@@ -1,7 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { prisma, ok, fail } from "./lib.js";
+import { prisma, ok, fail, parseId, param } from "./lib.js";
 import { requireAuth, signToken } from "./auth.js";
 import os from "os";
 import fs from "fs";
@@ -10,10 +10,6 @@ import { fileURLToPath } from "url";
 
 const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-function parseId(v: string) {
-  return Number(v);
-}
 
 // ---------- Auth / License / Setup ----------
 router.post("/auth/login", async (req, res) => {
@@ -263,7 +259,7 @@ router.get("/products/search", requireAuth, async (req, res) => {
 });
 
 router.get("/products/check-code/:code", requireAuth, async (req, res) => {
-  const found = await prisma.product.findUnique({ where: { code: req.params.code } });
+  const found = await prisma.product.findUnique({ where: { code: param(req.params.code) } });
   res.json(ok({ exists: !!found }));
 });
 

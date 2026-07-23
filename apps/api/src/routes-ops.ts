@@ -4,15 +4,11 @@ import os from "os";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { prisma, ok, fail } from "./lib.js";
+import { prisma, ok, fail, parseId, param } from "./lib.js";
 import { requireAuth } from "./auth.js";
 
 const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-function parseId(v: string) {
-  return Number(v);
-}
 
 async function nextNo(prefix: string, count: number) {
   const d = new Date();
@@ -407,7 +403,7 @@ router.get("/suppliers/:id/payments", requireAuth, async (req, res) => {
 // ---------- POS / Sales / Returns ----------
 router.get("/pos/products/barcode/:code", requireAuth, async (req, res) => {
   const variant = await prisma.productVariant.findFirst({
-    where: { barcode: req.params.code },
+    where: { barcode: param(req.params.code) },
     include: { product: true, stocks: true },
   });
   if (!variant) return res.status(404).json(fail("Product not found", 404));
@@ -437,7 +433,7 @@ router.post("/pos/invoice", requireAuth, async (req, res) => {
   }>;
   if (!items.length) return res.status(400).json(fail("Items required"));
 
-  const normalized = [];
+  const normalized: Array<{ variantId: number; qty: number; price: number; discount: number }> = [];
   for (const item of items) {
     let variantId = Number(item.variantId || item.id || 0);
     if (item.stock_id) {
@@ -501,9 +497,10 @@ router.post("/pos/invoice", requireAuth, async (req, res) => {
 });
 
 router.get("/pos/invoice/:no", requireAuth, async (req, res) => {
+  const no = param(req.params.no);
   const row = await prisma.invoice.findFirst({
     where: {
-      OR: [{ invoiceNo: req.params.no }, { id: Number(req.params.no) || -1 }],
+      OR: [{ invoiceNo: no }, { id: Number(no) || -1 }],
     },
     include: { items: { include: { variant: { include: { product: true } } } }, customer: true, user: true },
   });
