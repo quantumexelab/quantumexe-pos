@@ -1,0 +1,16 @@
+node_modules
+dist
+build
+.env
+.env.local
+*.db
+*.db-journal
+.DS_Store
+coverage
+playwright-report
+test-results
+apps/api/prisma/dev.db
+apps/api/prisma/dev.db-journal
+apps/api/backups
+*.log
+.vite

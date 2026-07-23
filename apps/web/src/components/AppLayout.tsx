@@ -1,0 +1,363 @@
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  FileText,
+  Package,
+  Truck,
+  Boxes,
+  Users,
+  UserCog,
+  Settings,
+  BarChart3,
+  DatabaseBackup,
+  Wallet,
+  ClipboardList,
+  LogOut,
+  Search,
+  Bell,
+  Maximize,
+  WifiOff,
+  ChevronDown,
+  ChevronUp,
+  type LucideIcon,
+} from "lucide-react";
+import { auth } from "../api";
+import { useEffect, useMemo, useState } from "react";
+import api from "../api";
+import { BrandLogo } from "./BrandLogo";
+
+type SubItem = { label: string; path: string };
+type NavItem = {
+  id: string;
+  label: string;
+  path?: string;
+  icon: LucideIcon;
+  roles: string[];
+  children?: SubItem[];
+};
+
+const nav: NavItem[] = [
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    path: "/dashboard",
+    icon: LayoutDashboard,
+    roles: ["Admin", "Cashier", "Storekeeper"],
+  },
+  {
+    id: "sales",
+    label: "Sales",
+    icon: ShoppingCart,
+    roles: ["Admin", "Cashier"],
+    children: [
+      { label: "Manage Invoice", path: "/sales/manage-invoice" },
+      { label: "User Sales", path: "/sales/manage-user-sales" },
+      { label: "Return History", path: "/sales/return-history" },
+    ],
+  },
+  {
+    id: "quotation",
+    label: "Quotation",
+    icon: FileText,
+    roles: ["Admin", "Cashier"],
+    children: [
+      { label: "Create Quotation", path: "/quotation/create-quotation" },
+      { label: "Quotation List", path: "/quotation/quotation-list" },
+    ],
+  },
+  {
+    id: "stock",
+    label: "Stock",
+    icon: Package,
+    roles: ["Admin", "Storekeeper"],
+    children: [
+      { label: "Stock List", path: "/stock/stock-list" },
+      { label: "Out of Stock", path: "/stock/out-of-stock" },
+      { label: "Damaged Stock", path: "/stock/damaged-stock" },
+      { label: "Low Stock", path: "/stock/low-stock" },
+      { label: "Expire Stock", path: "/stock/expire-stock" },
+    ],
+  },
+  {
+    id: "grn",
+    label: "GRN",
+    icon: ClipboardList,
+    roles: ["Admin", "Storekeeper"],
+    children: [
+      { label: "Create GRN", path: "/grn/create-grn" },
+      { label: "GRN List", path: "/grn/grn-list" },
+    ],
+  },
+  {
+    id: "products",
+    label: "Products",
+    icon: Boxes,
+    roles: ["Admin", "Storekeeper"],
+    children: [
+      { label: "Create Product", path: "/products/create-product" },
+      { label: "Product List", path: "/products/product-list" },
+      { label: "Manage Product Type", path: "/products/manage-product-type" },
+      { label: "Manage Unit", path: "/products/manage-unit" },
+      { label: "Manage Category", path: "/products/manage-category" },
+      { label: "Manage Brand", path: "/products/manage-brand" },
+      { label: "Deactivated Products", path: "/products/deactivated-products" },
+    ],
+  },
+  {
+    id: "supplier",
+    label: "Supplier",
+    icon: Truck,
+    roles: ["Admin", "Storekeeper"],
+    children: [
+      { label: "Create Supplier", path: "/supplier/create-supplier" },
+      { label: "Manage Supplier", path: "/supplier/manage-supplier" },
+      { label: "Manage Company", path: "/supplier/manage-company" },
+      { label: "Supplier GRN History", path: "/supplier/supplier-grn" },
+      { label: "Supplier Payments", path: "/supplier/supplier-payments" },
+    ],
+  },
+  {
+    id: "customer",
+    label: "Manage Customer",
+    path: "/customer/manage-customer",
+    icon: Users,
+    roles: ["Admin", "Cashier"],
+  },
+  {
+    id: "users",
+    label: "Manage User",
+    path: "/manage-users",
+    icon: UserCog,
+    roles: ["Admin"],
+  },
+  {
+    id: "accounts",
+    label: "Accounts",
+    path: "/accounts",
+    icon: Wallet,
+    roles: ["Admin"],
+  },
+  {
+    id: "reports",
+    label: "Reports",
+    icon: BarChart3,
+    roles: ["Admin"],
+    children: [
+      { label: "Sales & Financial Report", path: "/reports/sales-financial" },
+      { label: "Inventory & Product", path: "/reports/inventory-report" },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    path: "/setting",
+    icon: Settings,
+    roles: ["Admin"],
+  },
+  {
+    id: "backup",
+    label: "Back-Up",
+    path: "/back-up",
+    icon: DatabaseBackup,
+    roles: ["Admin"],
+  },
+];
+
+function isPathActive(pathname: string, path: string) {
+  return pathname === path || pathname.startsWith(path + "/");
+}
+
+function sectionActive(pathname: string, item: NavItem) {
+  if (item.path && isPathActive(pathname, item.path)) return true;
+  return !!item.children?.some((c) => isPathActive(pathname, c.path));
+}
+
+export default function AppLayout() {
+  const user = auth.getUser();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [expiry, setExpiry] = useState<string | null>(null);
+  const [online, setOnline] = useState(navigator.onLine);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  const role = user?.role || "";
+  const items = useMemo(() => nav.filter((n) => n.roles.includes(role)), [role]);
+
+  useEffect(() => {
+    api
+      .get("/license/status")
+      .then((r) => {
+        const d = r.data?.data?.expiry_date;
+        if (d) setExpiry(new Date(d).toLocaleDateString());
+      })
+      .catch(() => undefined);
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+
+  // Auto-expand the section that matches current route
+  useEffect(() => {
+    setOpen((prev) => {
+      const next = { ...prev };
+      for (const item of items) {
+        if (item.children && sectionActive(location.pathname, item)) {
+          next[item.id] = true;
+        }
+      }
+      return next;
+    });
+  }, [location.pathname, items]);
+
+  function toggle(id: string) {
+    setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  return (
+    <div className="h-screen flex overflow-hidden bg-[#f3f4f6]">
+      <aside className="w-[72px] lg:w-64 bg-white border-r border-gray-200 flex flex-col shrink-0 h-full">
+        <div className="h-14 flex items-center justify-center lg:justify-start lg:px-4 gap-2 border-b shrink-0">
+          <BrandLogo size="sm" className="hidden lg:block" />
+          <div className="lg:hidden text-sm font-black tracking-tight">
+            <span className="text-slate-900">Q</span>
+            <span className="text-sky-500">EXE</span>
+          </div>
+          <div className="hidden lg:block text-[10px] text-gray-400 mt-1">Version 1.0.1</div>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1 min-h-0">
+          {items.map((item) => {
+            const Icon = item.icon;
+            const hasChildren = !!item.children?.length;
+            const expanded = !!open[item.id];
+            const parentActive = sectionActive(location.pathname, item);
+
+            if (!hasChildren && item.path) {
+              return (
+                <NavLink
+                  key={item.id}
+                  to={item.path}
+                  title={item.label}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                      isActive ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-100"
+                    }`
+                  }
+                >
+                  <Icon size={18} />
+                  <span className="hidden lg:inline">{item.label}</span>
+                </NavLink>
+              );
+            }
+
+            return (
+              <div key={item.id} className="space-y-1">
+                <button
+                  type="button"
+                  title={item.label}
+                  onClick={() => {
+                    toggle(item.id);
+                    const first = item.children?.[0];
+                    if (first && !expanded) navigate(first.path);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                    parentActive ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span className="hidden lg:inline flex-1 text-left">{item.label}</span>
+                  <span className="hidden lg:inline opacity-80">
+                    {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </span>
+                </button>
+
+                {expanded && (
+                  <div className="hidden lg:block ml-5 pl-3 border-l border-gray-200 space-y-1 py-1">
+                    {item.children!.map((child) => (
+                      <NavLink
+                        key={child.path}
+                        to={child.path}
+                        className={({ isActive }) =>
+                          `block px-3 py-2 rounded-md text-sm transition ${
+                            isActive
+                              ? "bg-green-50 text-gray-900 font-semibold border border-green-600"
+                              : "text-gray-600 hover:bg-gray-50 border border-transparent"
+                          }`
+                        }
+                      >
+                        {child.label}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="p-3 border-t flex items-center gap-2 shrink-0">
+          <div className="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold">
+            {(user?.name || "A")[0]}
+          </div>
+          <div className="hidden lg:block flex-1 min-w-0">
+            <div className="text-sm font-semibold truncate">{user?.name}</div>
+            <div className="text-xs text-gray-500">{user?.role}</div>
+          </div>
+          <button
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+            title="Logout"
+            onClick={() => {
+              auth.logout();
+              navigate("/signin", { replace: true });
+            }}
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 shrink-0">
+          {expiry && (
+            <div className="flex-1 bg-red-600 text-white text-sm font-semibold rounded-md px-3 py-1.5 text-center">
+              Your subscription expires on {expiry}
+            </div>
+          )}
+          {!expiry && <div className="flex-1" />}
+          <button className="btn btn-primary" onClick={() => navigate("/pos")}>
+            POS
+          </button>
+          <div className={`flex items-center gap-1 text-xs font-semibold ${online ? "text-green-600" : "text-red-500"}`}>
+            {online ? "Online" : (
+              <>
+                <WifiOff size={14} /> Offline
+              </>
+            )}
+          </div>
+          <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+            <Search size={18} />
+          </button>
+          <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+            <Bell size={18} />
+          </button>
+          <button
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+            onClick={() => document.documentElement.requestFullscreen?.()}
+          >
+            <Maximize size={18} />
+          </button>
+          <div className="text-sm font-semibold text-gray-700">{user?.name}</div>
+        </header>
+        <main className="flex-1 overflow-y-auto min-h-0 p-4 md:p-6">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
