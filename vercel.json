@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "installCommand": "npm install",
+  "buildCommand": "npm run prisma:generate -w apps/api && npm run build -w apps/api && npm run build -w apps/web",
+  "outputDirectory": "apps/web/dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/health", "destination": "/api" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/index.ts": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "includeFiles": "apps/api/{dist,prisma,node_modules/.prisma,node_modules/@prisma}/**"
+    }
+  }
+}

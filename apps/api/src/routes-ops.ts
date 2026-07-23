@@ -1420,13 +1420,15 @@ router.put("/settings", requireAuth, async (req, res) => {
 const BACKUP_RETENTION_DAYS = 7;
 
 function backupDirPath() {
-  const backupDir = path.resolve(__dirname, "../../backups");
+  const backupDir = process.env.VERCEL
+    ? path.join("/tmp", "quantumexe-backups")
+    : path.resolve(__dirname, "../../backups");
   fs.mkdirSync(backupDir, { recursive: true });
   return backupDir;
 }
 
 function isBackupFile(name: string) {
-  return /\.(db|zip)$/i.test(name) && name.toLowerCase().startsWith("backup");
+  return /\.(db|zip|json)$/i.test(name) && name.toLowerCase().startsWith("backup");
 }
 
 function listBackupFiles() {
@@ -1466,10 +1468,20 @@ function listBackupFiles() {
 }
 
 router.post("/backup/export", requireAuth, async (_req, res) => {
-  const dbPath = path.resolve(__dirname, "../../prisma/dev.db");
   const backupDir = backupDirPath();
-  const dest = path.join(backupDir, `backup_${Date.now()}.zip`);
-  fs.copyFileSync(dbPath, dest);
+  const dest = path.join(backupDir, `backup_${Date.now()}.json`);
+  const snapshot = {
+    createdAt: new Date().toISOString(),
+    settings: await prisma.setting.findMany(),
+    license: await prisma.license.findFirst({ orderBy: { id: "desc" } }),
+    counts: {
+      products: await prisma.product.count(),
+      customers: await prisma.customer.count(),
+      invoices: await prisma.invoice.count(),
+      users: await prisma.user.count(),
+    },
+  };
+  fs.writeFileSync(dest, JSON.stringify(snapshot, null, 2), "utf8");
   const st = fs.statSync(dest);
   res.json(
     ok(
@@ -1519,10 +1531,23 @@ router.delete("/backup/:file", requireAuth, async (req, res) => {
 router.post("/backup/restore", requireAuth, async (req, res) => {
   const file = String(req.body?.file || "");
   const src = path.join(backupDirPath(), path.basename(file));
-  const dbPath = path.resolve(__dirname, "../../prisma/dev.db");
   if (!fs.existsSync(src)) return res.status(404).json(fail("Backup not found", 404));
-  fs.copyFileSync(src, dbPath);
-  res.json(ok(null, "Backup restored — restart API recommended"));
+  if (!src.endsWith(".json")) {
+    return res.status(400).json(fail("Only JSON snapshot backups can be restored on this host"));
+  }
+  const snapshot = JSON.parse(fs.readFileSync(src, "utf8")) as {
+    settings?: Array<{ key: string; value: string }>;
+  };
+  if (Array.isArray(snapshot.settings)) {
+    for (const row of snapshot.settings) {
+      await prisma.setting.upsert({
+        where: { key: row.key },
+        create: { key: row.key, value: row.value },
+        update: { value: row.value },
+      });
+    }
+  }
+  res.json(ok(null, "Settings restored from snapshot"));
 });
 
 export default router;

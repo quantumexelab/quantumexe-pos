@@ -13,6 +13,7 @@
     "db:push": "npm run db:push -w apps/api",
     "db:seed": "npm run db:seed -w apps/api",
     "db:reset": "npm run db:reset -w apps/api",
+    "postinstall": "npm run prisma:generate -w apps/api",
     "test:e2e": "npm run test:e2e -w apps/web",
     "test:smoke": "tsx apps/api/scripts/smoke.ts"
   },
