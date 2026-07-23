@@ -15,3 +15,9 @@ apps/api/backups
 *.log
 .vite
 .vercel
+.firebase
+firebase-debug.log
+firebase-debug.*.log
+functions/lib
+functions/api-dist
+functions/node_modules
