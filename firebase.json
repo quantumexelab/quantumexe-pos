@@ -1,25 +1,6 @@
 {
-  "hosting": {
-    "public": "apps/web/dist",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "/api/**",
-        "function": "api"
-      },
-      {
-        "source": "/health",
-        "function": "api"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ]
+  "firestore": {
+    "rules": "firestore.rules"
   },
   "functions": [
     {
@@ -30,13 +11,22 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "*.local",
-        "src"
+        "*.local"
       ],
       "predeploy": [
-        "npm run build -w apps/api",
+        "node scripts/prepare-functions.mjs",
         "npm --prefix functions run build"
       ]
     }
-  ]
+  ],
+  "hosting": {
+    "public": "apps/web/dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "predeploy": ["npm run build -w apps/web"],
+    "rewrites": [
+      { "source": "/api/**", "function": "api" },
+      { "source": "/health", "function": "api" },
+      { "source": "**", "destination": "/index.html" }
+    ]
+  }
 }

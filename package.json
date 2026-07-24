@@ -10,13 +10,10 @@
     "dev:api": "npm run dev -w apps/api",
     "dev:web": "npm run dev -w apps/web",
     "build": "npm run build -w apps/api && npm run build -w apps/web",
-    "build:web": "npm run build -w apps/web",
     "db:push": "npm run db:push -w apps/api",
     "db:seed": "npm run db:seed -w apps/api",
     "db:reset": "npm run db:reset -w apps/api",
     "postinstall": "npm run prisma:generate -w apps/api",
-    "firebase:build": "npm run build && npm --prefix functions run build",
-    "firebase:deploy": "npm run firebase:build && firebase deploy",
     "test:e2e": "npm run test:e2e -w apps/web",
     "test:smoke": "tsx apps/api/scripts/smoke.ts"
   },

@@ -1,6 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import { prisma as fsPrisma } from "./fsdb.js";
 
-export const prisma = new PrismaClient();
+export const prisma = fsPrisma as unknown as PrismaClient;
 
 export function ok<T>(data: T, message = "OK") {
   return { success: true, message, data };

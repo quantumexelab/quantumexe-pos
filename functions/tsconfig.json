@@ -2,13 +2,14 @@
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "target": "ES2022",
+    "noImplicitReturns": true,
     "outDir": "lib",
-    "rootDir": "src",
+    "sourceMap": true,
     "strict": true,
+    "target": "ES2022",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "rootDir": "src"
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*.ts"]
 }
