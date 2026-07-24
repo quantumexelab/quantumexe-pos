@@ -27,5 +27,8 @@
     "tailwindcss": "^4.0.17",
     "typescript": "~5.8.2",
     "vite": "^8.1.1"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-linux-x64-gnu": "1.1.5"
   }
 }
