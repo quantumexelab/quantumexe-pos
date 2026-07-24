@@ -1,7 +1,10 @@
-import type { PrismaClient } from "@prisma/client";
-import { prisma as fsPrisma } from "./fsdb.js";
+import { PrismaClient } from "@prisma/client";
 
-export const prisma = fsPrisma as unknown as PrismaClient;
+const useFirestore = process.env.USE_FIRESTORE === "1";
+
+export const prisma: PrismaClient = useFirestore
+  ? ((await import("./fsdb.js")).prisma as unknown as PrismaClient)
+  : new PrismaClient();
 
 export function ok<T>(data: T, message = "OK") {
   return { success: true, message, data };

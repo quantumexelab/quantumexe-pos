@@ -8,11 +8,14 @@
     { "source": "/health", "destination": "/api" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
+  "env": {
+    "DATABASE_URL": "file:./dev.db"
+  },
   "functions": {
     "api/index.ts": {
       "memory": 1024,
       "maxDuration": 60,
-      "includeFiles": "apps/api/dist/**"
+      "includeFiles": "apps/api/{dist,prisma}/**"
     }
   }
 }
