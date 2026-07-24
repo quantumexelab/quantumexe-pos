@@ -1,7 +1,7 @@
 {
   "version": 2,
   "installCommand": "npm install && npm install @rolldown/binding-linux-x64-gnu@1.1.5 --no-save",
-  "buildCommand": "npm run prisma:generate -w apps/api && npm run build -w apps/api && npm run build -w apps/web",
+  "buildCommand": "npm run prisma:generate -w apps/api && DATABASE_URL=\"file:./prisma/demo.db\" npm run db:push -w apps/api && DATABASE_URL=\"file:./prisma/demo.db\" npm run db:seed -w apps/api && npm run build -w apps/api && npm run build -w apps/web",
   "outputDirectory": "apps/web/dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
@@ -9,7 +9,8 @@
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "env": {
-    "DATABASE_URL": "file:./dev.db"
+    "DATABASE_URL": "file:/tmp/quantumexe-pos.db",
+    "JWT_SECRET": "reox-clone-dev-secret"
   },
   "functions": {
     "api/index.ts": {
