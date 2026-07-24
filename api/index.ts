@@ -15,8 +15,9 @@ function ensureSqliteOnVercel() {
   if (fs.existsSync(tmpDb)) return;
 
   const candidates = [
+    path.join(process.cwd(), "apps/api/prisma/demo.sqlite"),
+    path.join(process.cwd(), "prisma/demo.sqlite"),
     path.join(process.cwd(), "apps/api/prisma/demo.db"),
-    path.join(process.cwd(), "prisma/demo.db"),
   ];
   const bundled = candidates.find((p) => fs.existsSync(p));
   if (bundled) {
