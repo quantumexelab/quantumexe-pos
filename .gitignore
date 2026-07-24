@@ -15,6 +15,8 @@ apps/api/backups
 *.log
 .vite
 .vercel
+api/demo.sqlite
+apps/api/prisma/demo.sqlite
 functions/lib
 functions/api-dist
 functions/node_modules

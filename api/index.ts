@@ -12,17 +12,27 @@ function ensureSqliteOnVercel() {
   process.env.DATABASE_URL = `file:${tmpDb}`;
   if (!process.env.JWT_SECRET) process.env.JWT_SECRET = "reox-clone-dev-secret";
 
-  if (fs.existsSync(tmpDb)) return;
+  if (fs.existsSync(tmpDb) && fs.statSync(tmpDb).size > 0) return;
 
   const candidates = [
+    path.join(process.cwd(), "api/demo.sqlite"),
+    path.join(process.cwd(), "demo.sqlite"),
     path.join(process.cwd(), "apps/api/prisma/demo.sqlite"),
     path.join(process.cwd(), "prisma/demo.sqlite"),
-    path.join(process.cwd(), "apps/api/prisma/demo.db"),
   ];
-  const bundled = candidates.find((p) => fs.existsSync(p));
-  if (bundled) {
-    fs.copyFileSync(bundled, tmpDb);
+  const bundled = candidates.find((p) => {
+    try {
+      return fs.existsSync(p) && fs.statSync(p).size > 0;
+    } catch {
+      return false;
+    }
+  });
+  if (!bundled) {
+    console.error("Bundled demo.sqlite not found. Tried:", candidates);
+    return;
   }
+  fs.copyFileSync(bundled, tmpDb);
+  console.log("Copied demo DB from", bundled, "to", tmpDb);
 }
 
 function getApp() {

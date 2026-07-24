@@ -48,14 +48,23 @@ router.post("/auth/login", async (req, res) => {
 });
 
 router.get("/setup/check-env", async (_req, res) => {
-  const license = await prisma.license.findFirst();
-  res.json({
-    exists: true,
-    connected: true,
-    license: license
-      ? { key: license.licenseKey, status: license.status, expiry_date: license.expiryDate }
-      : null,
-  });
+  try {
+    const license = await prisma.license.findFirst();
+    res.json({
+      exists: true,
+      connected: true,
+      license: license
+        ? { key: license.licenseKey, status: license.status, expiry_date: license.expiryDate }
+        : null,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({
+      exists: false,
+      connected: false,
+      message: e instanceof Error ? e.message : "DB error",
+    });
+  }
 });
 
 /** First-time seed (no service-account JSON needed on Cloud Functions). Only works when DB has no users. */
