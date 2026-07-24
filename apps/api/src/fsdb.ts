@@ -213,14 +213,30 @@ const CASCADE_DELETE: Partial<Record<ModelName, ModelName[]>> = {
 
 function initFirebase(): FirebaseFirestore.Firestore {
   if (!admin.apps.length) {
-    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || "quantumexe-pos";
     const saJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+    const onGoogleCloud = !!(process.env.FUNCTION_TARGET || process.env.K_SERVICE || process.env.FIREBASE_CONFIG);
+
     if (saJson) {
       const cred = JSON.parse(saJson) as admin.ServiceAccount;
       admin.initializeApp({
         credential: admin.credential.cert(cred),
         projectId: (cred as admin.ServiceAccount & { project_id?: string }).project_id || cred.projectId || projectId,
       });
+    } else if (clientEmail && privateKey) {
+      // Vercel-friendly: set FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY (+ PROJECT_ID)
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
+        projectId,
+      });
+    } else if (onGoogleCloud) {
+      admin.initializeApp({ projectId });
     } else {
       admin.initializeApp({
         credential: admin.credential.applicationDefault(),

@@ -1,54 +1,52 @@
 # QUANTUMEXE POS
 
-Full-stack POS — React + Express + **Firebase Firestore** (no Neon).
+**Architecture (what you asked for)**
 
-## Stack
+| Layer | Service |
+|-------|---------|
+| **Hosting (web + API)** | **Vercel** |
+| **Database** | **Firebase Firestore** |
 
-- **Web:** Vite React → Firebase Hosting
-- **API:** Express → Firebase Cloud Functions
-- **DB:** Cloud Firestore (`apps/api/src/fsdb.ts`)
+No Neon. Firebase Hosting is optional / not required.
 
-## Local development
-
-1. Create a Firebase project in [Firebase Console](https://console.firebase.google.com)
-2. Enable **Firestore**
-3. Download a service account key (Project settings → Service accounts)
-4. Set env in `apps/api/.env`:
-
-```env
-FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
-JWT_SECRET=quantumexe-dev-secret
-```
-
-5. Install + seed + run:
+## Local
 
 ```bash
 npm install
+# apps/api/.env — Firebase Admin credentials (see below)
 npm run db:seed -w apps/api
 npm run dev
 ```
 
-- Web: http://localhost:5173
-- API: http://localhost:4000
-- Login: `0771234567` / `123456`
+- Web http://localhost:5173 · API http://localhost:4000  
+- Login `0771234567` / `123456`
 
-## Deploy (Firebase)
+## Vercel deploy
 
-```bash
-npx firebase login
-npx firebase use your-project-id
-npm install --prefix functions
-npx firebase deploy
+1. Link repo / `npx vercel`
+2. Project → Settings → Environment Variables:
+
+```
+FIREBASE_PROJECT_ID=quantumexe-pos
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-...@quantumexe-pos.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+JWT_SECRET=any-long-random-string
 ```
 
-After first deploy, seed Firestore once (local with service account):
+3. Deploy, then seed once:
 
 ```bash
-npm run db:seed -w apps/api
+curl -X POST https://YOUR-APP.vercel.app/api/setup/seed
 ```
 
-## Demo login
+### Service account key blocked by org?
 
-- Username: `0771234567`
-- Password: `123456`
+Firebase console → Generate private key fails with org policy. Then either:
+
+- Ask org admin to allow service account keys for this project, **or**
+- Create the Firebase project under a **personal Gmail** (not company Workspace) and use that key
+
+## Firebase console (DB only)
+
+- Enable **Firestore** on project `quantumexe-pos`
+- You do **not** need Firebase Hosting or Blaze for the Vercel setup

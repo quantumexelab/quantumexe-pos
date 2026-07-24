@@ -58,6 +58,20 @@ router.get("/setup/check-env", async (_req, res) => {
   });
 });
 
+/** First-time seed (no service-account JSON needed on Cloud Functions). Only works when DB has no users. */
+router.post("/setup/seed", async (_req, res) => {
+  try {
+    const count = await prisma.user.count();
+    if (count > 0) return res.status(400).json(fail("Already seeded"));
+    const { seedDemo } = await import("./seed-demo.js");
+    await seedDemo();
+    res.json(ok({ login: "0771234567", password: "123456" }, "Demo data seeded"));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json(fail(e instanceof Error ? e.message : "Seed failed", 500));
+  }
+});
+
 router.get("/license/status", requireAuth, async (_req, res) => {
   const license = await prisma.license.findFirst({ orderBy: { id: "desc" } });
   if (!license) return res.json(ok({ status: "MISSING" }));

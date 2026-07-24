@@ -11,8 +11,8 @@
   "functions": {
     "api/index.ts": {
       "memory": 1024,
-      "maxDuration": 30,
-      "includeFiles": "apps/api/{dist,prisma,node_modules/.prisma,node_modules/@prisma}/**"
+      "maxDuration": 60,
+      "includeFiles": "apps/api/dist/**"
     }
   }
 }
