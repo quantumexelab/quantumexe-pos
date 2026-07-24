@@ -1,8 +1,9 @@
 import axios from "axios";
 
+/** Production: set VITE_API_BASE to Firebase Hosting URL (e.g. https://quantumexe-pos.web.app) when API runs on Cloud Functions. */
 const api = axios.create({
-  baseURL: "/api",
-  timeout: 15000,
+  baseURL: import.meta.env.VITE_API_BASE || "/api",
+  timeout: 30000,
 });
 
 api.interceptors.request.use((config) => {
