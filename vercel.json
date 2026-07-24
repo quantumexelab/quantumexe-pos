@@ -1,7 +1,7 @@
 {
   "version": 2,
   "installCommand": "npm install && npm install @rolldown/binding-linux-x64-gnu@1.1.5 --no-save",
-  "buildCommand": "npm run prisma:generate -w apps/api && DATABASE_URL=\"file:./prisma/demo.sqlite\" npm run db:push -w apps/api && DATABASE_URL=\"file:./prisma/demo.sqlite\" npm run db:seed -w apps/api && cp apps/api/prisma/demo.sqlite api/demo.sqlite && npm run build -w apps/api && npm run build -w apps/web",
+  "buildCommand": "npm run prisma:generate -w apps/api && DATABASE_URL=\"file:./prisma/demo.sqlite\" npm run db:push -w apps/api && DATABASE_URL=\"file:./prisma/demo.sqlite\" npm run db:seed -w apps/api && cp -f apps/api/prisma/demo.sqlite api/demo.sqlite && npm run build -w apps/api && npm run build -w apps/web",
   "outputDirectory": "apps/web/dist",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
@@ -16,7 +16,7 @@
     "api/index.ts": {
       "memory": 1024,
       "maxDuration": 60,
-      "includeFiles": "{api/demo.sqlite,apps/api/prisma/demo.sqlite,apps/api/dist/**,apps/api/prisma/**}"
+      "includeFiles": "api/demo.sqlite"
     }
   }
 }
