@@ -4,16 +4,24 @@ import { prisma, resetFirestore } from "./fsdb.js";
 export async function seedDemo() {
   await resetFirestore();
 
+  async function ensureRole(name: string) {
+    const existing = await prisma.role.findFirst({ where: { name } });
+    if (existing) return existing;
+    return prisma.role.create({ data: { name } });
+  }
+  async function ensureStatus(name: string) {
+    const existing = await prisma.status.findFirst({ where: { name } });
+    if (existing) return existing;
+    return prisma.status.create({ data: { name } });
+  }
+
   const [adminRole, cashierRole, storeRole] = await Promise.all([
-    prisma.role.create({ data: { name: "Admin" } }),
-    prisma.role.create({ data: { name: "Cashier" } }),
-    prisma.role.create({ data: { name: "Storekeeper" } }),
+    ensureRole("Admin"),
+    ensureRole("Cashier"),
+    ensureRole("Storekeeper"),
   ]);
 
-  const [active, inactive] = await Promise.all([
-    prisma.status.create({ data: { name: "Active" } }),
-    prisma.status.create({ data: { name: "Inactive" } }),
-  ]);
+  const [active, inactive] = await Promise.all([ensureStatus("Active"), ensureStatus("Inactive")]);
 
   const passwordHash = await bcrypt.hash("123456", 10);
   const admin = await prisma.user.create({

@@ -2461,7 +2461,10 @@ export function ManageUsers() {
     try {
       const [users, roleRes] = await Promise.all([api.get("/users/all"), api.get("/roles")]);
       setRows(users.data.data || []);
-      const roleList = roleRes.data.data || [];
+      const roleList = (roleRes.data.data || []).filter(
+        (r: any, i: number, arr: any[]) =>
+          arr.findIndex((x) => String(x.name).toLowerCase() === String(r.name).toLowerCase()) === i
+      );
       setRoles(roleList);
       if (roleList.length && !editing) {
         setForm((f) => ({ ...f, role_id: roleList[0].id }));

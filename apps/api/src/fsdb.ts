@@ -638,6 +638,14 @@ class ModelDelegate {
   }
 
   async create(args: { data: Record<string, unknown>; include?: Record<string, unknown> }) {
+    for (const field of UNIQUE_FIELDS[this.model] || []) {
+      if (args.data[field] !== undefined && args.data[field] !== null) {
+        const existing = await this.findFirst({ where: { [field]: args.data[field] } });
+        if (existing) {
+          throw new Error(`Unique constraint failed on ${this.model}.${field}`);
+        }
+      }
+    }
     const id = await this.client.nextId(this.model);
     const data = await this.prepareCreateData(args.data, id);
     await firestore.collection(this.model).doc(String(id)).set(toFirestoreValue(data) as FirebaseFirestore.DocumentData);

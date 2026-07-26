@@ -112,8 +112,73 @@ router.post("/license/validate", async (req, res) => {
 
 // ---------- Roles / Users ----------
 router.get("/roles", requireAuth, async (_req, res) => {
-  const roles = await prisma.role.findMany();
-  res.json(ok(roles));
+  const roles = await prisma.role.findMany({ orderBy: { id: "asc" } });
+  // Dedupe by name (Firestore can accumulate duplicates after repeated seeds/syncs)
+  const seen = new Set<string>();
+  const unique = [];
+  for (const r of roles) {
+    const key = String(r.name || "").trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(r);
+  }
+  res.json(ok(unique));
+});
+
+/** Merge duplicate Role/Status rows (same name) onto the lowest id. */
+router.post("/setup/cleanup-duplicates", requireAuth, async (_req, res) => {
+  try {
+    const remapped = { roles: 0, statuses: 0, usersFixed: 0 };
+
+    const roles = await prisma.role.findMany({ orderBy: { id: "asc" } });
+    const roleKeep = new Map<string, number>();
+    for (const r of roles) {
+      const key = String(r.name || "").trim().toLowerCase();
+      if (!key) continue;
+      if (!roleKeep.has(key)) roleKeep.set(key, r.id);
+      else {
+        const keepId = roleKeep.get(key)!;
+        const users = await prisma.user.findMany({ where: { roleId: r.id } });
+        for (const u of users) {
+          await prisma.user.update({ where: { id: u.id }, data: { roleId: keepId } });
+          remapped.usersFixed++;
+        }
+        await prisma.role.delete({ where: { id: r.id } });
+        remapped.roles++;
+      }
+    }
+
+    const statuses = await prisma.status.findMany({ orderBy: { id: "asc" } });
+    const statusKeep = new Map<string, number>();
+    for (const s of statuses) {
+      const key = String(s.name || "").trim().toLowerCase();
+      if (!key) continue;
+      if (!statusKeep.has(key)) statusKeep.set(key, s.id);
+      else {
+        const keepId = statusKeep.get(key)!;
+        const users = await prisma.user.findMany({ where: { statusId: s.id } });
+        for (const u of users) {
+          await prisma.user.update({ where: { id: u.id }, data: { statusId: keepId } });
+          remapped.usersFixed++;
+        }
+        const customers = await prisma.customer.findMany({ where: { statusId: s.id } });
+        for (const c of customers) {
+          await prisma.customer.update({ where: { id: c.id }, data: { statusId: keepId } });
+        }
+        const suppliers = await prisma.supplier.findMany({ where: { statusId: s.id } });
+        for (const srow of suppliers) {
+          await prisma.supplier.update({ where: { id: srow.id }, data: { statusId: keepId } });
+        }
+        await prisma.status.delete({ where: { id: s.id } });
+        remapped.statuses++;
+      }
+    }
+
+    res.json(ok(remapped, "Duplicate roles/statuses cleaned"));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json(fail(e instanceof Error ? e.message : "Cleanup failed", 500));
+  }
 });
 
 router.get("/users/all", requireAuth, async (_req, res) => {
