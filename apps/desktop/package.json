@@ -1,0 +1,76 @@
+{
+  "name": "quantumexe-pos-desktop",
+  "version": "1.0.7",
+  "private": true,
+  "description": "QUANTUMEXE POS Windows desktop shell",
+  "main": "main.cjs",
+  "author": "QUANTUMEXE Technologies",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win nsis",
+    "dist:publish": "electron-builder --win nsis --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.quantumexe.pos",
+    "productName": "QUANTUMEXE POS",
+    "copyright": "Copyright © QUANTUMEXE Technologies",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "app-bundle",
+        "filter": [
+          "**/*",
+          "!node_modules",
+          "!node_modules/**/*"
+        ]
+      },
+      {
+        "from": "resources/node_modules",
+        "to": "app-bundle/node_modules"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "quantumexelab",
+        "repo": "quantumexe-pos"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "QUANTUMEXE-POS-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "QUANTUMEXE POS",
+      "runAfterFinish": true
+    }
+  }
+}

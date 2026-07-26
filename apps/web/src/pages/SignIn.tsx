@@ -124,7 +124,7 @@ export default function SignIn() {
             An advanced point-of-sale platform engineered for modern retail excellence.
           </p>
         </div>
-        <div className="text-sm text-slate-500">Version 1.0.6</div>
+        <div className="text-sm text-slate-500">Version 1.0.7</div>
       </div>
 
       <div className="flex items-center justify-center p-8 bg-white overflow-y-auto">
