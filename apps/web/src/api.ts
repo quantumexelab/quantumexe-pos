@@ -19,16 +19,82 @@ export type User = {
   email?: string | null;
   role: string;
   role_id: number;
+  shop_status?: string;
+};
+
+export type ShopAccess = {
+  shopId: string | null;
+  status: string;
+  shop?: unknown;
+};
+
+export const masterApi = {
+  async register(payload: Record<string, string>) {
+    const { data } = await api.post("/auth/register", payload);
+    if (!data?.success) throw new Error(data?.message || "Registration failed");
+    return data;
+  },
+  async access() {
+    const { data } = await api.get("/shop/access");
+    return (data?.data || {}) as ShopAccess;
+  },
+  async shops(): Promise<Shop[]> {
+    const { data } = await api.get("/master/shops");
+    return (data?.data || []) as Shop[];
+  },
+  async approve(shopId: string, paymentNote?: string) {
+    const { data } = await api.post(`/master/shops/${shopId}/approve`, { paymentNote });
+    if (!data?.success) throw new Error(data?.message || "Approve failed");
+    return data;
+  },
+  async markPaid(shopId: string, paymentNote?: string) {
+    const { data } = await api.post(`/master/shops/${shopId}/mark-paid`, { paymentNote });
+    if (!data?.success) throw new Error(data?.message || "Mark paid failed");
+    return data;
+  },
+  async revoke(shopId: string) {
+    const { data } = await api.post(`/master/shops/${shopId}/revoke`);
+    if (!data?.success) throw new Error(data?.message || "Revoke failed");
+    return data;
+  },
+  async resetPassword(shopId: string, password: string) {
+    const { data } = await api.post(`/master/shops/${shopId}/reset-password`, { password });
+    if (!data?.success) throw new Error(data?.message || "Reset failed");
+    return data;
+  },
+  async changePassword(currentPassword: string, newPassword: string) {
+    const { data } = await api.post("/master/password", { currentPassword, newPassword });
+    if (!data?.success) throw new Error(data?.message || "Password change failed");
+    return data;
+  },
+};
+
+type Shop = {
+  shopId: string;
+  shopName: string;
+  ownerName: string;
+  phone: string;
+  email: string;
+  status: string;
+  [key: string]: unknown;
 };
 
 export const auth = {
   async login(username: string, password: string) {
-    const { data } = await api.post("/auth/login", { username, password });
-    if (data.success && data.token) {
-      sessionStorage.setItem("token", data.token);
-      sessionStorage.setItem("user", JSON.stringify(data.user));
+    try {
+      const { data } = await api.post("/auth/login", { username, password });
+      if (data.success && data.token) {
+        sessionStorage.setItem("token", data.token);
+        sessionStorage.setItem("user", JSON.stringify(data.user));
+      }
+      return data;
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: { success?: boolean; message?: string } } };
+      if (ax.response?.data?.message) {
+        return { success: false, message: ax.response.data.message };
+      }
+      throw e;
     }
-    return data;
   },
   logout() {
     sessionStorage.removeItem("token");
@@ -40,6 +106,60 @@ export const auth = {
   },
   isAuthenticated() {
     return !!sessionStorage.getItem("token");
+  },
+};
+
+export type SyncStatus = {
+  enabled: boolean;
+  mode?: string;
+  connectionMode?: "not-configured" | "offline" | "auto-sync" | string;
+  credentialsConfigured?: boolean;
+  userEnabled?: boolean;
+  cloudReachable?: boolean | null;
+  pendingOutbox?: number;
+  status?: string;
+  lastPushAt?: string | null;
+  lastPullAt?: string | null;
+  lastError?: string | null;
+  intervalMinutes?: number;
+  projectId?: string | null;
+  message?: string;
+};
+
+export const syncApi = {
+  async status(): Promise<SyncStatus> {
+    const { data } = await api.get("/sync/status");
+    return (data?.data || {}) as SyncStatus;
+  },
+  async setAuto(enabled: boolean): Promise<SyncStatus> {
+    try {
+      const { data } = await api.post("/sync/auto", { enabled });
+      if (!data?.success) throw new Error(data?.message || "Failed to update sync");
+      return (data?.data || {}) as SyncStatus;
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: { message?: string } }; message?: string };
+      throw new Error(ax.response?.data?.message || ax.message || "Failed to update sync");
+    }
+  },
+  async push() {
+    try {
+      const { data } = await api.post("/sync/push");
+      if (!data?.success) throw new Error(data?.message || "Push failed");
+      return data;
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: { message?: string } }; message?: string };
+      throw new Error(ax.response?.data?.message || ax.message || "Push failed");
+    }
+  },
+  async pull(force = false) {
+    try {
+      const { data } = await api.post(`/sync/pull${force ? "?force=1" : ""}`);
+      if (!data?.success) throw new Error(data?.message || "Pull failed");
+      return data;
+    } catch (e: unknown) {
+      const ax = e as { response?: { data?: { message?: string } }; message?: string };
+      throw new Error(ax.response?.data?.message || ax.message || "Pull failed");
+    }
   },
 };
 

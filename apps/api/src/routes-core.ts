@@ -20,16 +20,65 @@ router.post("/auth/login", async (req, res) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(fail("Invalid credentials payload"));
 
+  // Master Admin (cloud registry) — same Sign in screen
+  try {
+    const { tryMasterLogin } = await import("./routes-master.js");
+    const master = await tryMasterLogin(parsed.data.username, parsed.data.password);
+    if (master) return res.json(master);
+  } catch (e) {
+    console.warn("[auth] master login check failed:", e instanceof Error ? e.message : e);
+  }
+
   const user = await prisma.user.findUnique({
     where: { contact: parsed.data.username },
     include: { role: true, status: true },
   });
-  if (!user || !(await bcrypt.compare(parsed.data.password, user.passwordHash))) {
-    return res.status(401).json(fail("Invalid username or password", 401));
+  if (!user) return res.status(401).json(fail("Invalid username or password", 401));
+
+  let passwordOk = await bcrypt.compare(parsed.data.password, user.passwordHash);
+  if (!passwordOk) {
+    try {
+      const { findShopByPhone } = await import("./master/shopRegistry.js");
+      const remote = await findShopByPhone(user.contact);
+      if (remote?.passwordHash && (await bcrypt.compare(parsed.data.password, remote.passwordHash))) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { passwordHash: remote.passwordHash },
+        });
+        passwordOk = true;
+      }
+    } catch {
+      /* ignore */
+    }
   }
+  if (!passwordOk) return res.status(401).json(fail("Invalid username or password", 401));
   if (user.status.name !== "Active") return res.status(403).json(fail("User inactive", 403));
 
-  const token = signToken(user);
+  let shop_status: string = "active";
+  try {
+    const { refreshLocalAccessFromRegistry, findShopByPhone, getLocalShopId } = await import(
+      "./master/shopRegistry.js"
+    );
+    // Link local install to registry shop by phone if shop_id missing
+    const localId = await getLocalShopId();
+    if (!localId) {
+      const remote = await findShopByPhone(user.contact);
+      if (remote) {
+        const { prisma: p } = await import("./lib.js");
+        await p.setting.upsert({
+          where: { key: "shop_id" },
+          create: { key: "shop_id", value: remote.shopId },
+          update: { value: remote.shopId },
+        });
+      }
+    }
+    const access = await refreshLocalAccessFromRegistry();
+    shop_status = access.status;
+  } catch {
+    shop_status = "active";
+  }
+
+  const token = signToken({ ...user, role: user.role.name });
   return res.json({
     success: true,
     message: "Login successful",
@@ -43,6 +92,7 @@ router.post("/auth/login", async (req, res) => {
       status_id: user.statusId,
       role: user.role.name,
       ststus: user.status.name,
+      shop_status,
     },
   });
 });

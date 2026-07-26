@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Building2,
   Info,
@@ -8,8 +9,9 @@ import {
 } from "lucide-react";
 import api from "../api";
 import { ErrorBox } from "../components/ui";
+import ConnectionCenter from "../components/ConnectionCenter";
 
-type Tab = "license" | "print" | "pos" | "display" | "about";
+type Tab = "connection" | "license" | "print" | "pos" | "display" | "about";
 
 const DEFAULTS: Record<string, string> = {
   shop_name: "My POS Store",
@@ -72,12 +74,28 @@ function Toggle({
 }
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<Tab>("license");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const initialTab: Tab =
+    tabParam === "connection" ||
+    tabParam === "license" ||
+    tabParam === "print" ||
+    tabParam === "pos" ||
+    tabParam === "display" ||
+    tabParam === "about"
+      ? tabParam
+      : "connection";
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [settings, setSettings] = useState<Record<string, string>>({ ...DEFAULTS });
   const [license, setLicense] = useState<any>(null);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+
+  function selectTab(id: Tab) {
+    setTab(id);
+    setSearchParams(id === "connection" ? { tab: "connection" } : { tab: id });
+  }
 
   function setField(key: string, value: string) {
     setSettings((s) => ({ ...s, [key]: value }));
@@ -154,6 +172,7 @@ export default function SettingsPage() {
   }
 
   const tabs: { id: Tab; label: string }[] = [
+    { id: "connection", label: "Connection" },
     { id: "license", label: "License Status" },
     { id: "print", label: "Print Settings" },
     { id: "pos", label: "POS Settings" },
@@ -190,7 +209,7 @@ export default function SettingsPage() {
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => selectTab(t.id)}
             className={`px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 -mb-[9px] ${
               tab === t.id
                 ? "text-emerald-700 border-emerald-600"
@@ -202,13 +221,19 @@ export default function SettingsPage() {
         ))}
       </div>
 
+      {tab === "connection" && <ConnectionCenter />}
+
       {tab === "license" && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs text-gray-500">Live status from subscription check API</div>
             <div className="flex flex-wrap gap-2">
-              <button type="button" className="h-9 px-3 rounded-lg border border-gray-200 text-sm font-semibold hover:bg-gray-50">
-                Switch to Online
+              <button
+                type="button"
+                onClick={() => selectTab("connection")}
+                className="h-9 px-3 rounded-lg border border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800 hover:bg-emerald-100"
+              >
+                Cloud sync / Connection
               </button>
               <button type="button" onClick={refreshLicense} className="h-9 px-3 rounded-lg border border-gray-200 text-sm font-semibold inline-flex items-center gap-1 hover:bg-gray-50">
                 <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh License

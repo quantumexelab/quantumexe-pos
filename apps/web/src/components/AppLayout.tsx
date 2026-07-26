@@ -18,11 +18,13 @@ import {
   Bell,
   Maximize,
   WifiOff,
+  Cloud,
+  RefreshCw,
   ChevronDown,
   ChevronUp,
   type LucideIcon,
 } from "lucide-react";
-import { auth } from "../api";
+import { auth, syncApi, type SyncStatus } from "../api";
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { BrandLogo } from "./BrandLogo";
@@ -180,9 +182,33 @@ export default function AppLayout() {
   const [expiry, setExpiry] = useState<string | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [sync, setSync] = useState<SyncStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const role = user?.role || "";
   const items = useMemo(() => nav.filter((n) => n.roles.includes(role)), [role]);
+
+  async function refreshSync() {
+    try {
+      const s = await syncApi.status();
+      setSync(s);
+    } catch {
+      setSync(null);
+    }
+  }
+
+  async function syncNow() {
+    setSyncing(true);
+    try {
+      await syncApi.push();
+      await refreshSync();
+    } catch (e) {
+      console.error(e);
+      await refreshSync();
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   useEffect(() => {
     api
@@ -196,9 +222,12 @@ export default function AppLayout() {
     const off = () => setOnline(false);
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
+    void refreshSync();
+    const t = setInterval(() => void refreshSync(), 60_000);
     return () => {
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
+      clearInterval(t);
     };
   }, []);
 
@@ -228,7 +257,7 @@ export default function AppLayout() {
             <span className="text-slate-900">Q</span>
             <span className="text-sky-500">EXE</span>
           </div>
-          <div className="hidden lg:block text-[10px] text-gray-400 mt-1">Version 1.0.1</div>
+          <div className="hidden lg:block text-[10px] text-gray-400 mt-1">Version 1.0.5</div>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1 min-h-0">
@@ -340,6 +369,44 @@ export default function AppLayout() {
               </>
             )}
           </div>
+          {sync?.enabled && (
+            <button
+              type="button"
+              onClick={() => void syncNow()}
+              disabled={syncing || !online}
+              title={sync.lastError || "Push local DB to Firestore backup"}
+              className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md border ${
+                sync.status === "error"
+                  ? "text-red-600 border-red-200 bg-red-50"
+                  : sync.status === "ok"
+                    ? "text-emerald-700 border-emerald-200 bg-emerald-50"
+                    : "text-gray-600 border-gray-200 bg-gray-50"
+              }`}
+            >
+              {syncing ? <RefreshCw size={12} className="animate-spin" /> : <Cloud size={12} />}
+              {syncing
+                ? "Syncing…"
+                : sync.status === "error"
+                  ? "Sync failed"
+                  : sync.lastPushAt
+                    ? `Synced ${new Date(sync.lastPushAt).toLocaleTimeString()}`
+                    : "Cloud sync"}
+            </button>
+          )}
+          {sync && !sync.enabled && sync.mode === "local-sqlite" && (
+            <button
+              type="button"
+              onClick={() => role === "Admin" && navigate("/setting?tab=connection")}
+              className="text-[10px] text-gray-400 flex items-center gap-1 hover:text-emerald-700"
+              title={
+                sync.credentialsConfigured
+                  ? "Open Connection Center to turn on cloud auto-sync"
+                  : "Cloud credentials not configured"
+              }
+            >
+              <Cloud size={12} /> Local only
+            </button>
+          )}
           <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
             <Search size={18} />
           </button>

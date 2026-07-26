@@ -310,4 +310,11 @@ export async function seedDemo() {
   });
 
   console.log("Seed complete. Login: 0771234567 / 123456");
+  try {
+    const { ensureMasterAdmin, ensureDemoShopApproved } = await import("./master/shopRegistry.js");
+    await ensureMasterAdmin();
+    await ensureDemoShopApproved();
+  } catch (e) {
+    console.warn("Master/demo shop registry seed skipped:", e instanceof Error ? e.message : e);
+  }
 }
