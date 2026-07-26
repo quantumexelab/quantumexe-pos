@@ -372,3 +372,25 @@ model License {
   expiryDate  DateTime?
   createdAt   DateTime  @default(now())
 }
+
+/** Hybrid sync metadata (single row, id=1). */
+model SyncState {
+  id         Int       @id @default(1)
+  lastPushAt DateTime?
+  lastPullAt DateTime?
+  lastError  String?
+  status     String    @default("idle")
+  updatedAt  DateTime  @updatedAt
+}
+
+/** Failed / pending cloud writes when offline. */
+model SyncOutbox {
+  id         Int      @id @default(autoincrement())
+  collection String
+  recordId   String
+  op         String   @default("upsert")
+  payload    String
+  createdAt  DateTime @default(now())
+  attempts   Int      @default(0)
+  lastError  String?
+}
