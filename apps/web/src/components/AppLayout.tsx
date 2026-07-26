@@ -17,6 +17,7 @@ import {
   Search,
   Bell,
   Maximize,
+  Minimize2,
   WifiOff,
   Cloud,
   RefreshCw,
@@ -179,6 +180,7 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [online, setOnline] = useState(navigator.onLine);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -211,13 +213,17 @@ export default function AppLayout() {
   useEffect(() => {
     const on = () => setOnline(true);
     const off = () => setOnline(false);
+    const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
+    document.addEventListener("fullscreenchange", onFs);
+    onFs();
     void refreshSync();
     const t = setInterval(() => void refreshSync(), 60_000);
     return () => {
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
+      document.removeEventListener("fullscreenchange", onFs);
       clearInterval(t);
     };
   }, []);
@@ -400,10 +406,18 @@ export default function AppLayout() {
             <Bell size={18} />
           </button>
           <button
+            type="button"
             className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-            onClick={() => document.documentElement.requestFullscreen?.()}
+            title={isFullscreen ? "Exit full screen (Esc)" : "Full screen"}
+            onClick={() => {
+              if (document.fullscreenElement) {
+                void document.exitFullscreen?.();
+              } else {
+                void document.documentElement.requestFullscreen?.();
+              }
+            }}
           >
-            <Maximize size={18} />
+            {isFullscreen ? <Minimize2 size={18} /> : <Maximize size={18} />}
           </button>
           <div className="text-sm font-semibold text-gray-700">{user?.name}</div>
         </header>
