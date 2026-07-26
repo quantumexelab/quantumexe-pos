@@ -6,7 +6,7 @@ Org policy blocks downloading keys. So we use:
 
 | Layer | Where |
 |-------|--------|
-| **Database** | Firebase Firestore |
+| **Database** | Firebase Firestore (`USE_FIRESTORE=1` on Functions) |
 | **API** | Firebase Cloud Functions (default credentials — **no JSON key**) |
 | **Website** | Vercel |
 

@@ -35,9 +35,18 @@ function ensureSqliteOnVercel() {
   console.log("Copied demo DB from", bundled, "to", tmpDb);
 }
 
+function prepareRuntime() {
+  if (!process.env.JWT_SECRET) process.env.JWT_SECRET = "reox-clone-dev-secret";
+  if (!process.env.FIREBASE_PROJECT_ID) process.env.FIREBASE_PROJECT_ID = "quantumexe-pos-test";
+
+  // Firestore mode: skip ephemeral SQLite bootstrap.
+  if (process.env.USE_FIRESTORE === "1") return;
+  ensureSqliteOnVercel();
+}
+
 function getApp() {
   if (!appPromise) {
-    ensureSqliteOnVercel();
+    prepareRuntime();
     // Vercel compiles this entry as CJS; dynamic import loads the ESM Express build.
     appPromise = import("../apps/api/dist/app.js").then((m) => m.default as ExpressApp);
   }

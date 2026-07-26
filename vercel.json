@@ -14,7 +14,9 @@
     }
   },
   "env": {
-    "JWT_SECRET": "reox-clone-dev-secret"
+    "JWT_SECRET": "reox-clone-dev-secret",
+    "USE_FIRESTORE": "1",
+    "FIREBASE_PROJECT_ID": "quantumexe-pos-test"
   },
   "functions": {
     "api/index.ts": {

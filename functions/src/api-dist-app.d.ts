@@ -1,5 +1,5 @@
 declare module "../api-dist/app.js" {
-  import type { Express } from "express";
-  const app: Express;
+  import type { Request, Response } from "express";
+  const app: (req: Request, res: Response) => void;
   export default app;
 }
