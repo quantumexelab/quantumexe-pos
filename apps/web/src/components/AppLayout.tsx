@@ -181,6 +181,9 @@ export default function AppLayout() {
   const location = useLocation();
   const [online, setOnline] = useState(navigator.onLine);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [headerQuery, setHeaderQuery] = useState("");
+  const [showBell, setShowBell] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -399,12 +402,115 @@ export default function AppLayout() {
               <Cloud size={12} /> Local only
             </button>
           )}
-          <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
-            <Search size={18} />
-          </button>
-          <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
-            <Bell size={18} />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              className={`p-2 rounded-lg hover:bg-gray-100 text-gray-500 ${showSearch ? "bg-gray-100 text-emerald-700" : ""}`}
+              title="Search (F)"
+              onClick={() => {
+                setShowBell(false);
+                setShowSearch((v) => !v);
+                // Prefer page search box when present
+                const pageSearch = document.querySelector<HTMLInputElement>("[data-page-search]");
+                if (pageSearch) {
+                  pageSearch.focus();
+                  pageSearch.select();
+                  setShowSearch(false);
+                }
+              }}
+            >
+              <Search size={18} />
+            </button>
+            {showSearch && (
+              <div className="absolute right-0 top-11 z-40 w-80 rounded-xl border border-gray-200 bg-white shadow-lg p-3">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const q = headerQuery.trim().toLowerCase();
+                    setShowSearch(false);
+                    if (!q) return;
+                    if (q.includes("invoice") || q.includes("sale")) navigate("/sales/manage-invoice");
+                    else if (q.includes("product") || q.includes("stock")) navigate("/products/product-list");
+                    else if (q.includes("customer")) navigate("/customer/manage-customer");
+                    else if (q.includes("user")) navigate("/manage-users");
+                    else if (q.includes("setting")) navigate("/setting");
+                    else if (q.includes("report")) navigate("/reports");
+                    else if (q.includes("pos")) navigate("/pos");
+                    else navigate(`/sales/manage-invoice`);
+                  }}
+                >
+                  <input
+                    autoFocus
+                    className="input"
+                    placeholder="Go to: invoices, products, customers…"
+                    value={headerQuery}
+                    onChange={(e) => setHeaderQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") setShowSearch(false);
+                    }}
+                  />
+                  <div className="mt-2 text-[11px] text-gray-500">Press Enter to open · Esc to close</div>
+                </form>
+              </div>
+            )}
+          </div>
+          <div className="relative">
+            <button
+              type="button"
+              className={`p-2 rounded-lg hover:bg-gray-100 text-gray-500 ${showBell ? "bg-gray-100 text-emerald-700" : ""}`}
+              title="Notifications"
+              onClick={() => {
+                setShowSearch(false);
+                setShowBell((v) => !v);
+              }}
+            >
+              <Bell size={18} />
+            </button>
+            {showBell && (
+              <div className="absolute right-0 top-11 z-40 w-80 rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+                <div className="px-3 py-2 border-b border-gray-100 text-sm font-bold text-gray-800">Notifications</div>
+                <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
+                  <div className="px-3 py-2.5 text-sm">
+                    <div className="font-semibold text-gray-800">System online</div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {online ? "Browser is connected to the network." : "You are offline — sales still save locally."}
+                    </div>
+                  </div>
+                  {sync?.enabled ? (
+                    <div className="px-3 py-2.5 text-sm">
+                      <div className="font-semibold text-gray-800">
+                        {sync.status === "error" ? "Cloud sync issue" : "Cloud sync"}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {sync.lastError ||
+                          (sync.lastPushAt
+                            ? `Last push ${new Date(sync.lastPushAt).toLocaleString()}`
+                            : "Auto-sync is enabled")}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="px-3 py-2.5 text-sm">
+                      <div className="font-semibold text-gray-800">Local-only mode</div>
+                      <div className="text-xs text-gray-500 mt-0.5">Turn on cloud sync from Settings → Connection.</div>
+                    </div>
+                  )}
+                  <div className="px-3 py-2.5 text-sm">
+                    <div className="font-semibold text-gray-800">Shortcuts tip</div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      On Manage Invoices: ↑↓ navigate · Enter view · P print · F search · R reset
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="w-full text-center text-xs font-semibold text-emerald-700 py-2 hover:bg-emerald-50 border-t border-gray-100"
+                  onClick={() => setShowBell(false)}
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"

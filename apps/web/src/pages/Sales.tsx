@@ -69,6 +69,7 @@ export function ManageInvoice() {
   const [toDate, setToDate] = useState("");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<any | null>(null);
+  const [cursor, setCursor] = useState(0);
   const pageSize = 10;
 
   async function load() {
@@ -151,6 +152,48 @@ export function ManageInvoice() {
   const pageRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const showingFrom = filtered.length ? (currentPage - 1) * pageSize + 1 : 0;
   const showingTo = Math.min(currentPage * pageSize, filtered.length);
+  const activeRow = pageRows[Math.min(cursor, Math.max(0, pageRows.length - 1))] || null;
+
+  useEffect(() => {
+    setCursor(0);
+  }, [currentPage, invoiceNo, fromDate, toDate, filtered.length]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      const typing = tag === "input" || tag === "textarea" || tag === "select" || (e.target as HTMLElement)?.isContentEditable;
+      if (e.key === "Escape" && selected) {
+        e.preventDefault();
+        setSelected(null);
+        return;
+      }
+      if (typing && e.key !== "Escape") return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setCursor((c) => Math.min(pageRows.length - 1, c + 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setCursor((c) => Math.max(0, c - 1));
+      } else if (e.key === "Enter" && activeRow) {
+        e.preventDefault();
+        setSelected(activeRow);
+      } else if ((e.key === "p" || e.key === "P") && activeRow) {
+        e.preventDefault();
+        printInvoice(activeRow);
+      } else if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        const el = document.querySelector<HTMLInputElement>("[data-page-search]");
+        el?.focus();
+        el?.select();
+      } else if (e.key === "r" || e.key === "R") {
+        e.preventDefault();
+        resetFilters();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pageRows, activeRow, selected]);
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
@@ -162,7 +205,8 @@ export function ManageInvoice() {
     setFromDate("");
     setToDate("");
     setPage(1);
-    load();
+    setCursor(0);
+    void load();
   }
 
   function printInvoice(row: any) {
@@ -282,6 +326,7 @@ export function ManageInvoice() {
           <div>
             <label className="text-xs font-semibold text-gray-600">Invoice Number</label>
             <input
+              data-page-search
               className="input mt-1"
               placeholder="Search invoice #"
               value={invoiceNo}
@@ -329,7 +374,11 @@ export function ManageInvoice() {
             </thead>
             <tbody>
               {pageRows.map((r, idx) => (
-                <tr key={r.id} className={idx % 2 === 0 ? "bg-green-50/40" : "bg-white"}>
+                <tr
+                  key={r.id}
+                  onClick={() => setCursor(idx)}
+                  className={`${idx === cursor ? "bg-emerald-100 ring-1 ring-inset ring-emerald-300" : idx % 2 === 0 ? "bg-green-50/40" : "bg-white"} cursor-pointer`}
+                >
                   <td className="px-3 py-3 font-semibold text-gray-700">#{r.id}</td>
                   <td className="px-3 py-3">
                     <div className="font-semibold text-gray-800">{r.invoiceNo}</div>
