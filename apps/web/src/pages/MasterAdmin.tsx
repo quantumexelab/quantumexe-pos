@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import {
   Building2,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Cloud,
   KeyRound,
   LogOut,
   RefreshCw,
@@ -35,11 +38,19 @@ type Shop = {
   firebaseProvisionedAt?: string | null;
 };
 
+type PanelTab = "firebase" | "access" | "security";
+
 function formatWhen(iso?: string | null) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString();
+}
+
+function statusClass(status: string) {
+  if (status === "active") return "bg-emerald-100 text-emerald-800";
+  if (status === "pending") return "bg-amber-100 text-amber-900";
+  return "bg-rose-100 text-rose-800";
 }
 
 export default function MasterAdmin() {
@@ -50,6 +61,8 @@ export default function MasterAdmin() {
   const [msg, setMsg] = useState("");
   const [selected, setSelected] = useState<Shop | null>(null);
   const [filter, setFilter] = useState("");
+  const [tab, setTab] = useState<PanelTab>("firebase");
+  const [showGuide, setShowGuide] = useState(false);
   const [pwdForm, setPwdForm] = useState({ currentPassword: "", newPassword: "" });
   const [resetPwd, setResetPwd] = useState("");
   const [busy, setBusy] = useState(false);
@@ -64,7 +77,19 @@ export default function MasterAdmin() {
     setError("");
     try {
       const { data } = await api.get("/master/shops");
-      setShops(data?.data || []);
+      const list: Shop[] = data?.data || [];
+      setShops(list);
+      if (selected) {
+        const updated = list.find((s) => s.shopId === selected.shopId) || null;
+        setSelected(updated);
+        if (updated) {
+          setFbForm({
+            firebaseProjectId: updated.firebaseProjectId || "",
+            firebaseClientEmail: updated.firebaseClientEmail || "",
+            firebasePrivateKey: "",
+          });
+        }
+      }
     } catch (e: unknown) {
       const ax = e as { response?: { data?: { message?: string } }; message?: string };
       setError(ax.response?.data?.message || ax.message || "Failed to load shops");
@@ -80,6 +105,7 @@ export default function MasterAdmin() {
       return;
     }
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   const filtered = useMemo(() => {
@@ -95,14 +121,15 @@ export default function MasterAdmin() {
     );
   }, [shops, filter]);
 
-  const stats = useMemo(() => {
-    return {
+  const stats = useMemo(
+    () => ({
       total: shops.length,
       pending: shops.filter((s) => s.status === "pending").length,
       active: shops.filter((s) => s.status === "active").length,
       blocked: shops.filter((s) => s.status === "revoked" || s.status === "overdue").length,
-    };
-  }, [shops]);
+    }),
+    [shops]
+  );
 
   async function act(path: string, body?: object, successMsg?: string, method: "post" | "delete" = "post") {
     setBusy(true);
@@ -114,19 +141,6 @@ export default function MasterAdmin() {
       if (!data.success) throw new Error(data.message || "Action failed");
       setMsg(successMsg || data.message || "Done");
       await load();
-      if (selected) {
-        const updated = (await api.get("/master/shops")).data?.data?.find(
-          (s: Shop) => s.shopId === selected.shopId
-        );
-        setSelected(updated || null);
-        if (updated) {
-          setFbForm({
-            firebaseProjectId: updated.firebaseProjectId || "",
-            firebaseClientEmail: updated.firebaseClientEmail || "",
-            firebasePrivateKey: "",
-          });
-        }
-      }
     } catch (e: unknown) {
       const ax = e as { response?: { data?: { message?: string } }; message?: string };
       setError(ax.response?.data?.message || ax.message || "Action failed");
@@ -137,6 +151,7 @@ export default function MasterAdmin() {
 
   function selectShop(s: Shop) {
     setSelected(s);
+    setTab(s.firebaseConfigured ? "access" : "firebase");
     setFbForm({
       firebaseProjectId: s.firebaseProjectId || "",
       firebaseClientEmail: s.firebaseClientEmail || "",
@@ -150,10 +165,14 @@ export default function MasterAdmin() {
     setPwdForm({ currentPassword: "", newPassword: "" });
   }
 
+  const step1Done = !!selected;
+  const step2Done = !!selected?.firebaseConfigured;
+  const step3Done = selected?.status === "active";
+
   return (
-    <div className="h-full overflow-y-auto bg-slate-100 auth-fade">
-      <div className="bg-slate-950 text-white">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
+    <div className="h-full overflow-y-auto bg-[#eef1f4]">
+      <header className="bg-slate-950 text-white sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <BrandLogo variant="dark" size="sm" showTagline />
             <div className="hidden sm:block border-l border-white/15 pl-4">
@@ -181,353 +200,431 @@ export default function MasterAdmin() {
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
       <div className="max-w-7xl mx-auto px-4 py-5 space-y-4">
         {error && <ErrorBox text={error} />}
         {msg && (
-          <div className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+          <div className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
             {msg}
           </div>
         )}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
-            ["Total shops", stats.total, "bg-white"],
-            ["Pending approval", stats.pending, "bg-amber-50"],
-            ["Active", stats.active, "bg-emerald-50"],
-            ["Blocked", stats.blocked, "bg-red-50"],
-          ].map(([label, value, bg]) => (
-            <div key={label as string} className={`rounded-xl border border-slate-200 ${bg} p-4`}>
-              <div className="text-2xl font-bold text-slate-900">{value as number}</div>
-              <div className="text-xs font-semibold text-slate-600 mt-1">{label as string}</div>
+            ["Total", stats.total, "border-slate-200 bg-white"],
+            ["Pending", stats.pending, "border-amber-200 bg-amber-50"],
+            ["Active", stats.active, "border-emerald-200 bg-emerald-50"],
+            ["Blocked", stats.blocked, "border-rose-200 bg-rose-50"],
+          ].map(([label, value, cls]) => (
+            <div key={label as string} className={`rounded-xl border ${cls} px-4 py-3`}>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums">{value as number}</div>
+              <div className="text-xs font-semibold text-slate-600 mt-0.5">{label as string}</div>
             </div>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-4">
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="text-sm font-bold text-slate-900">Shops</div>
-                <div className="text-xs text-slate-500">Select a shop to approve payment / manage access</div>
+        {/* Workflow strip */}
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-2">
+            Onboard order
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0">
+            {[
+              { n: 1, label: "Select shop", done: step1Done },
+              { n: 2, label: "Connect Firebase", done: step2Done },
+              { n: 3, label: "Approve payment", done: step3Done },
+            ].map((s, i) => (
+              <div key={s.n} className="flex items-center gap-2 flex-1 min-w-0">
+                <div
+                  className={`h-7 w-7 rounded-full grid place-items-center text-xs font-bold shrink-0 ${
+                    s.done ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {s.done ? <CheckCircle2 size={14} /> : s.n}
+                </div>
+                <div className={`text-sm font-semibold truncate ${s.done ? "text-emerald-800" : "text-slate-700"}`}>
+                  {s.label}
+                </div>
+                {i < 2 && (
+                  <div className="hidden sm:block flex-1 h-px bg-slate-200 mx-3" aria-hidden />
+                )}
               </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,380px)_1fr] gap-4 items-start">
+          {/* Shop list */}
+          <aside className="bg-white border border-slate-200 rounded-2xl overflow-hidden lg:sticky lg:top-[4.5rem]">
+            <div className="px-4 py-3 border-b border-slate-100 space-y-2">
+              <div className="text-sm font-bold text-slate-900">1 · Shops</div>
               <input
-                className="input max-w-xs"
+                className="input w-full text-sm"
                 placeholder="Search shop, owner, phone…"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
               />
             </div>
-            <div className="overflow-x-auto">
-              <table className="table text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-slate-500">
-                    <th className="px-4 py-2">Shop</th>
-                    <th className="px-4 py-2">Owner</th>
-                    <th className="px-4 py-2">Phone</th>
-                    <th className="px-4 py-2">Status</th>
-                    <th className="px-4 py-2">Next due</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((s) => (
-                    <tr
-                      key={s.shopId}
-                      onClick={() => selectShop(s)}
-                      className={`cursor-pointer border-t border-slate-50 hover:bg-emerald-50/40 ${
-                        selected?.shopId === s.shopId ? "bg-emerald-50" : ""
-                      }`}
-                    >
-                      <td className="px-4 py-3 font-semibold text-slate-800">
-                        {s.shopName}
-                        {s.firebaseConfigured ? (
-                          <span className="ml-2 text-[10px] font-bold text-sky-600">FB</span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">{s.ownerName}</td>
-                      <td className="px-4 py-3">{s.phone}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${
-                            s.status === "active"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : s.status === "pending"
-                                ? "bg-amber-100 text-amber-800"
-                                : "bg-red-100 text-red-700"
-                          }`}
-                        >
-                          {s.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-500">{formatWhen(s.nextDueAt)}</td>
-                    </tr>
-                  ))}
-                  {!filtered.length && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
-                        {loading ? "Loading…" : "No shops yet — waiting for registrations"}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-sky-200 bg-white p-4 space-y-3">
-              <div className="text-sm font-bold text-slate-900">New shop — Firebase setup (step by step)</div>
-              <ol className="list-decimal pl-4 space-y-2 text-xs text-slate-700 leading-relaxed">
-                <li>
-                  Open{" "}
-                  <a
-                    className="text-sky-700 font-semibold underline"
-                    href="https://console.firebase.google.com/"
-                    target="_blank"
-                    rel="noreferrer"
+            <div className="max-h-[min(70vh,640px)] overflow-y-auto divide-y divide-slate-100">
+              {filtered.map((s) => {
+                const active = selected?.shopId === s.shopId;
+                return (
+                  <button
+                    key={s.shopId}
+                    type="button"
+                    onClick={() => selectShop(s)}
+                    className={`w-full text-left px-4 py-3 transition-colors ${
+                      active ? "bg-emerald-50 border-l-4 border-l-emerald-600" : "hover:bg-slate-50 border-l-4 border-l-transparent"
+                    }`}
                   >
-                    Firebase Console
-                  </a>{" "}
-                  with your Google account → <strong>Add project</strong> (one project = one shop).
-                </li>
-                <li>
-                  In that project: <strong>Build → Firestore Database → Create database</strong> (start in
-                  production or test mode).
-                </li>
-                <li>
-                  Go to <strong>Project settings → Service accounts → Generate new private key</strong>.
-                  Download the JSON file.
-                </li>
-                <li>
-                  Select the shop on the left → fill below:
-                  <ul className="list-disc pl-4 mt-1 space-y-0.5 text-slate-600">
-                    <li>
-                      <strong>Project ID</strong> — from JSON <code className="bg-slate-100 px-1 rounded">project_id</code>
-                    </li>
-                    <li>
-                      <strong>Client email</strong> —{" "}
-                      <code className="bg-slate-100 px-1 rounded">client_email</code>
-                    </li>
-                    <li>
-                      <strong>Private key</strong> — paste{" "}
-                      <code className="bg-slate-100 px-1 rounded">private_key</code> OR paste the{" "}
-                      <strong>full JSON</strong> file contents
-                    </li>
-                  </ul>
-                </li>
-                <li>
-                  Click <strong>Save &amp; provision DB</strong> (creates Admin user + roles in that shop DB).
-                </li>
-                <li>
-                  Then click <strong>Confirm payment &amp; approve</strong> so the shop can log in to POS.
-                </li>
-              </ol>
-              <p className="text-[11px] text-slate-500 border-t border-slate-100 pt-2">
-                Master registry / Master login stays on the control Firebase (server env). Only shop POS data
-                uses the project you connect here.
-              </p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-900 truncate">{s.shopName}</div>
+                        <div className="text-xs text-slate-500 truncate mt-0.5">
+                          {s.ownerName} · {s.phone}
+                        </div>
+                      </div>
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusClass(s.status)}`}>
+                        {s.status}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 text-[11px]">
+                      <span
+                        className={`inline-flex items-center gap-1 font-semibold ${
+                          s.firebaseConfigured ? "text-sky-700" : "text-slate-400"
+                        }`}
+                      >
+                        <Cloud size={12} />
+                        {s.firebaseConfigured ? "Firebase OK" : "No Firebase"}
+                      </span>
+                      <span className="text-slate-300">·</span>
+                      <span className="text-slate-500">Due {formatWhen(s.nextDueAt)}</span>
+                    </div>
+                  </button>
+                );
+              })}
+              {!filtered.length && (
+                <div className="px-4 py-10 text-center text-sm text-slate-400">
+                  {loading ? "Loading…" : "No shops yet"}
+                </div>
+              )}
             </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4">
-              <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                <Building2 size={16} /> Shop detail
+          </aside>
+
+          {/* Workspace */}
+          <section className="space-y-4 min-w-0">
+            {!selected ? (
+              <div className="bg-white border border-dashed border-slate-300 rounded-2xl px-6 py-16 text-center">
+                <Building2 className="mx-auto text-slate-300 mb-3" size={36} />
+                <div className="text-base font-bold text-slate-800">Select a shop from the left</div>
+                <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+                  Then connect that shop&apos;s Firebase project and approve payment — in that order.
+                </p>
               </div>
-              {!selected ? (
-                <p className="text-sm text-slate-500 mt-3">Select a shop from the list.</p>
-              ) : (
-                <div className="mt-3 space-y-3 text-sm">
-                  <div className="grid grid-cols-2 gap-2">
+            ) : (
+              <>
+                <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Selected shop</div>
+                      <h2 className="text-xl font-bold text-slate-900 mt-0.5">{selected.shopName}</h2>
+                      <p className="text-sm text-slate-600 mt-1">
+                        {selected.ownerName} · {selected.phone} · {selected.email}
+                      </p>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${statusClass(selected.status)}`}>
+                      {selected.status}
+                    </span>
+                  </div>
+                  <dl className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-xs">
                     {[
-                      ["Shop", selected.shopName],
-                      ["Owner", selected.ownerName],
-                      ["Phone", selected.phone],
-                      ["Email", selected.email],
                       ["City", selected.city || "—"],
                       ["NIC", selected.nic || "—"],
-                      ["Address", selected.address || "—"],
                       ["Biz reg", selected.businessRegNo || "—"],
                       ["Cloud ID", selected.shopId],
                       ["Registered", formatWhen(selected.createdAt)],
                       ["Last paid", formatWhen(selected.lastPaidAt)],
+                      ["Next due", formatWhen(selected.nextDueAt)],
+                      ["Address", selected.address || "—"],
                     ].map(([k, v]) => (
-                      <div key={k as string} className="rounded-lg bg-slate-50 border border-slate-100 px-2.5 py-2">
-                        <div className="text-[10px] font-semibold text-slate-500">{k}</div>
-                        <div className="font-semibold text-slate-800 break-words">{v as string}</div>
+                      <div key={k}>
+                        <dt className="text-slate-400 font-semibold">{k}</dt>
+                        <dd className="text-slate-800 font-medium break-all">{v}</dd>
                       </div>
+                    ))}
+                  </dl>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                  <div className="flex border-b border-slate-100">
+                    {(
+                      [
+                        ["firebase", "2 · Firebase", Cloud],
+                        ["access", "3 · Payment", Wallet],
+                        ["security", "Security", KeyRound],
+                      ] as const
+                    ).map(([id, label, Icon]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setTab(id)}
+                        className={`flex-1 px-3 py-3 text-sm font-semibold inline-flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+                          tab === id
+                            ? "border-emerald-600 text-emerald-800 bg-emerald-50/50"
+                            : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                        }`}
+                      >
+                        <Icon size={15} />
+                        <span className="hidden sm:inline">{label}</span>
+                        <span className="sm:hidden">{id === "firebase" ? "Firebase" : id === "access" ? "Pay" : "Sec"}</span>
+                      </button>
                     ))}
                   </div>
 
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <button
-                      type="button"
-                      disabled={busy}
-                      className="btn btn-primary"
-                      onClick={() =>
-                        void act(
-                          `/master/shops/${selected.shopId}/approve`,
-                          { paymentNote: "Payment confirmed by Master Admin" },
-                          "Approved — payment confirmed, shop unlocked"
-                        )
-                      }
-                    >
-                      <CheckCircle2 size={16} /> Confirm payment & approve
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      className="btn btn-muted"
-                      onClick={() =>
-                        void act(
-                          `/master/shops/${selected.shopId}/mark-paid`,
-                          { paymentNote: "Monthly payment renewed" },
-                          "Payment renewed (+30 days)"
-                        )
-                      }
-                    >
-                      <Wallet size={16} /> Mark paid / renew
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      className="h-9 px-3 rounded-lg bg-red-600 text-white text-sm font-semibold inline-flex items-center gap-1.5 hover:bg-red-700"
-                      onClick={() =>
-                        void act(`/master/shops/${selected.shopId}/revoke`, {}, "Shop access revoked")
-                      }
-                    >
-                      <ShieldOff size={16} /> Revoke access
-                    </button>
-                  </div>
+                  <div className="p-4 sm:p-5">
+                    {tab === "firebase" && (
+                      <div className="space-y-4 max-w-xl">
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <div className="text-sm font-bold text-slate-900">Connect shop database</div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              One Firebase project = this shop&apos;s POS data only.
+                            </p>
+                          </div>
+                          <span
+                            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                              selected.firebaseConfigured
+                                ? "bg-sky-100 text-sky-800"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {selected.firebaseConfigured ? "Connected" : "Not connected"}
+                          </span>
+                        </div>
 
-                  <div className="border-t border-slate-100 pt-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs font-semibold text-slate-600">Shop Firebase project</div>
-                      <span
-                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                          selected.firebaseConfigured
-                            ? "bg-sky-100 text-sky-700"
-                            : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {selected.firebaseConfigured ? "Connected" : "Not connected"}
-                      </span>
-                    </div>
-                    <input
-                      className="input text-xs"
-                      placeholder="Firebase Project ID"
-                      value={fbForm.firebaseProjectId}
-                      onChange={(e) => setFbForm((p) => ({ ...p, firebaseProjectId: e.target.value }))}
-                    />
-                    <input
-                      className="input text-xs"
-                      placeholder="Service account client email"
-                      value={fbForm.firebaseClientEmail}
-                      onChange={(e) => setFbForm((p) => ({ ...p, firebaseClientEmail: e.target.value }))}
-                    />
-                    <textarea
-                      className="input text-xs min-h-[88px] font-mono"
-                      placeholder="Private key (or paste full service-account JSON here)"
-                      value={fbForm.firebasePrivateKey}
-                      onChange={(e) => setFbForm((p) => ({ ...p, firebasePrivateKey: e.target.value }))}
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={
-                          busy ||
-                          !fbForm.firebaseProjectId.trim() ||
-                          !fbForm.firebaseClientEmail.trim() ||
-                          !fbForm.firebasePrivateKey.trim()
-                        }
-                        className="btn btn-primary text-xs"
-                        onClick={() =>
-                          void act(
-                            `/master/shops/${selected.shopId}/firebase`,
-                            fbForm,
-                            "Firebase connected — shop database ready"
-                          )
-                        }
-                      >
-                        Save & provision DB
-                      </button>
-                      {selected.firebaseConfigured ? (
                         <button
                           type="button"
-                          disabled={busy}
-                          className="btn btn-muted text-xs"
-                          onClick={() =>
-                            void act(
-                              `/master/shops/${selected.shopId}/firebase`,
-                              undefined,
-                              "Firebase disconnected",
-                              "delete"
-                            )
-                          }
+                          onClick={() => setShowGuide((v) => !v)}
+                          className="w-full flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100"
                         >
-                          Disconnect
+                          How to create the Firebase project
+                          {showGuide ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
-                      ) : null}
-                    </div>
-                    {selected.firebaseProvisionedAt ? (
-                      <div className="text-[11px] text-slate-500">
-                        Provisioned {formatWhen(selected.firebaseProvisionedAt)}
-                      </div>
-                    ) : null}
-                  </div>
+                        {showGuide && (
+                          <ol className="list-decimal pl-5 space-y-1.5 text-xs text-slate-600 leading-relaxed bg-slate-50 border border-slate-100 rounded-lg p-3">
+                            <li>
+                              Open{" "}
+                              <a
+                                className="text-sky-700 font-semibold underline"
+                                href="https://console.firebase.google.com/"
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Firebase Console
+                              </a>{" "}
+                              → Add project
+                            </li>
+                            <li>Build → Firestore Database → Create database</li>
+                            <li>Project settings → Service accounts → Generate new private key (JSON)</li>
+                            <li>Paste Project ID, client email, and private key (or full JSON) below</li>
+                            <li>Save &amp; provision → then open Payment tab and Approve</li>
+                          </ol>
+                        )}
 
-                  <div className="border-t border-slate-100 pt-3">
-                    <div className="text-xs font-semibold text-slate-600 mb-2">Reset Super Admin password</div>
-                    <div className="flex gap-2">
-                      <input
-                        className="input"
-                        type="text"
-                        placeholder="New password"
-                        value={resetPwd}
-                        onChange={(e) => setResetPwd(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        disabled={busy || resetPwd.length < 6}
-                        className="btn btn-muted shrink-0"
-                        onClick={() => {
-                          void act(
-                            `/master/shops/${selected.shopId}/reset-password`,
-                            { password: resetPwd },
-                            "Password reset"
-                          ).then(() => setResetPwd(""));
-                        }}
-                      >
-                        <KeyRound size={16} /> Reset
-                      </button>
-                    </div>
+                        <div className="space-y-2">
+                          <label className="text-[11px] font-bold uppercase text-slate-500">Project ID</label>
+                          <input
+                            className="input w-full text-sm"
+                            placeholder="my-shop-pos"
+                            value={fbForm.firebaseProjectId}
+                            onChange={(e) => setFbForm((p) => ({ ...p, firebaseProjectId: e.target.value }))}
+                          />
+                          <label className="text-[11px] font-bold uppercase text-slate-500">Client email</label>
+                          <input
+                            className="input w-full text-sm"
+                            placeholder="firebase-adminsdk-…@….iam.gserviceaccount.com"
+                            value={fbForm.firebaseClientEmail}
+                            onChange={(e) => setFbForm((p) => ({ ...p, firebaseClientEmail: e.target.value }))}
+                          />
+                          <label className="text-[11px] font-bold uppercase text-slate-500">
+                            Private key or full JSON
+                          </label>
+                          <textarea
+                            className="input w-full text-xs min-h-[100px] font-mono"
+                            placeholder="-----BEGIN PRIVATE KEY----- … or paste entire service-account JSON"
+                            value={fbForm.firebasePrivateKey}
+                            onChange={(e) => setFbForm((p) => ({ ...p, firebasePrivateKey: e.target.value }))}
+                          />
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <button
+                            type="button"
+                            disabled={
+                              busy ||
+                              !fbForm.firebaseProjectId.trim() ||
+                              !fbForm.firebaseClientEmail.trim() ||
+                              !fbForm.firebasePrivateKey.trim()
+                            }
+                            className="btn btn-primary"
+                            onClick={() =>
+                              void act(
+                                `/master/shops/${selected.shopId}/firebase`,
+                                fbForm,
+                                "Firebase connected — shop database ready"
+                              ).then(() => setTab("access"))
+                            }
+                          >
+                            <Cloud size={16} /> Save &amp; provision DB
+                          </button>
+                          {selected.firebaseConfigured ? (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="btn btn-muted"
+                              onClick={() =>
+                                void act(
+                                  `/master/shops/${selected.shopId}/firebase`,
+                                  undefined,
+                                  "Firebase disconnected",
+                                  "delete"
+                                )
+                              }
+                            >
+                              Disconnect
+                            </button>
+                          ) : null}
+                        </div>
+                        {selected.firebaseProvisionedAt ? (
+                          <p className="text-[11px] text-slate-500">
+                            Last provisioned {formatWhen(selected.firebaseProvisionedAt)}
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {tab === "access" && (
+                      <div className="space-y-4 max-w-xl">
+                        <div>
+                          <div className="text-sm font-bold text-slate-900">Payment & access</div>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Approve after Firebase is connected so the shop can use POS.
+                          </p>
+                        </div>
+                        {!selected.firebaseConfigured && (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                            Firebase not connected yet. Open the <strong>Firebase</strong> tab first.
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="btn btn-primary"
+                            onClick={() =>
+                              void act(
+                                `/master/shops/${selected.shopId}/approve`,
+                                { paymentNote: "Payment confirmed by Master Admin" },
+                                "Approved — payment confirmed, shop unlocked"
+                              )
+                            }
+                          >
+                            <CheckCircle2 size={16} /> Confirm payment &amp; approve
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="btn btn-muted"
+                            onClick={() =>
+                              void act(
+                                `/master/shops/${selected.shopId}/mark-paid`,
+                                { paymentNote: "Monthly payment renewed" },
+                                "Payment renewed (+30 days)"
+                              )
+                            }
+                          >
+                            <Wallet size={16} /> Mark paid / renew
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="h-9 px-3 rounded-lg bg-rose-600 text-white text-sm font-semibold inline-flex items-center gap-1.5 hover:bg-rose-700"
+                            onClick={() =>
+                              void act(`/master/shops/${selected.shopId}/revoke`, {}, "Shop access revoked")
+                            }
+                          >
+                            <ShieldOff size={16} /> Revoke
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {tab === "security" && (
+                      <div className="space-y-6 max-w-md">
+                        <div>
+                          <div className="text-sm font-bold text-slate-900 mb-2">Reset shop Super Admin password</div>
+                          <div className="flex gap-2">
+                            <input
+                              className="input flex-1"
+                              type="text"
+                              placeholder="New password (min 6)"
+                              value={resetPwd}
+                              onChange={(e) => setResetPwd(e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              disabled={busy || resetPwd.length < 6}
+                              className="btn btn-muted shrink-0"
+                              onClick={() => {
+                                void act(
+                                  `/master/shops/${selected.shopId}/reset-password`,
+                                  { password: resetPwd },
+                                  "Password reset"
+                                ).then(() => setResetPwd(""));
+                              }}
+                            >
+                              <KeyRound size={16} /> Reset
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
+              </>
+            )}
 
-            <form onSubmit={changeMasterPassword} className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
-              <div className="text-sm font-bold text-slate-900">Change Master Admin password</div>
+            <form
+              onSubmit={changeMasterPassword}
+              className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-end gap-3"
+            >
+              <div className="sm:w-40 shrink-0">
+                <div className="text-sm font-bold text-slate-900">Master password</div>
+                <div className="text-[11px] text-slate-500">Your login only</div>
+              </div>
               <input
-                className="input"
+                className="input flex-1"
                 type="password"
-                placeholder="Current password"
+                placeholder="Current"
                 value={pwdForm.currentPassword}
                 onChange={(e) => setPwdForm((p) => ({ ...p, currentPassword: e.target.value }))}
                 required
               />
               <input
-                className="input"
+                className="input flex-1"
                 type="password"
-                placeholder="New password"
+                placeholder="New (min 6)"
                 value={pwdForm.newPassword}
                 onChange={(e) => setPwdForm((p) => ({ ...p, newPassword: e.target.value }))}
                 required
                 minLength={6}
               />
-              <button className="btn btn-primary" disabled={busy}>
-                Update password
+              <button className="btn btn-primary shrink-0" disabled={busy}>
+                Update
               </button>
             </form>
-          </div>
+          </section>
         </div>
       </div>
     </div>
