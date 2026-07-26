@@ -739,100 +739,100 @@ router.post("/quotations/:id/convert", requireAuth, async (req, res) => {
 
 // ---------- Analytics / Dashboard ----------
 router.get("/analytics/dashboard", requireAuth, async (_req, res) => {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 6);
+    weekAgo.setHours(0, 0, 0, 0);
 
-  const [todaySales, invoiceCount, productCount, customerCount, supplierCount, lowStock, allInvoices, sessions] =
-    await Promise.all([
-      prisma.invoice.aggregate({ where: { createdAt: { gte: startOfDay } }, _sum: { total: true }, _count: true }),
-      prisma.invoice.count(),
-      prisma.product.count({ where: { active: true } }),
-      prisma.customer.count(),
-      prisma.supplier.count(),
-      prisma.stock.findMany(),
-      prisma.invoice.findMany({ include: { items: { include: { variant: { include: { product: true } } } } } }),
-      prisma.posSession.count(),
-    ]);
+    // Keep this Firestore-friendly: avoid nested includes (N+1 / cold-start timeouts on Vercel).
+    const [invoiceCount, productCount, customerCount, supplierCount, sessions, stocks, weekInvoices, expenses] =
+      await Promise.all([
+        prisma.invoice.count(),
+        prisma.product.count({ where: { active: true } }),
+        prisma.customer.count(),
+        prisma.supplier.count(),
+        prisma.posSession.count(),
+        prisma.stock.findMany(),
+        prisma.invoice.findMany({
+          where: { createdAt: { gte: weekAgo } },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.cashMovement.aggregate({ where: { type: "OUT" }, _sum: { amount: true } }),
+      ]);
 
-  const low = lowStock.filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold).length;
-  const revenue = allInvoices.reduce((s, i) => s + i.total, 0);
-  const gross = allInvoices.reduce((s, i) => s + i.subtotal, 0);
-  const discounts = allInvoices.reduce((s, i) => s + i.discount, 0);
-  const costs = allInvoices.reduce(
-    (s, inv) => s + inv.items.reduce((a, it) => a + it.qty * (it.variant.cost || 0), 0),
-    0
-  );
-  const expenses = await prisma.cashMovement.aggregate({ where: { type: "OUT" }, _sum: { amount: true } });
-  const misc = expenses._sum.amount || 0;
-  const netProfit = revenue - costs - misc;
+    const low = stocks.filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold).length;
+    const todayInvoices = weekInvoices.filter((i) => new Date(i.createdAt).getTime() >= startOfDay.getTime());
+    const todaysSales = todayInvoices.reduce((s, i) => s + Number(i.total || 0), 0);
+    const revenue = weekInvoices.reduce((s, i) => s + Number(i.total || 0), 0);
+    const gross = weekInvoices.reduce((s, i) => s + Number(i.subtotal || 0), 0);
+    const discounts = weekInvoices.reduce((s, i) => s + Number(i.discount || 0), 0);
+    const misc = Number(expenses._sum.amount || 0);
+    const netProfit = revenue - discounts - misc;
 
-  const popularMap = new Map<string, number>();
-  for (const inv of allInvoices) {
-    for (const it of inv.items) {
-      const name = it.variant.product.name;
-      popularMap.set(name, (popularMap.get(name) || 0) + it.qty);
+    const revenueSeries = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const dayTotal = weekInvoices
+        .filter((inv) => new Date(inv.createdAt).toISOString().slice(0, 10) === key)
+        .reduce((s, inv) => s + Number(inv.total || 0), 0);
+      revenueSeries.push({ date: key, total: dayTotal });
     }
+
+    // Skip nested popular-product scan on cloud (was causing 30s+ timeouts).
+    const popular: { name: string; sales: number }[] = [];
+
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+    const cpus = os.cpus();
+    const cpuLoad = Math.min(
+      100,
+      Math.round(
+        cpus.reduce((s, c) => {
+          const t = Object.values(c.times).reduce((a, b) => a + b, 0);
+          return s + ((t - c.times.idle) / t) * 100;
+        }, 0) / Math.max(1, cpus.length)
+      )
+    );
+
+    res.json(
+      ok({
+        kpis: {
+          todaysSales,
+          invoicesToday: todayInvoices.length,
+          invoices: invoiceCount,
+          products: productCount,
+          customers: customerCount,
+          suppliers: supplierCount,
+          lowStock: low,
+        },
+        revenue: { total: revenue, growth: 100, series: revenueSeries },
+        popular,
+        financial: {
+          grossSales: gross,
+          discounts,
+          netProfit,
+          miscExpenses: misc,
+          growth: 100,
+        },
+        sessions: { total: sessions, growth: 100 },
+        resources: {
+          cpu: cpuLoad,
+          memory: totalMem ? Math.round((usedMem / totalMem) * 100) : 0,
+          memoryDetail: `${(usedMem / 1e9).toFixed(1)}GB/${(totalMem / 1e9).toFixed(1)}GB`,
+          storage: 69,
+          storageDetail: "6.9GB/10.0GB",
+        },
+      })
+    );
+  } catch (e) {
+    console.error("[dashboard]", e);
+    res.status(500).json(fail(e instanceof Error ? e.message : "Dashboard failed", 500));
   }
-  const popular = [...popularMap.entries()]
-    .map(([name, sales]) => ({ name, sales }))
-    .sort((a, b) => b.sales - a.sales)
-    .slice(0, 5);
-
-  const revenueSeries = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    const dayTotal = allInvoices
-      .filter((inv) => inv.createdAt.toISOString().slice(0, 10) === key)
-      .reduce((s, inv) => s + inv.total, 0);
-    revenueSeries.push({ date: key, total: dayTotal });
-  }
-
-  const totalMem = os.totalmem();
-  const freeMem = os.freemem();
-  const usedMem = totalMem - freeMem;
-  const cpus = os.cpus();
-  const cpuLoad = Math.min(
-    100,
-    Math.round(
-      cpus.reduce((s, c) => {
-        const t = Object.values(c.times).reduce((a, b) => a + b, 0);
-        return s + ((t - c.times.idle) / t) * 100;
-      }, 0) / cpus.length
-    )
-  );
-
-  res.json(
-    ok({
-      kpis: {
-        todaysSales: todaySales._sum.total || 0,
-        invoicesToday: todaySales._count,
-        invoices: invoiceCount,
-        products: productCount,
-        customers: customerCount,
-        suppliers: supplierCount,
-        lowStock: low,
-      },
-      revenue: { total: revenue, growth: 100, series: revenueSeries },
-      popular,
-      financial: {
-        grossSales: gross,
-        discounts,
-        netProfit,
-        miscExpenses: misc + costs,
-        growth: 100,
-      },
-      sessions: { total: sessions, growth: 100 },
-      resources: {
-        cpu: cpuLoad,
-        memory: Math.round((usedMem / totalMem) * 100),
-        memoryDetail: `${(usedMem / 1e9).toFixed(1)}GB/${(totalMem / 1e9).toFixed(1)}GB`,
-        storage: 69,
-        storageDetail: "6.9GB/10.0GB",
-      },
-    })
-  );
 });
 
 // ---------- Employees ----------

@@ -248,7 +248,7 @@ export default function AppLayout() {
             <span className="text-slate-900">Q</span>
             <span className="text-sky-500">EXE</span>
           </div>
-          <div className="hidden lg:block text-[10px] text-gray-400 mt-1">Version 1.0.5</div>
+          <div className="hidden lg:block text-[10px] text-gray-400 mt-1">Version 1.0.6</div>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1 min-h-0">
