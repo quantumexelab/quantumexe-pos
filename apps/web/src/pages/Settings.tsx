@@ -10,6 +10,7 @@ import {
 import api from "../api";
 import { ErrorBox } from "../components/ui";
 import ConnectionCenter from "../components/ConnectionCenter";
+import { APP_VERSION } from "../version";
 
 type Tab = "connection" | "license" | "print" | "pos" | "display" | "about";
 
@@ -48,7 +49,7 @@ const DEFAULTS: Record<string, string> = {
   online_access: "No",
   db_type: "offline",
   plan_name: "1st Month Free (Demo)",
-  version: "1.0.1",
+  version: APP_VERSION,
 };
 
 function Toggle({
@@ -114,7 +115,7 @@ export default function SettingsPage() {
     setError("");
     try {
       const [s, l] = await Promise.all([api.get("/settings"), api.get("/license/status")]);
-      const merged = { ...DEFAULTS, ...(s.data.data || {}) };
+      const merged = { ...DEFAULTS, ...(s.data.data || {}), version: APP_VERSION };
       setSettings(merged);
       setLicense(l.data.data || null);
     } catch (e: any) {
@@ -138,7 +139,7 @@ export default function SettingsPage() {
     setError("");
     setMsg("");
     try {
-      await api.put("/settings", settings);
+      await api.put("/settings", { ...settings, version: APP_VERSION });
       setMsg("Settings saved");
     } catch (e: any) {
       setError(e.message || "Failed to save");
@@ -608,7 +609,7 @@ export default function SettingsPage() {
                 <span className="text-sky-500">EXE</span> POS System
               </h2>
               <span className="inline-flex mt-2 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
-                Version {settings.version || "1.0.1"}
+                Version {APP_VERSION}
               </span>
             </div>
             <p className="text-sm text-gray-600 max-w-xl mx-auto">

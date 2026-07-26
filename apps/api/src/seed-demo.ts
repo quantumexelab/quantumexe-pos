@@ -307,7 +307,7 @@ export async function seedDemo() {
       { key: "online_access", value: "No" },
       { key: "db_type", value: "offline" },
       { key: "plan_name", value: "1st Month Free (Demo)" },
-      { key: "version", value: "1.0.1" },
+      { key: "version", value: "1.0.8" },
       { key: "low_stock_threshold", value: "5" },
     ],
   });

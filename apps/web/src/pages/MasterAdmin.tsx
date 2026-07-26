@@ -29,6 +29,10 @@ type Shop = {
   nextDueAt?: string | null;
   approvedAt?: string | null;
   createdAt: string;
+  firebaseProjectId?: string;
+  firebaseClientEmail?: string;
+  firebaseConfigured?: boolean;
+  firebaseProvisionedAt?: string | null;
 };
 
 function formatWhen(iso?: string | null) {
@@ -49,6 +53,11 @@ export default function MasterAdmin() {
   const [pwdForm, setPwdForm] = useState({ currentPassword: "", newPassword: "" });
   const [resetPwd, setResetPwd] = useState("");
   const [busy, setBusy] = useState(false);
+  const [fbForm, setFbForm] = useState({
+    firebaseProjectId: "",
+    firebaseClientEmail: "",
+    firebasePrivateKey: "",
+  });
 
   async function load() {
     setLoading(true);
@@ -95,12 +104,13 @@ export default function MasterAdmin() {
     };
   }, [shops]);
 
-  async function act(path: string, body?: object, successMsg?: string) {
+  async function act(path: string, body?: object, successMsg?: string, method: "post" | "delete" = "post") {
     setBusy(true);
     setError("");
     setMsg("");
     try {
-      const { data } = await api.post(path, body || {});
+      const { data } =
+        method === "delete" ? await api.delete(path) : await api.post(path, body || {});
       if (!data.success) throw new Error(data.message || "Action failed");
       setMsg(successMsg || data.message || "Done");
       await load();
@@ -109,6 +119,13 @@ export default function MasterAdmin() {
           (s: Shop) => s.shopId === selected.shopId
         );
         setSelected(updated || null);
+        if (updated) {
+          setFbForm({
+            firebaseProjectId: updated.firebaseProjectId || "",
+            firebaseClientEmail: updated.firebaseClientEmail || "",
+            firebasePrivateKey: "",
+          });
+        }
       }
     } catch (e: unknown) {
       const ax = e as { response?: { data?: { message?: string } }; message?: string };
@@ -116,6 +133,15 @@ export default function MasterAdmin() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function selectShop(s: Shop) {
+    setSelected(s);
+    setFbForm({
+      firebaseProjectId: s.firebaseProjectId || "",
+      firebaseClientEmail: s.firebaseClientEmail || "",
+      firebasePrivateKey: "",
+    });
   }
 
   async function changeMasterPassword(e: FormEvent) {
@@ -208,12 +234,17 @@ export default function MasterAdmin() {
                   {filtered.map((s) => (
                     <tr
                       key={s.shopId}
-                      onClick={() => setSelected(s)}
+                      onClick={() => selectShop(s)}
                       className={`cursor-pointer border-t border-slate-50 hover:bg-emerald-50/40 ${
                         selected?.shopId === s.shopId ? "bg-emerald-50" : ""
                       }`}
                     >
-                      <td className="px-4 py-3 font-semibold text-slate-800">{s.shopName}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-800">
+                        {s.shopName}
+                        {s.firebaseConfigured ? (
+                          <span className="ml-2 text-[10px] font-bold text-sky-600">FB</span>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-3">{s.ownerName}</td>
                       <td className="px-4 py-3">{s.phone}</td>
                       <td className="px-4 py-3">
@@ -245,6 +276,58 @@ export default function MasterAdmin() {
           </div>
 
           <div className="space-y-4">
+            <div className="rounded-2xl border border-sky-200 bg-white p-4 space-y-3">
+              <div className="text-sm font-bold text-slate-900">New shop — Firebase setup (step by step)</div>
+              <ol className="list-decimal pl-4 space-y-2 text-xs text-slate-700 leading-relaxed">
+                <li>
+                  Open{" "}
+                  <a
+                    className="text-sky-700 font-semibold underline"
+                    href="https://console.firebase.google.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Firebase Console
+                  </a>{" "}
+                  with your Google account → <strong>Add project</strong> (one project = one shop).
+                </li>
+                <li>
+                  In that project: <strong>Build → Firestore Database → Create database</strong> (start in
+                  production or test mode).
+                </li>
+                <li>
+                  Go to <strong>Project settings → Service accounts → Generate new private key</strong>.
+                  Download the JSON file.
+                </li>
+                <li>
+                  Select the shop on the left → fill below:
+                  <ul className="list-disc pl-4 mt-1 space-y-0.5 text-slate-600">
+                    <li>
+                      <strong>Project ID</strong> — from JSON <code className="bg-slate-100 px-1 rounded">project_id</code>
+                    </li>
+                    <li>
+                      <strong>Client email</strong> —{" "}
+                      <code className="bg-slate-100 px-1 rounded">client_email</code>
+                    </li>
+                    <li>
+                      <strong>Private key</strong> — paste{" "}
+                      <code className="bg-slate-100 px-1 rounded">private_key</code> OR paste the{" "}
+                      <strong>full JSON</strong> file contents
+                    </li>
+                  </ul>
+                </li>
+                <li>
+                  Click <strong>Save &amp; provision DB</strong> (creates Admin user + roles in that shop DB).
+                </li>
+                <li>
+                  Then click <strong>Confirm payment &amp; approve</strong> so the shop can log in to POS.
+                </li>
+              </ol>
+              <p className="text-[11px] text-slate-500 border-t border-slate-100 pt-2">
+                Master registry / Master login stays on the control Firebase (server env). Only shop POS data
+                uses the project you connect here.
+              </p>
+            </div>
             <div className="bg-white border border-slate-200 rounded-2xl p-4">
               <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
                 <Building2 size={16} /> Shop detail
@@ -263,6 +346,7 @@ export default function MasterAdmin() {
                       ["NIC", selected.nic || "—"],
                       ["Address", selected.address || "—"],
                       ["Biz reg", selected.businessRegNo || "—"],
+                      ["Cloud ID", selected.shopId],
                       ["Registered", formatWhen(selected.createdAt)],
                       ["Last paid", formatWhen(selected.lastPaidAt)],
                     ].map(([k, v]) => (
@@ -312,6 +396,82 @@ export default function MasterAdmin() {
                     >
                       <ShieldOff size={16} /> Revoke access
                     </button>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs font-semibold text-slate-600">Shop Firebase project</div>
+                      <span
+                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          selected.firebaseConfigured
+                            ? "bg-sky-100 text-sky-700"
+                            : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {selected.firebaseConfigured ? "Connected" : "Not connected"}
+                      </span>
+                    </div>
+                    <input
+                      className="input text-xs"
+                      placeholder="Firebase Project ID"
+                      value={fbForm.firebaseProjectId}
+                      onChange={(e) => setFbForm((p) => ({ ...p, firebaseProjectId: e.target.value }))}
+                    />
+                    <input
+                      className="input text-xs"
+                      placeholder="Service account client email"
+                      value={fbForm.firebaseClientEmail}
+                      onChange={(e) => setFbForm((p) => ({ ...p, firebaseClientEmail: e.target.value }))}
+                    />
+                    <textarea
+                      className="input text-xs min-h-[88px] font-mono"
+                      placeholder="Private key (or paste full service-account JSON here)"
+                      value={fbForm.firebasePrivateKey}
+                      onChange={(e) => setFbForm((p) => ({ ...p, firebasePrivateKey: e.target.value }))}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={
+                          busy ||
+                          !fbForm.firebaseProjectId.trim() ||
+                          !fbForm.firebaseClientEmail.trim() ||
+                          !fbForm.firebasePrivateKey.trim()
+                        }
+                        className="btn btn-primary text-xs"
+                        onClick={() =>
+                          void act(
+                            `/master/shops/${selected.shopId}/firebase`,
+                            fbForm,
+                            "Firebase connected — shop database ready"
+                          )
+                        }
+                      >
+                        Save & provision DB
+                      </button>
+                      {selected.firebaseConfigured ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className="btn btn-muted text-xs"
+                          onClick={() =>
+                            void act(
+                              `/master/shops/${selected.shopId}/firebase`,
+                              undefined,
+                              "Firebase disconnected",
+                              "delete"
+                            )
+                          }
+                        >
+                          Disconnect
+                        </button>
+                      ) : null}
+                    </div>
+                    {selected.firebaseProvisionedAt ? (
+                      <div className="text-[11px] text-slate-500">
+                        Provisioned {formatWhen(selected.firebaseProvisionedAt)}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="border-t border-slate-100 pt-3">

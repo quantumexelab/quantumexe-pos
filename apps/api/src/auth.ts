@@ -5,6 +5,12 @@ import { DEMO_SHOP_ID, runWithShop, tenancyEnabled } from "./shopContext.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "reox-clone-dev-secret";
 
+/** Paths shop users may call while pending / revoked (gate UI + status). */
+const SHOP_ACCESS_ALLOWLIST = new Set([
+  "/shop/access",
+  "/license/status",
+]);
+
 export type AuthUser = {
   id: number;
   role_id: number;
@@ -70,22 +76,28 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         role: "MasterAdmin",
         shopId: null,
       };
-      // Master sees all shops (no tenant filter)
       return runWithShop(null, () => next());
     }
 
-    const dbUser = await prisma.user.findUnique({
-      where: { id: payload.id },
-      include: { role: true, status: true },
-    });
+    let shopId = payload.shopId ?? null;
+    if (tenancyEnabled() && !shopId) shopId = DEMO_SHOP_ID;
+
+    const { warmShopFirestore } = await import("./master/shopFirebase.js");
+    await warmShopFirestore(shopId);
+
+    const dbUser = await runWithShop(shopId, async () =>
+      prisma.user.findUnique({
+        where: { id: payload.id },
+        include: { role: true, status: true },
+      })
+    );
     if (!dbUser || dbUser.status.name !== "Active") {
       return res.status(401).json(fail("Unauthorized", 401));
     }
 
-    let shopId = (dbUser as { shopId?: string | null }).shopId ?? payload.shopId ?? null;
-    if (tenancyEnabled() && !shopId) {
-      shopId = DEMO_SHOP_ID;
-    }
+    shopId = (dbUser as { shopId?: string | null }).shopId ?? shopId;
+    if (tenancyEnabled() && !shopId) shopId = DEMO_SHOP_ID;
+    await warmShopFirestore(shopId);
 
     req.user = {
       id: dbUser.id,
@@ -94,6 +106,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       role: dbUser.role.name,
       shopId,
     };
+
+    if (tenancyEnabled() && !SHOP_ACCESS_ALLOWLIST.has(req.path)) {
+      return runWithShop(shopId, () => {
+        void requireShopAccess(req, res, next);
+      });
+    }
+
     return runWithShop(shopId, () => next());
   } catch {
     return res.status(401).json(fail("Invalid token", 401));
@@ -105,8 +124,9 @@ export async function requireShopAccess(req: Request, res: Response, next: NextF
   if (req.user?.role === "MasterAdmin") return next();
   try {
     const { refreshLocalAccessFromRegistry } = await import("./master/shopRegistry.js");
-    const access = await refreshLocalAccessFromRegistry();
+    const access = await refreshLocalAccessFromRegistry(req.user?.shopId ?? null);
     if (access.status === "active") return next();
+    // Untagged local demo / no registry row yet
     if (access.status === "unknown" && !access.shopId) return next();
     return res.status(403).json(
       fail(

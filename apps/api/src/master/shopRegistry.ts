@@ -23,6 +23,11 @@ export type ShopRecord = {
   approvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Dedicated Firebase project for this shop's POS data (Master-configured). */
+  firebaseProjectId?: string;
+  firebaseClientEmail?: string;
+  firebasePrivateKey?: string;
+  firebaseProvisionedAt?: string | null;
 };
 
 const SHOPS_COL = "pos_shops";
@@ -207,12 +212,16 @@ export async function createShopRegistration(input: {
     await writeLocalShops(map);
   }
 
-  await prisma.setting.upsert({
-    where: { key: SHOP_ID_KEY },
-    create: { key: SHOP_ID_KEY, value: shop.shopId },
-    update: { value: shop.shopId },
-  });
-  await setLocalShopStatus("pending");
+  // Shared cloud (USE_FIRESTORE=1): never write a global shop_id Setting —
+  // tenant is JWT/user.shopId. Local SQLite / desktop: bind this install.
+  if (process.env.USE_FIRESTORE !== "1") {
+    await prisma.setting.upsert({
+      where: { key: SHOP_ID_KEY },
+      create: { key: SHOP_ID_KEY, value: shop.shopId },
+      update: { value: shop.shopId },
+    });
+    await setLocalShopStatus("pending");
+  }
   return shop;
 }
 
@@ -315,17 +324,14 @@ export async function setLocalShopStatus(status: ShopStatus | string) {
   });
 }
 
-export async function refreshLocalAccessFromRegistry(): Promise<{
+/** Resolve access for a shop from the registry (cloud-safe; no global Setting). */
+export async function resolveShopAccess(shopId: string | null | undefined): Promise<{
   shopId: string | null;
   status: ShopStatus | "unknown";
   shop: ShopRecord | null;
 }> {
-  const shopId = await getLocalShopId();
   if (!shopId) {
-    // Demo installs without registration stay active
-    const cached = await prisma.setting.findUnique({ where: { key: SHOP_STATUS_KEY } });
-    const status = (cached?.value as ShopStatus) || "active";
-    return { shopId: null, status, shop: null };
+    return { shopId: null, status: "unknown", shop: null };
   }
   const shop = await getShop(shopId);
   if (!shop) return { shopId, status: "pending", shop: null };
@@ -334,34 +340,55 @@ export async function refreshLocalAccessFromRegistry(): Promise<{
     status = "overdue";
     await updateShop(shopId, { status: "overdue" });
   }
-  await setLocalShopStatus(status);
-  if (status === "active") {
-    const expiry = shop.nextDueAt ? new Date(shop.nextDueAt) : new Date(Date.now() + 30 * 86400000);
-    const existing = await prisma.license.findFirst();
-    if (existing) {
-      await prisma.license.update({
-        where: { id: existing.id },
-        data: { status: "VALID", expiryDate: expiry },
-      });
-    } else {
-      await prisma.license.create({
-        data: {
-          licenseKey: `QX-${shopId.slice(-8).toUpperCase()}`,
-          status: "VALID",
-          expiryDate: expiry,
-        },
-      });
-    }
-  } else if (status === "revoked" || status === "overdue" || status === "pending") {
-    const existing = await prisma.license.findFirst();
-    if (existing) {
-      await prisma.license.update({
-        where: { id: existing.id },
-        data: { status: status === "pending" ? "PENDING" : "REVOKED" },
-      });
+  return { shopId, status, shop };
+}
+
+export async function refreshLocalAccessFromRegistry(preferredShopId?: string | null): Promise<{
+  shopId: string | null;
+  status: ShopStatus | "unknown";
+  shop: ShopRecord | null;
+}> {
+  const shopId = preferredShopId || (await getLocalShopId());
+  if (!shopId) {
+    // Demo installs without registration stay active
+    const cached = await prisma.setting.findUnique({ where: { key: SHOP_STATUS_KEY } });
+    const status = (cached?.value as ShopStatus) || "active";
+    return { shopId: null, status, shop: null };
+  }
+  const access = await resolveShopAccess(shopId);
+  const { status, shop } = access;
+
+  // Local license mirror only for single-tenant SQLite / desktop
+  if (process.env.USE_FIRESTORE !== "1") {
+    await setLocalShopStatus(status === "unknown" ? "pending" : status);
+    if (status === "active") {
+      const expiry = shop?.nextDueAt ? new Date(shop.nextDueAt) : new Date(Date.now() + 30 * 86400000);
+      const existing = await prisma.license.findFirst();
+      if (existing) {
+        await prisma.license.update({
+          where: { id: existing.id },
+          data: { status: "VALID", expiryDate: expiry },
+        });
+      } else {
+        await prisma.license.create({
+          data: {
+            licenseKey: `QX-${shopId.slice(-8).toUpperCase()}`,
+            status: "VALID",
+            expiryDate: expiry,
+          },
+        });
+      }
+    } else if (status === "revoked" || status === "overdue" || status === "pending") {
+      const existing = await prisma.license.findFirst();
+      if (existing) {
+        await prisma.license.update({
+          where: { id: existing.id },
+          data: { status: status === "pending" ? "PENDING" : "REVOKED" },
+        });
+      }
     }
   }
-  return { shopId, status, shop };
+  return access;
 }
 
 /** Ensure demo shop is marked active for existing seeded installs (E1). */
@@ -406,12 +433,75 @@ export async function ensureDemoShopApproved() {
   } else if (shop.status !== "active") {
     shop = await approveShop(shop.shopId, "Demo seed — pre-approved");
   }
-  await prisma.setting.upsert({
-    where: { key: SHOP_ID_KEY },
-    create: { key: SHOP_ID_KEY, value: shop.shopId },
-    update: { value: shop.shopId },
-  });
-  await setLocalShopStatus("active");
+  // Shared cloud: keep demo shop in registry only — do not overwrite global Setting.shop_id
+  // (that would break multi-tenant web). Desktop/SQLite: bind install to demo.
+  if (process.env.USE_FIRESTORE !== "1") {
+    await prisma.setting.upsert({
+      where: { key: SHOP_ID_KEY },
+      create: { key: SHOP_ID_KEY, value: shop.shopId },
+      update: { value: shop.shopId },
+    });
+    await setLocalShopStatus("active");
+  }
 }
 
 export { DEFAULT_MASTER_USER, SHOP_ID_KEY, SHOP_STATUS_KEY };
+
+/** Strip secrets for Master Admin API responses. */
+export function toPublicShop(shop: ShopRecord) {
+  const {
+    passwordHash: _pw,
+    firebasePrivateKey: _key,
+    ...rest
+  } = shop;
+  return {
+    ...rest,
+    firebaseConfigured: Boolean(
+      shop.firebaseProjectId?.trim() &&
+        shop.firebaseClientEmail?.trim() &&
+        shop.firebasePrivateKey?.trim()
+    ),
+    firebaseProvisionedAt: shop.firebaseProvisionedAt || null,
+  };
+}
+
+export async function setShopFirebase(
+  shopId: string,
+  creds: {
+    firebaseProjectId: string;
+    firebaseClientEmail: string;
+    firebasePrivateKey: string;
+    provision?: boolean;
+  }
+) {
+  const { clearShopFirebaseCache, provisionShopDatabase, shopHasFirebase, testShopFirebase } = await import(
+    "./shopFirebase.js"
+  );
+  const test = await testShopFirebase(creds);
+  if (!test.ok) throw new Error(test.message);
+
+  clearShopFirebaseCache(shopId);
+  const shop = await updateShop(shopId, {
+    firebaseProjectId: creds.firebaseProjectId.trim(),
+    firebaseClientEmail: creds.firebaseClientEmail.trim(),
+    firebasePrivateKey: creds.firebasePrivateKey.replace(/\\n/g, "\n").trim(),
+  });
+
+  if (creds.provision !== false) {
+    await provisionShopDatabase(shop);
+    return updateShop(shopId, { firebaseProvisionedAt: new Date().toISOString() });
+  }
+  if (!shopHasFirebase(shop)) throw new Error("Firebase credentials incomplete");
+  return shop;
+}
+
+export async function clearShopFirebase(shopId: string) {
+  const { clearShopFirebaseCache } = await import("./shopFirebase.js");
+  clearShopFirebaseCache(shopId);
+  return updateShop(shopId, {
+    firebaseProjectId: "",
+    firebaseClientEmail: "",
+    firebasePrivateKey: "",
+    firebaseProvisionedAt: null,
+  });
+}

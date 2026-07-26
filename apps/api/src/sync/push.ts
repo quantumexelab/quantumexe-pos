@@ -19,6 +19,8 @@ export async function pushAllToFirestore() {
   const fs = getSyncFirestore();
   let collections = 0;
   let documents = 0;
+  const { getLocalShopId } = await import("../master/shopRegistry.js");
+  const localShopId = (await getLocalShopId()) || undefined;
 
   try {
     for (const name of SYNC_COLLECTIONS) {
@@ -31,7 +33,9 @@ export async function pushAllToFirestore() {
         for (const row of chunk) {
           const id = String(row.id);
           const ref = fs.collection(name).doc(id);
-          batch.set(ref, toFirestoreDoc(row), { merge: true });
+          const shopId = (row as { shopId?: string }).shopId || localShopId;
+          const payload = shopId ? { ...toFirestoreDoc(row), shopId } : toFirestoreDoc(row);
+          batch.set(ref, payload, { merge: true });
           documents++;
         }
         await batch.commit();

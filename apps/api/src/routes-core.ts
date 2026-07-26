@@ -29,66 +29,71 @@ router.post("/auth/login", async (req, res) => {
     console.warn("[auth] master login check failed:", e instanceof Error ? e.message : e);
   }
 
-  const user = await prisma.user.findUnique({
-    where: { contact: parsed.data.username },
-    include: { role: true, status: true },
-  });
+  const { DEMO_SHOP_ID, tenancyEnabled, runWithShop } = await import("./shopContext.js");
+  const { findShopByPhone, refreshLocalAccessFromRegistry, getLocalShopId } = await import(
+    "./master/shopRegistry.js"
+  );
+  const { warmShopFirestore, shopHasFirebase } = await import("./master/shopFirebase.js");
+
+  const remoteShop = await findShopByPhone(parsed.data.username);
+  let shopId = remoteShop?.shopId || null;
+  if (remoteShop && shopHasFirebase(remoteShop)) {
+    await warmShopFirestore(shopId);
+  } else if (tenancyEnabled() && !shopId) {
+    shopId = DEMO_SHOP_ID;
+  }
+
+  const user = await runWithShop(shopId, async () =>
+    prisma.user.findUnique({
+      where: { contact: parsed.data.username },
+      include: { role: true, status: true },
+    })
+  );
+
   if (!user) return res.status(401).json(fail("Invalid username or password", 401));
 
   let passwordOk = await bcrypt.compare(parsed.data.password, user.passwordHash);
-  if (!passwordOk) {
-    try {
-      const { findShopByPhone } = await import("./master/shopRegistry.js");
-      const remote = await findShopByPhone(user.contact);
-      if (remote?.passwordHash && (await bcrypt.compare(parsed.data.password, remote.passwordHash))) {
+  if (!passwordOk && remoteShop?.passwordHash) {
+    if (await bcrypt.compare(parsed.data.password, remoteShop.passwordHash)) {
+      await runWithShop(shopId, async () => {
         await prisma.user.update({
           where: { id: user.id },
-          data: { passwordHash: remote.passwordHash },
+          data: { passwordHash: remoteShop.passwordHash },
         });
-        passwordOk = true;
-      }
-    } catch {
-      /* ignore */
+      });
+      passwordOk = true;
     }
   }
   if (!passwordOk) return res.status(401).json(fail("Invalid username or password", 401));
   if (user.status.name !== "Active") return res.status(403).json(fail("User inactive", 403));
 
-  const { DEMO_SHOP_ID, tenancyEnabled } = await import("./shopContext.js");
-  let shopId = (user as { shopId?: string | null }).shopId || null;
+  shopId = (user as { shopId?: string | null }).shopId || shopId || (tenancyEnabled() ? DEMO_SHOP_ID : null);
 
   let shop_status: string = "active";
   try {
-    const { refreshLocalAccessFromRegistry, findShopByPhone, getLocalShopId } = await import(
-      "./master/shopRegistry.js"
-    );
-    const remote = await findShopByPhone(user.contact);
-    if (remote?.shopId) {
-      shopId = remote.shopId;
-      // Persist shopId on user if missing (cloud multi-tenant)
+    if (remoteShop?.shopId) {
+      shopId = remoteShop.shopId;
       if (!(user as { shopId?: string | null }).shopId) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { shopId: remote.shopId } as { shopId: string },
+        await runWithShop(shopId, async () => {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { shopId: remoteShop.shopId } as { shopId: string },
+          });
         });
       }
-    } else if (tenancyEnabled() && !shopId) {
-      shopId = DEMO_SHOP_ID;
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { shopId: DEMO_SHOP_ID } as { shopId: string },
-      });
     }
 
-    const localId = await getLocalShopId();
-    if (!localId && shopId) {
-      await prisma.setting.upsert({
-        where: { key: "shop_id" },
-        create: { key: "shop_id", value: shopId },
-        update: { value: shopId },
-      });
+    if (process.env.USE_FIRESTORE !== "1") {
+      const localId = await getLocalShopId();
+      if (!localId && shopId) {
+        await prisma.setting.upsert({
+          where: { key: "shop_id" },
+          create: { key: "shop_id", value: shopId },
+          update: { value: shopId },
+        });
+      }
     }
-    const access = await refreshLocalAccessFromRegistry();
+    const access = await refreshLocalAccessFromRegistry(shopId);
     shop_status = access.status;
   } catch {
     if (tenancyEnabled() && !shopId) shopId = DEMO_SHOP_ID;
@@ -111,6 +116,7 @@ router.post("/auth/login", async (req, res) => {
       ststus: user.status.name,
       shop_status,
       shopId,
+      firebaseDedicated: Boolean(remoteShop && shopHasFirebase(remoteShop)),
     },
   });
 });

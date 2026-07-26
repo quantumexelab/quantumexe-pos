@@ -6,6 +6,7 @@ import { requireAuth, requireRoles, signMasterToken } from "./auth.js";
 import {
   approveShop,
   changeMasterPassword,
+  clearShopFirebase,
   createShopRegistration,
   ensureDemoShopApproved,
   ensureMasterAdmin,
@@ -13,6 +14,8 @@ import {
   refreshLocalAccessFromRegistry,
   resetShopPassword,
   revokeShop,
+  setShopFirebase,
+  toPublicShop,
   verifyMasterLogin,
 } from "./master/shopRegistry.js";
 
@@ -104,12 +107,12 @@ router.post("/auth/register", async (req, res) => {
   }
 });
 
-router.get("/shop/access", requireAuth, async (_req, res) => {
+router.get("/shop/access", requireAuth, async (req, res) => {
   try {
-    if (_req.user?.role === "MasterAdmin") {
+    if (req.user?.role === "MasterAdmin") {
       return res.json(ok({ status: "active", role: "MasterAdmin" }));
     }
-    const access = await refreshLocalAccessFromRegistry();
+    const access = await refreshLocalAccessFromRegistry(req.user?.shopId ?? null);
     res.json(ok(access));
   } catch (e) {
     res.status(500).json(fail(e instanceof Error ? e.message : "Access check failed", 500));
@@ -119,15 +122,62 @@ router.get("/shop/access", requireAuth, async (_req, res) => {
 router.get("/master/shops", requireAuth, requireRoles("MasterAdmin"), async (_req, res) => {
   try {
     const shops = await listShops();
-    // Never send password hashes to UI
-    res.json(
-      ok(
-        shops.map(({ passwordHash: _, ...rest }) => rest),
-        "OK"
-      )
-    );
+    res.json(ok(shops.map(toPublicShop), "OK"));
   } catch (e) {
     res.status(500).json(fail(e instanceof Error ? e.message : "Failed to list shops", 500));
+  }
+});
+
+router.post("/master/shops/:shopId/firebase", requireAuth, requireRoles("MasterAdmin"), async (req, res) => {
+  try {
+    const shopId = String(req.params.shopId);
+    const firebaseProjectId = String(req.body?.firebaseProjectId || "").trim();
+    const firebaseClientEmail = String(req.body?.firebaseClientEmail || "").trim();
+    let firebasePrivateKey = String(req.body?.firebasePrivateKey || "").trim();
+    if (!firebaseProjectId || !firebaseClientEmail || !firebasePrivateKey) {
+      return res.status(400).json(fail("Project ID, client email, and private key are required"));
+    }
+    // Allow pasting full service-account JSON into the private-key field
+    if (firebasePrivateKey.startsWith("{")) {
+      try {
+        const sa = JSON.parse(firebasePrivateKey) as {
+          project_id?: string;
+          client_email?: string;
+          private_key?: string;
+        };
+        if (sa.project_id) {
+          /* prefer explicit form fields if already set */
+        }
+        if (sa.private_key) firebasePrivateKey = sa.private_key;
+        const shop = await setShopFirebase(shopId, {
+          firebaseProjectId: firebaseProjectId || sa.project_id || "",
+          firebaseClientEmail: firebaseClientEmail || sa.client_email || "",
+          firebasePrivateKey,
+          provision: req.body?.provision !== false,
+        });
+        return res.json(ok(toPublicShop(shop), "Shop Firebase connected & provisioned"));
+      } catch {
+        return res.status(400).json(fail("Invalid service account JSON"));
+      }
+    }
+    const shop = await setShopFirebase(shopId, {
+      firebaseProjectId,
+      firebaseClientEmail,
+      firebasePrivateKey,
+      provision: req.body?.provision !== false,
+    });
+    res.json(ok(toPublicShop(shop), "Shop Firebase connected & provisioned"));
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Firebase connect failed"));
+  }
+});
+
+router.delete("/master/shops/:shopId/firebase", requireAuth, requireRoles("MasterAdmin"), async (req, res) => {
+  try {
+    const shop = await clearShopFirebase(String(req.params.shopId));
+    res.json(ok(toPublicShop(shop), "Shop Firebase disconnected"));
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Disconnect failed"));
   }
 });
 
@@ -136,8 +186,7 @@ router.post("/master/shops/:shopId/approve", requireAuth, requireRoles("MasterAd
     const shopId = String(req.params.shopId);
     const note = String(req.body?.paymentNote || "Payment confirmed");
     const shop = await approveShop(shopId, note);
-    const { passwordHash: _, ...safe } = shop;
-    res.json(ok(safe, "Shop approved — payment confirmed"));
+    res.json(ok(toPublicShop(shop), "Shop approved — payment confirmed"));
   } catch (e) {
     res.status(400).json(fail(e instanceof Error ? e.message : "Approve failed"));
   }
@@ -146,8 +195,7 @@ router.post("/master/shops/:shopId/approve", requireAuth, requireRoles("MasterAd
 router.post("/master/shops/:shopId/revoke", requireAuth, requireRoles("MasterAdmin"), async (req, res) => {
   try {
     const shop = await revokeShop(String(req.params.shopId));
-    const { passwordHash: _, ...safe } = shop;
-    res.json(ok(safe, "Shop access revoked"));
+    res.json(ok(toPublicShop(shop), "Shop access revoked"));
   } catch (e) {
     res.status(400).json(fail(e instanceof Error ? e.message : "Revoke failed"));
   }
@@ -158,18 +206,22 @@ router.post("/master/shops/:shopId/reset-password", requireAuth, requireRoles("M
     const password = String(req.body?.password || "").trim();
     if (password.length < 6) return res.status(400).json(fail("Password must be at least 6 characters"));
     const shop = await resetShopPassword(String(req.params.shopId), password);
+    const passwordHash = shop.passwordHash;
 
-    // If this PC is that shop, update local Super Admin password too
-    const local = await prisma.user.findUnique({ where: { contact: shop.phone } });
-    if (local) {
-      await prisma.user.update({
-        where: { id: local.id },
-        data: { passwordHash: await bcrypt.hash(password, 10) },
-      });
-    }
+    const { warmShopFirestore } = await import("./master/shopFirebase.js");
+    const { runWithShop } = await import("./shopContext.js");
+    await warmShopFirestore(shop.shopId);
+    await runWithShop(shop.shopId, async () => {
+      const local = await prisma.user.findUnique({ where: { contact: shop.phone } });
+      if (local) {
+        await prisma.user.update({
+          where: { id: local.id },
+          data: { passwordHash },
+        });
+      }
+    });
 
-    const { passwordHash: _, ...safe } = shop;
-    res.json(ok(safe, "Super Admin password reset"));
+    res.json(ok(toPublicShop(shop), "Super Admin password reset"));
   } catch (e) {
     res.status(400).json(fail(e instanceof Error ? e.message : "Reset failed"));
   }
@@ -179,8 +231,7 @@ router.post("/master/shops/:shopId/mark-paid", requireAuth, requireRoles("Master
   try {
     const note = String(req.body?.paymentNote || "Monthly payment confirmed");
     const shop = await approveShop(String(req.params.shopId), note);
-    const { passwordHash: _, ...safe } = shop;
-    res.json(ok(safe, "Payment recorded — access active for 30 days"));
+    res.json(ok(toPublicShop(shop), "Payment recorded — access active for 30 days"));
   } catch (e) {
     res.status(400).json(fail(e instanceof Error ? e.message : "Payment update failed"));
   }

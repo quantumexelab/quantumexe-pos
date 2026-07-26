@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { auth } from "../api";
 import { BrandLogo } from "../components/BrandLogo";
+import { APP_VERSION } from "../version";
 
 type Step = "license" | "login" | "register";
 
@@ -124,7 +125,7 @@ export default function SignIn() {
             An advanced point-of-sale platform engineered for modern retail excellence.
           </p>
         </div>
-        <div className="text-sm text-slate-500">Version 1.0.7</div>
+        <div className="text-sm text-slate-500">Version {APP_VERSION}</div>
       </div>
 
       <div className="flex items-center justify-center p-8 bg-white overflow-y-auto">

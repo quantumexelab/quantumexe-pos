@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { getCachedShopFirestore } from "./master/shopFirebase.js";
 
 type ShopStore = { shopId: string | null };
 
@@ -30,6 +31,8 @@ export function rowBelongsToShop(
   if (!tenancyEnabled()) return true;
   if (!shopId) return true; // system / master / login
   if (GLOBAL_MODELS.has(model)) return true;
+  // Dedicated shop Firebase = whole DB is that shop
+  if (getCachedShopFirestore(shopId)) return true;
   if (!row) return false;
   const rowShop = row.shopId == null || row.shopId === "" ? null : String(row.shopId);
   if (rowShop == null) {

@@ -28,6 +28,7 @@ import {
 import { auth, syncApi, type SyncStatus } from "../api";
 import { useEffect, useMemo, useState } from "react";
 import { BrandLogo } from "./BrandLogo";
+import { APP_VERSION } from "../version";
 
 type SubItem = { label: string; path: string };
 type NavItem = {
@@ -257,7 +258,7 @@ export default function AppLayout() {
             <span className="text-slate-900">Q</span>
             <span className="text-sky-500">EXE</span>
           </div>
-          <div className="hidden lg:block text-[10px] text-gray-400 mt-1">Version 1.0.7</div>
+          <div className="hidden lg:block text-[10px] text-gray-400 mt-1">Version {APP_VERSION}</div>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1 min-h-0">

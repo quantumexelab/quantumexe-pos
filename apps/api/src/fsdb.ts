@@ -1,6 +1,7 @@
 import admin from "firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
 import { getShopId, rowBelongsToShop, tenancyEnabled } from "./shopContext.js";
+import { getCachedShopFirestore } from "./master/shopFirebase.js";
 
 type ModelName =
   | "Role"
@@ -212,7 +213,7 @@ const CASCADE_DELETE: Partial<Record<ModelName, ModelName[]>> = {
   Stock: ["DamagedStock"],
 };
 
-function initFirebase(): FirebaseFirestore.Firestore {
+function initControlFirebase(): FirebaseFirestore.Firestore {
   if (!admin.apps.length) {
     const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || "quantumexe-pos";
     const saJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -248,7 +249,14 @@ function initFirebase(): FirebaseFirestore.Firestore {
   return admin.firestore();
 }
 
-const firestore = initFirebase();
+/** Control / registry Firebase (default app). Shop POS may use a dedicated project. */
+const controlFirestore = initControlFirebase();
+
+function firestore(): FirebaseFirestore.Firestore {
+  const shopId = getShopId();
+  const shopDb = getCachedShopFirestore(shopId);
+  return shopDb || controlFirestore;
+}
 
 function isTimestamp(v: unknown): v is Timestamp {
   return v instanceof Timestamp || (typeof v === "object" && v !== null && "_seconds" in v);
@@ -333,7 +341,7 @@ class QueryContext {
     if (this.cache.has(key)) {
       row = this.cache.get(key)!;
     } else {
-      const snap = await firestore.collection(model).doc(String(id)).get();
+      const snap = await firestore().collection(model).doc(String(id)).get();
       if (!snap.exists) return null;
       row = { id: Number(snap.id), ...docToRecord(snap.data()!) };
       this.cache.set(key, row);
@@ -348,7 +356,7 @@ class QueryContext {
     if (this.cache.has(cacheAllKey)) {
       rows = this.cache.get(cacheAllKey)! as unknown as Record<string, unknown>[];
     } else {
-      const snap = await firestore.collection(model).get();
+      const snap = await firestore().collection(model).get();
       rows = snap.docs.map((d) => {
         const row = { id: Number(d.id), ...docToRecord(d.data()) };
         this.cache.set(this.cacheKey(model, row.id as number), row);
@@ -659,7 +667,7 @@ class ModelDelegate {
     }
     const id = await this.client.nextId(this.model);
     const data = await this.prepareCreateData(args.data, id);
-    await firestore.collection(this.model).doc(String(id)).set(toFirestoreValue(data) as FirebaseFirestore.DocumentData);
+    await firestore().collection(this.model).doc(String(id)).set(toFirestoreValue(data) as FirebaseFirestore.DocumentData);
     this.ctx().invalidate(this.model);
     let row: Record<string, unknown> = { id, ...data };
     if (args.include) row = await applyInclude(this.ctx(), this.model, row, args.include);
@@ -728,7 +736,7 @@ class ModelDelegate {
     }
 
     const merged = { ...existing, ...patch };
-    await firestore.collection(this.model).doc(String(id)).set(toFirestoreValue(merged) as FirebaseFirestore.DocumentData, { merge: false });
+    await firestore().collection(this.model).doc(String(id)).set(toFirestoreValue(merged) as FirebaseFirestore.DocumentData, { merge: false });
     this.ctx().invalidate(this.model);
     let row = merged;
     if (args.include) row = await applyInclude(this.ctx(), this.model, row, args.include);
@@ -738,7 +746,7 @@ class ModelDelegate {
   async delete(args: { where: { id: number } }) {
     const id = Number(args.where.id);
     await this.cascadeDelete(id);
-    await firestore.collection(this.model).doc(String(id)).delete();
+    await firestore().collection(this.model).doc(String(id)).delete();
     this.ctx().invalidate(this.model);
   }
 
@@ -752,7 +760,7 @@ class ModelDelegate {
       const children = await this.client.delegate(childModel).filterRows({ [rel.fk]: id });
       for (const child of children) {
         await this.client.delegate(childModel).cascadeDelete(Number(child.id));
-        await firestore.collection(childModel).doc(String(child.id)).delete();
+        await firestore().collection(childModel).doc(String(child.id)).delete();
         this.ctx().invalidate(childModel);
       }
     }
@@ -762,7 +770,7 @@ class ModelDelegate {
     const rows = await this.filterRows(args.where);
     for (const row of rows) {
       await this.cascadeDelete(Number(row.id));
-      await firestore.collection(this.model).doc(String(row.id)).delete();
+      await firestore().collection(this.model).doc(String(row.id)).delete();
     }
     this.ctx().invalidate(this.model);
     return { count: rows.length };
@@ -866,8 +874,9 @@ class FirestoreClient {
   }
 
   async nextId(model: ModelName): Promise<number> {
-    const counterRef = firestore.collection("counters").doc(model);
-    const id = await firestore.runTransaction(async (tx) => {
+    const db = firestore();
+    const counterRef = db.collection("counters").doc(model);
+    const id = await db.runTransaction(async (tx) => {
       const snap = await tx.get(counterRef);
       const current = snap.exists ? Number(snap.data()?.value || 0) : 0;
       const next = current + 1;
@@ -929,9 +938,9 @@ export async function resetFirestore() {
   for (const model of ALL_MODELS) {
     await prisma.delegate(model).deleteMany({});
   }
-  const counters = await firestore.collection("counters").get();
+  const counters = await firestore().collection("counters").get();
   if (!counters.empty) {
-    const batch = firestore.batch();
+    const batch = firestore().batch();
     for (const doc of counters.docs) batch.delete(doc.ref);
     await batch.commit();
   }
