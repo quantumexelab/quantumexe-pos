@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import { auth, syncApi, type SyncStatus } from "../api";
 import { useEffect, useMemo, useState } from "react";
-import api from "../api";
 import { BrandLogo } from "./BrandLogo";
 
 type SubItem = { label: string; path: string };
@@ -179,7 +178,6 @@ export default function AppLayout() {
   const user = auth.getUser();
   const navigate = useNavigate();
   const location = useLocation();
-  const [expiry, setExpiry] = useState<string | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [sync, setSync] = useState<SyncStatus | null>(null);
@@ -211,13 +209,6 @@ export default function AppLayout() {
   }
 
   useEffect(() => {
-    api
-      .get("/license/status")
-      .then((r) => {
-        const d = r.data?.data?.expiry_date;
-        if (d) setExpiry(new Date(d).toLocaleDateString());
-      })
-      .catch(() => undefined);
     const on = () => setOnline(true);
     const off = () => setOnline(false);
     window.addEventListener("online", on);
@@ -353,12 +344,7 @@ export default function AppLayout() {
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 shrink-0">
-          {expiry && (
-            <div className="flex-1 bg-red-600 text-white text-sm font-semibold rounded-md px-3 py-1.5 text-center">
-              Your subscription expires on {expiry}
-            </div>
-          )}
-          {!expiry && <div className="flex-1" />}
+          <div className="flex-1" />
           <button className="btn btn-primary" onClick={() => navigate("/pos")}>
             POS
           </button>
