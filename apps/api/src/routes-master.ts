@@ -57,33 +57,28 @@ router.post("/auth/register", async (req, res) => {
         passwordHash: await bcrypt.hash(parsed.data.password, 10),
         roleId: adminRole.id,
         statusId: active.id,
+        shopId: shop.shopId,
       },
     });
 
-    await prisma.setting.upsert({
-      where: { key: "shop_name" },
-      create: { key: "shop_name", value: parsed.data.shopName },
-      update: { value: parsed.data.shopName },
-    });
-    await prisma.setting.upsert({
-      where: { key: "business_name" },
-      create: { key: "business_name", value: parsed.data.shopName },
-      update: { value: parsed.data.shopName },
-    });
-    await prisma.setting.upsert({
-      where: { key: "owner_name" },
-      create: { key: "owner_name", value: parsed.data.ownerName },
-      update: { value: parsed.data.ownerName },
-    });
-
-    // Pending license until Master confirms payment / approves
-    const existingLic = await prisma.license.findFirst();
-    if (existingLic) {
-      await prisma.license.update({
-        where: { id: existingLic.id },
-        data: { status: "PENDING", licenseKey: `QX-PENDING-${shop.shopId.slice(-6).toUpperCase()}` },
+    // Shop-scoped settings (do not overwrite other shops on shared Firestore)
+    const { runWithShop } = await import("./shopContext.js");
+    await runWithShop(shop.shopId, async () => {
+      await prisma.setting.upsert({
+        where: { key: "shop_name" },
+        create: { key: "shop_name", value: parsed.data.shopName },
+        update: { value: parsed.data.shopName },
       });
-    } else {
+      await prisma.setting.upsert({
+        where: { key: "business_name" },
+        create: { key: "business_name", value: parsed.data.shopName },
+        update: { value: parsed.data.shopName },
+      });
+      await prisma.setting.upsert({
+        where: { key: "owner_name" },
+        create: { key: "owner_name", value: parsed.data.ownerName },
+        update: { value: parsed.data.ownerName },
+      });
       await prisma.license.create({
         data: {
           licenseKey: `QX-PENDING-${shop.shopId.slice(-6).toUpperCase()}`,
@@ -91,7 +86,7 @@ router.post("/auth/register", async (req, res) => {
           expiryDate: new Date(Date.now() + 7 * 86400000),
         },
       });
-    }
+    });
 
     res.json(
       ok(

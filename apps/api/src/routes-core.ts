@@ -54,31 +54,48 @@ router.post("/auth/login", async (req, res) => {
   if (!passwordOk) return res.status(401).json(fail("Invalid username or password", 401));
   if (user.status.name !== "Active") return res.status(403).json(fail("User inactive", 403));
 
+  const { DEMO_SHOP_ID, tenancyEnabled } = await import("./shopContext.js");
+  let shopId = (user as { shopId?: string | null }).shopId || null;
+
   let shop_status: string = "active";
   try {
     const { refreshLocalAccessFromRegistry, findShopByPhone, getLocalShopId } = await import(
       "./master/shopRegistry.js"
     );
-    // Link local install to registry shop by phone if shop_id missing
-    const localId = await getLocalShopId();
-    if (!localId) {
-      const remote = await findShopByPhone(user.contact);
-      if (remote) {
-        const { prisma: p } = await import("./lib.js");
-        await p.setting.upsert({
-          where: { key: "shop_id" },
-          create: { key: "shop_id", value: remote.shopId },
-          update: { value: remote.shopId },
+    const remote = await findShopByPhone(user.contact);
+    if (remote?.shopId) {
+      shopId = remote.shopId;
+      // Persist shopId on user if missing (cloud multi-tenant)
+      if (!(user as { shopId?: string | null }).shopId) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { shopId: remote.shopId } as { shopId: string },
         });
       }
+    } else if (tenancyEnabled() && !shopId) {
+      shopId = DEMO_SHOP_ID;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { shopId: DEMO_SHOP_ID } as { shopId: string },
+      });
+    }
+
+    const localId = await getLocalShopId();
+    if (!localId && shopId) {
+      await prisma.setting.upsert({
+        where: { key: "shop_id" },
+        create: { key: "shop_id", value: shopId },
+        update: { value: shopId },
+      });
     }
     const access = await refreshLocalAccessFromRegistry();
     shop_status = access.status;
   } catch {
+    if (tenancyEnabled() && !shopId) shopId = DEMO_SHOP_ID;
     shop_status = "active";
   }
 
-  const token = signToken({ ...user, role: user.role.name });
+  const token = signToken({ ...user, role: user.role.name, shopId });
   return res.json({
     success: true,
     message: "Login successful",
@@ -93,6 +110,7 @@ router.post("/auth/login", async (req, res) => {
       role: user.role.name,
       ststus: user.status.name,
       shop_status,
+      shopId,
     },
   });
 });

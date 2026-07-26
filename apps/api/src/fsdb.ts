@@ -1,5 +1,6 @@
 import admin from "firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
+import { getShopId, rowBelongsToShop, tenancyEnabled } from "./shopContext.js";
 
 type ModelName =
   | "Role"
@@ -328,25 +329,35 @@ class QueryContext {
 
   async getById(model: ModelName, id: number): Promise<Record<string, unknown> | null> {
     const key = this.cacheKey(model, id);
-    if (this.cache.has(key)) return this.cache.get(key)!;
-    const snap = await firestore.collection(model).doc(String(id)).get();
-    if (!snap.exists) return null;
-    const row = { id: Number(snap.id), ...docToRecord(snap.data()!) };
-    this.cache.set(key, row);
+    let row: Record<string, unknown> | null;
+    if (this.cache.has(key)) {
+      row = this.cache.get(key)!;
+    } else {
+      const snap = await firestore.collection(model).doc(String(id)).get();
+      if (!snap.exists) return null;
+      row = { id: Number(snap.id), ...docToRecord(snap.data()!) };
+      this.cache.set(key, row);
+    }
+    if (!rowBelongsToShop(model, row, getShopId())) return null;
     return row;
   }
 
   async loadAll(model: ModelName): Promise<Record<string, unknown>[]> {
     const cacheAllKey = `__all__:${model}`;
-    if (this.cache.has(cacheAllKey)) return this.cache.get(cacheAllKey)! as unknown as Record<string, unknown>[];
-    const snap = await firestore.collection(model).get();
-    const rows = snap.docs.map((d) => {
-      const row = { id: Number(d.id), ...docToRecord(d.data()) };
-      this.cache.set(this.cacheKey(model, row.id as number), row);
-      return row;
-    });
-    this.cache.set(cacheAllKey, rows as unknown as Record<string, unknown>);
-    return rows;
+    let rows: Record<string, unknown>[];
+    if (this.cache.has(cacheAllKey)) {
+      rows = this.cache.get(cacheAllKey)! as unknown as Record<string, unknown>[];
+    } else {
+      const snap = await firestore.collection(model).get();
+      rows = snap.docs.map((d) => {
+        const row = { id: Number(d.id), ...docToRecord(d.data()) };
+        this.cache.set(this.cacheKey(model, row.id as number), row);
+        return row;
+      });
+      this.cache.set(cacheAllKey, rows as unknown as Record<string, unknown>);
+    }
+    const shopId = getShopId();
+    return rows.filter((r) => rowBelongsToShop(model, r, shopId));
   }
 
   invalidate(model: ModelName) {
@@ -673,6 +684,12 @@ class ModelDelegate {
 
     for (const [field, def] of Object.entries(MODEL_DEFAULTS[this.model] || {})) {
       if (out[field] === undefined) out[field] = typeof def === "function" ? def() : def;
+    }
+
+    // Multi-tenant stamp (Firestore cloud shared DB)
+    if (tenancyEnabled() && out.shopId == null) {
+      const shopId = getShopId();
+      if (shopId) out.shopId = shopId;
     }
 
     for (const nested of nestedCreates) {

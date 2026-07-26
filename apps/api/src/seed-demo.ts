@@ -32,6 +32,7 @@ export async function seedDemo() {
       passwordHash,
       roleId: adminRole.id,
       statusId: active.id,
+      shopId: "shop_demo_quantumexe",
     },
   });
 
@@ -43,6 +44,7 @@ export async function seedDemo() {
       passwordHash,
       roleId: cashierRole.id,
       statusId: active.id,
+      shopId: "shop_demo_quantumexe",
     },
   });
 
@@ -54,6 +56,7 @@ export async function seedDemo() {
       passwordHash,
       roleId: storeRole.id,
       statusId: active.id,
+      shopId: "shop_demo_quantumexe",
     },
   });
 

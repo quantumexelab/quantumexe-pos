@@ -31,6 +31,7 @@ model User {
   passwordHash String
   roleId       Int
   statusId     Int
+  shopId       String?
   role         Role      @relation(fields: [roleId], references: [id])
   status       Status    @relation(fields: [statusId], references: [id])
   invoices     Invoice[]
