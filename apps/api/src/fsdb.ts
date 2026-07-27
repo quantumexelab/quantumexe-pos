@@ -1,6 +1,6 @@
 import admin from "firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
-import { getShopId, rowBelongsToShop, tenancyEnabled } from "./shopContext.js";
+import { getShopId, rowBelongsToShop, tenancyEnabled, useShopFirebase } from "./shopContext.js";
 import { getCachedShopFirestore } from "./master/shopFirebase.js";
 
 type ModelName =
@@ -252,10 +252,19 @@ function initControlFirebase(): FirebaseFirestore.Firestore {
 /** Control / registry Firebase (default app). Shop POS may use a dedicated project. */
 const controlFirestore = initControlFirebase();
 
+function activeDbTag(): string {
+  const shopId = getShopId();
+  if (shopId && useShopFirebase() && getCachedShopFirestore(shopId)) return `shop:${shopId}`;
+  return "control";
+}
+
 function firestore(): FirebaseFirestore.Firestore {
   const shopId = getShopId();
-  const shopDb = getCachedShopFirestore(shopId);
-  return shopDb || controlFirestore;
+  if (shopId && useShopFirebase()) {
+    const shopDb = getCachedShopFirestore(shopId);
+    if (shopDb) return shopDb;
+  }
+  return controlFirestore;
 }
 
 function isTimestamp(v: unknown): v is Timestamp {
@@ -332,7 +341,7 @@ class QueryContext {
   constructor(private client: FirestoreClient) {}
 
   cacheKey(model: ModelName, id: number | string) {
-    return `${model}:${id}`;
+    return `${activeDbTag()}:${model}:${id}`;
   }
 
   async getById(model: ModelName, id: number): Promise<Record<string, unknown> | null> {
@@ -351,7 +360,7 @@ class QueryContext {
   }
 
   async loadAll(model: ModelName): Promise<Record<string, unknown>[]> {
-    const cacheAllKey = `__all__:${model}`;
+    const cacheAllKey = `${activeDbTag()}:__all__:${model}`;
     let rows: Record<string, unknown>[];
     if (this.cache.has(cacheAllKey)) {
       rows = this.cache.get(cacheAllKey)! as unknown as Record<string, unknown>[];
@@ -369,8 +378,9 @@ class QueryContext {
   }
 
   invalidate(model: ModelName) {
+    const tag = activeDbTag();
     for (const key of [...this.cache.keys()]) {
-      if (key.startsWith(`${model}:`) || key === `__all__:${model}`) this.cache.delete(key);
+      if (key.startsWith(`${tag}:${model}:`) || key === `${tag}:__all__:${model}`) this.cache.delete(key);
     }
   }
 
@@ -933,6 +943,14 @@ const ALL_MODELS: ModelName[] = [
 
 export const prisma: any = new FirestoreClient();
 export const db: any = prisma;
+
+export function invalidateFsCache() {
+  try {
+    prisma.getContext().invalidateAll();
+  } catch {
+    /* ignore */
+  }
+}
 
 export async function resetFirestore() {
   for (const model of ALL_MODELS) {

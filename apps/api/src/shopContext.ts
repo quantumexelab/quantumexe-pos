@@ -1,19 +1,38 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { getCachedShopFirestore } from "./master/shopFirebase.js";
 
-type ShopStore = { shopId: string | null };
+type ShopStore = {
+  shopId: string | null;
+  /** When false, force control Firebase even if shop has a dedicated project. */
+  useShopFirebase?: boolean;
+};
 
 const shopStorage = new AsyncLocalStorage<ShopStore>();
 
 /** Demo / legacy shared cloud data lives under this shop id. */
 export const DEMO_SHOP_ID = "shop_demo_quantumexe";
 
-export function runWithShop<T>(shopId: string | null, fn: () => T): T {
-  return shopStorage.run({ shopId }, fn);
+export function runWithShop<T>(
+  shopId: string | null,
+  fn: () => T,
+  opts?: { useShopFirebase?: boolean }
+): T {
+  return shopStorage.run(
+    {
+      shopId,
+      useShopFirebase: opts?.useShopFirebase ?? true,
+    },
+    fn
+  );
 }
 
 export function getShopId(): string | null {
   return shopStorage.getStore()?.shopId ?? null;
+}
+
+/** Whether POS reads/writes should use the shop's dedicated Firebase (if warmed). */
+export function useShopFirebase(): boolean {
+  return shopStorage.getStore()?.useShopFirebase !== false;
 }
 
 export function tenancyEnabled() {
@@ -32,7 +51,7 @@ export function rowBelongsToShop(
   if (!shopId) return true; // system / master / login
   if (GLOBAL_MODELS.has(model)) return true;
   // Dedicated shop Firebase = whole DB is that shop
-  if (getCachedShopFirestore(shopId)) return true;
+  if (useShopFirebase() && getCachedShopFirestore(shopId)) return true;
   if (!row) return false;
   const rowShop = row.shopId == null || row.shopId === "" ? null : String(row.shopId);
   if (rowShop == null) {

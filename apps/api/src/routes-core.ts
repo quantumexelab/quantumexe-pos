@@ -43,29 +43,44 @@ router.post("/auth/login", async (req, res) => {
     shopId = DEMO_SHOP_ID;
   }
 
-  const user = await runWithShop(shopId, async () =>
+  const { invalidateFsCache } = await import("./fsdb.js");
+  invalidateFsCache();
+
+  const findUser = () =>
     prisma.user.findUnique({
       where: { contact: parsed.data.username },
       include: { role: true, status: true },
-    })
-  );
+    });
+
+  // Dedicated shop DB first, then control/shared (pre-provision registration)
+  let user = await runWithShop(shopId, findUser, { useShopFirebase: true });
+  let usedDedicated = Boolean(user && remoteShop && shopHasFirebase(remoteShop));
+  if (!user) {
+    user = await runWithShop(shopId, findUser, { useShopFirebase: false });
+    usedDedicated = false;
+  }
 
   if (!user) return res.status(401).json(fail("Invalid username or password", 401));
 
   let passwordOk = await bcrypt.compare(parsed.data.password, user.passwordHash);
   if (!passwordOk && remoteShop?.passwordHash) {
     if (await bcrypt.compare(parsed.data.password, remoteShop.passwordHash)) {
-      await runWithShop(shopId, async () => {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { passwordHash: remoteShop.passwordHash },
-        });
-      });
+      await runWithShop(
+        shopId,
+        async () => {
+          await prisma.user.update({
+            where: { id: user!.id },
+            data: { passwordHash: remoteShop.passwordHash },
+          });
+        },
+        { useShopFirebase: usedDedicated }
+      );
       passwordOk = true;
     }
   }
   if (!passwordOk) return res.status(401).json(fail("Invalid username or password", 401));
-  if (user.status.name !== "Active") return res.status(403).json(fail("User inactive", 403));
+  const statusName = user.status?.name || "Active";
+  if (statusName !== "Active") return res.status(403).json(fail("User inactive", 403));
 
   shopId = (user as { shopId?: string | null }).shopId || shopId || (tenancyEnabled() ? DEMO_SHOP_ID : null);
 
@@ -100,7 +115,12 @@ router.post("/auth/login", async (req, res) => {
     shop_status = "active";
   }
 
-  const token = signToken({ ...user, role: user.role.name, shopId });
+  const token = signToken({
+    ...user,
+    role: user.role?.name || "Admin",
+    contact: user.contact,
+    shopId,
+  });
   const shopType = remoteShop?.shopType || null;
   let features = null;
   if (shopId && shopType) {
@@ -125,13 +145,13 @@ router.post("/auth/login", async (req, res) => {
       email: user.email,
       role_id: user.roleId,
       status_id: user.statusId,
-      role: user.role.name,
-      ststus: user.status.name,
+      role: user.role?.name || "Admin",
+      ststus: user.status?.name || "Active",
       shop_status,
       shopId,
       shopType,
       features,
-      firebaseDedicated: Boolean(remoteShop && shopHasFirebase(remoteShop)),
+      firebaseDedicated: Boolean(remoteShop && shopHasFirebase(remoteShop) && usedDedicated),
     },
   });
 });
