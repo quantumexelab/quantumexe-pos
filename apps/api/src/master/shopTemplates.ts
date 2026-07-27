@@ -160,10 +160,10 @@ export const SHOP_TEMPLATES: Record<ShopTypeId, ShopTemplate> = {
   },
 };
 
-async function upsertSetting(key: string, value: string, shopId: string) {
+async function upsertSetting(key: string, value: string) {
   await prisma.setting.upsert({
     where: { key },
-    create: { key, value, ...(shopId ? { shopId } : {}) } as { key: string; value: string },
+    create: { key, value },
     update: { value },
   });
 }
@@ -194,18 +194,17 @@ export async function applyShopTemplate(shop: ShopRecord, shopType: ShopTypeId):
   await warmShopFirestore(shop.shopId);
 
   await runWithShop(shop.shopId, async () => {
-    await upsertSetting("shop_type", shopType, shop.shopId);
-    await upsertSetting("shop_type_label", template.label, shop.shopId);
-    await upsertSetting("features_json", JSON.stringify(template.features), shop.shopId);
-    await upsertSetting("quick_sale_mode", template.features.quickSaleMode ? "1" : "0", shop.shopId);
+    await upsertSetting("shop_type", shopType);
+    await upsertSetting("shop_type_label", template.label);
+    await upsertSetting("features_json", JSON.stringify(template.features));
+    await upsertSetting("quick_sale_mode", template.features.quickSaleMode ? "1" : "0");
     await upsertSetting(
       "expire_stock_emphasis",
-      template.features.expireStockEmphasis ? "1" : "0",
-      shop.shopId
+      template.features.expireStockEmphasis ? "1" : "0"
     );
-    await upsertSetting("show_brand", template.features.showBrand ? "1" : "0", shop.shopId);
-    await upsertSetting("shop_name", shop.shopName, shop.shopId);
-    await upsertSetting("business_name", shop.shopName, shop.shopId);
+    await upsertSetting("show_brand", template.features.showBrand ? "1" : "0");
+    await upsertSetting("shop_name", shop.shopName);
+    await upsertSetting("business_name", shop.shopName);
 
     await seedNamed("category", template.categories, shop.shopId);
     await seedNamed("brand", template.brands, shop.shopId);
