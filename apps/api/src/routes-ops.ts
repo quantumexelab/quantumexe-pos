@@ -408,13 +408,20 @@ router.get("/pos/products/barcode/:code", requireAuth, async (req, res) => {
   });
   if (!variant) return res.status(404).json(fail("Product not found", 404));
   const qty = variant.stocks.reduce((s, x) => s + x.quantity, 0);
+  const size = (variant as { size?: string | null }).size;
+  const vname = variant.name;
+  const displayParts = [variant.product.name];
+  if (size) displayParts.push(`Size ${size}`);
+  else if (vname && vname.toLowerCase() !== "default") displayParts.push(vname);
   res.json(
     ok({
       id: variant.id,
-      displayName: variant.product.name,
+      displayName: displayParts.join(" · "),
       productName: variant.product.name,
       productID: variant.product.code,
       barcode: variant.barcode,
+      size: size || null,
+      variantName: vname,
       price: variant.price,
       quantity: qty,
     })
@@ -489,7 +496,11 @@ router.post("/pos/invoice", requireAuth, async (req, res) => {
           })),
         },
       },
-      include: { items: true, customer: true },
+      include: {
+        items: { include: { variant: { include: { product: true } } } },
+        customer: true,
+        user: true,
+      },
     });
   });
 

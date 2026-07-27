@@ -1,8 +1,9 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2 } from "lucide-react";
+import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag } from "lucide-react";
 import api from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
+import { printProductLabels } from "../print/label";
 
 function lkr(n: number) {
   return `LKR ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -87,6 +88,48 @@ export function ProductList() {
     load();
   }
 
+  function printLabelsForProduct(p: any) {
+    const variants = p.variants || [];
+    if (!variants.length) {
+      alert("No variants / barcodes for this product");
+      return;
+    }
+    void printProductLabels(
+      variants.map((v: any) => ({
+        productName: p.name,
+        size: v.size,
+        variantName: v.name,
+        barcode: v.barcode || p.code || `P${p.id}-V${v.id}`,
+        price: Number(v.price || 0),
+        code: p.code,
+      }))
+    );
+  }
+
+  function printLabelsForPage() {
+    const items: Array<{
+      productName: string;
+      size?: string | null;
+      variantName?: string | null;
+      barcode: string;
+      price: number;
+      code?: string | null;
+    }> = [];
+    for (const p of pageRows) {
+      for (const v of p.variants || []) {
+        items.push({
+          productName: p.name,
+          size: v.size,
+          variantName: v.name,
+          barcode: v.barcode || p.code || `P${p.id}-V${v.id}`,
+          price: Number(v.price || 0),
+          code: p.code,
+        });
+      }
+    }
+    void printProductLabels(items);
+  }
+
   async function deactivate(id: number) {
     await api.post("/products/deactive", { id });
     setSelected(null);
@@ -137,6 +180,9 @@ export function ProductList() {
           <Link className="btn btn-primary" to="/products/create-product">
             Create Product
           </Link>
+          <button type="button" className="btn btn-muted inline-flex items-center gap-1" onClick={printLabelsForPage}>
+            <Tag size={16} /> Print labels (page)
+          </button>
         </div>
       </div>
       {error && <ErrorBox text={error} />}
@@ -216,6 +262,14 @@ export function ProductList() {
                       >
                         <Pencil size={14} />
                       </Link>
+                      <button
+                        type="button"
+                        title="Print labels"
+                        onClick={() => printLabelsForProduct(p)}
+                        className="w-8 h-8 rounded-full bg-amber-500 text-white grid place-items-center hover:bg-amber-600"
+                      >
+                        <Tag size={14} />
+                      </button>
                     </div>
                   </td>
                 </tr>

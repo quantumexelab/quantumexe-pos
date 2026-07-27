@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import api from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
+import { printReceipt } from "../print/receipt";
 
 function lkr(n: number) {
   return `LKR ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -209,36 +210,19 @@ export function ManageInvoice() {
     void load();
   }
 
-  function printInvoice(row: any) {
-    const w = window.open("", "_blank", "width=720,height=900");
-    if (!w) return;
-    w.document.write(`
-      <html><head><title>${row.invoiceNo}</title>
-      <style>body{font-family:Arial;padding:24px}h1{margin:0 0 8px}table{width:100%;border-collapse:collapse;margin-top:16px}
-      th,td{border-bottom:1px solid #ddd;padding:8px;text-align:left}</style></head>
-      <body>
-        <h1>QUANTUMEXE Invoice</h1>
-        <div>${row.invoiceNo}</div>
-        <div>Customer: ${row.customer?.name || "Guest"}</div>
-        <div>Cashier: ${row.user?.name || "-"}</div>
-        <div>Date: ${formatDt(row.createdAt)}</div>
-        <table><thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
-        <tbody>
-          ${(row.items || [])
-            .map(
-              (it: any) =>
-                `<tr><td>${it.variant?.product?.name || it.variantId}</td><td>${it.qty}</td><td>${it.price}</td><td>${
-                  it.qty * it.price - (it.discount || 0)
-                }</td></tr>`
-            )
-            .join("")}
-        </tbody></table>
-        <h3>Net Total: ${lkr(row.total)}</h3>
-      </body></html>
-    `);
-    w.document.close();
-    w.focus();
-    w.print();
+  async function printInvoice(row: any) {
+    try {
+      // Ensure items + variants are loaded
+      let inv = row;
+      if (!row?.items?.length || !row.items[0]?.variant?.product) {
+        const { data } = await api.get(`/pos/invoice/${encodeURIComponent(row.invoiceNo || row.id)}`);
+        if (data?.data) inv = data.data;
+      }
+      await printReceipt(inv);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to print receipt");
+    }
   }
 
   const cards = [
@@ -630,25 +614,18 @@ export function UserSales() {
     load();
   }
 
-  function printInvoice(row: any) {
-    const w = window.open("", "_blank", "width=720,height=900");
-    if (!w) return;
-    w.document.write(`
-      <html><head><title>${row.invoiceNo}</title>
-      <style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse;margin-top:16px}
-      th,td{border-bottom:1px solid #ddd;padding:8px;text-align:left}</style></head>
-      <body>
-        <h1>QUANTUMEXE User Sale</h1>
-        <div>${row.invoiceNo}</div>
-        <div>Customer: ${row.customer?.name || "Guest"}</div>
-        <div>Cashier: ${row.user?.name || "-"}</div>
-        <div>Date: ${formatDt(row.createdAt)}</div>
-        <h3>Net Total: ${lkr(row.net ?? row.total)}</h3>
-      </body></html>
-    `);
-    w.document.close();
-    w.focus();
-    w.print();
+  async function printInvoice(row: any) {
+    try {
+      let inv = row;
+      if (!row?.items?.length || !row.items[0]?.variant?.product) {
+        const { data } = await api.get(`/pos/invoice/${encodeURIComponent(row.invoiceNo || row.id)}`);
+        if (data?.data) inv = data.data;
+      }
+      await printReceipt(inv);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to print receipt");
+    }
   }
 
   const cards = [

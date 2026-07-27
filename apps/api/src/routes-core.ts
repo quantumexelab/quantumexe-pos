@@ -614,13 +614,20 @@ router.get("/stock/all-variations", requireAuth, async (req, res) => {
   });
   res.json(
     ok(
-      stocks.map((s) => ({
+      stocks.map((s) => {
+        const size = (s.variant as { size?: string | null }).size;
+        const vname = s.variant.name;
+        const parts = [s.variant.product.name];
+        if (size) parts.push(`Size ${size}`);
+        else if (vname && vname.toLowerCase() !== "default") parts.push(vname);
+        return {
         id: s.variantId,
         stockId: s.id,
-        displayName: s.variant.product.name,
+        displayName: parts.join(" · "),
         productName: s.variant.product.name,
         productID: s.variant.product.code,
         variant_name: s.variant.name,
+        size: size || null,
         barcode: s.variant.barcode,
         price: s.variant.price,
         Price: s.variant.price,
@@ -636,7 +643,8 @@ router.get("/stock/all-variations", requireAuth, async (req, res) => {
         lowThreshold: s.lowThreshold,
         supplier: "-",
         variant: s.variant,
-      }))
+      };
+      })
     )
   );
 });
