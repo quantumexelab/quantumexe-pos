@@ -25,10 +25,19 @@ import {
   ChevronUp,
   type LucideIcon,
 } from "lucide-react";
-import { auth, syncApi, type SyncStatus } from "../api";
+import api, { auth, syncApi, type SyncStatus } from "../api";
 import { useEffect, useMemo, useState } from "react";
 import { BrandLogo } from "./BrandLogo";
 import { APP_VERSION } from "../version";
+import {
+  modulesForShop,
+  parseFeatures,
+  readCachedFeatures,
+  readCachedShopType,
+  cacheShopFeatures,
+  SHOP_TYPE_LABELS,
+  type ShopFeatures,
+} from "../shopFeatures";
 
 type SubItem = { label: string; path: string };
 type NavItem = {
@@ -188,9 +197,46 @@ export default function AppLayout() {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [features, setFeatures] = useState<ShopFeatures | null>(() => readCachedFeatures());
+  const [shopType, setShopType] = useState<string | null>(() => readCachedShopType());
 
   const role = user?.role || "";
-  const items = useMemo(() => nav.filter((n) => n.roles.includes(role)), [role]);
+  const allowed = useMemo(() => modulesForShop(features), [features]);
+
+  const items = useMemo(() => {
+    return nav
+      .filter((n) => n.roles.includes(role) && allowed.has(n.id))
+      .map((n) => {
+        if (n.id !== "products" || !n.children) return n;
+        if (features?.showBrand !== false) return n;
+        return {
+          ...n,
+          children: n.children.filter((c) => c.path !== "/products/manage-brand"),
+        };
+      });
+  }, [role, allowed, features]);
+
+  useEffect(() => {
+    const u = auth.getUser() as { shopType?: string; features?: unknown } | null;
+    if (u?.shopType || u?.features) {
+      const f = parseFeatures(u.features) || readCachedFeatures();
+      setShopType(u.shopType || readCachedShopType());
+      setFeatures(f);
+      cacheShopFeatures(u.shopType || null, f);
+    }
+    void (async () => {
+      try {
+        const { data } = await api.get("/settings");
+        const map = (data?.data || {}) as Record<string, string>;
+        if (map.shop_type) setShopType(map.shop_type);
+        const f = parseFeatures(map.features_json);
+        if (f) setFeatures(f);
+        cacheShopFeatures(map.shop_type || null, f);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
 
   async function refreshSync() {
     try {
@@ -258,7 +304,10 @@ export default function AppLayout() {
             <span className="text-slate-900">Q</span>
             <span className="text-sky-500">EXE</span>
           </div>
-          <div className="hidden lg:block text-[10px] text-gray-400 mt-1">Version {APP_VERSION}</div>
+          <div className="hidden lg:block text-[10px] text-gray-400 mt-1">
+            Version {APP_VERSION}
+            {shopType ? ` · ${SHOP_TYPE_LABELS[shopType] || shopType}` : ""}
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1 min-h-0">

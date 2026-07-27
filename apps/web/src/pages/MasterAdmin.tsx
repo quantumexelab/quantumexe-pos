@@ -15,6 +15,7 @@ import {
 import api, { auth } from "../api";
 import { BrandLogo } from "../components/BrandLogo";
 import { ErrorBox } from "../components/ui";
+import { SHOP_TYPE_LABELS, SHOP_TYPE_OPTIONS } from "../shopFeatures";
 
 type Shop = {
   shopId: string;
@@ -36,9 +37,11 @@ type Shop = {
   firebaseClientEmail?: string;
   firebaseConfigured?: boolean;
   firebaseProvisionedAt?: string | null;
+  shopType?: string;
 };
 
 type PanelTab = "firebase" | "access" | "security";
+type TypeModalMode = "approve" | "renew" | "change" | null;
 
 function formatWhen(iso?: string | null) {
   if (!iso) return "—";
@@ -71,6 +74,8 @@ export default function MasterAdmin() {
     firebaseClientEmail: "",
     firebasePrivateKey: "",
   });
+  const [typeModal, setTypeModal] = useState<TypeModalMode>(null);
+  const [pickType, setPickType] = useState("clothing");
 
   async function load() {
     setLoading(true);
@@ -152,11 +157,49 @@ export default function MasterAdmin() {
   function selectShop(s: Shop) {
     setSelected(s);
     setTab(s.firebaseConfigured ? "access" : "firebase");
+    setPickType(s.shopType || "clothing");
     setFbForm({
       firebaseProjectId: s.firebaseProjectId || "",
       firebaseClientEmail: s.firebaseClientEmail || "",
       firebasePrivateKey: "",
     });
+  }
+
+  function openTypeModal(mode: TypeModalMode) {
+    if (!selected) return;
+    setPickType(selected.shopType || "clothing");
+    setTypeModal(mode);
+  }
+
+  async function confirmTypeModal() {
+    if (!selected || !typeModal) return;
+    const mode = typeModal;
+    setTypeModal(null);
+    if (mode === "approve") {
+      await act(
+        `/master/shops/${selected.shopId}/approve`,
+        {
+          paymentNote: "Payment confirmed by Master Admin",
+          shopType: pickType,
+        },
+        `Approved as ${SHOP_TYPE_LABELS[pickType] || pickType}`
+      );
+    } else if (mode === "renew") {
+      await act(
+        `/master/shops/${selected.shopId}/mark-paid`,
+        {
+          paymentNote: "Monthly payment renewed",
+          shopType: selected.shopType || pickType,
+        },
+        "Payment renewed (+30 days)"
+      );
+    } else if (mode === "change") {
+      await act(
+        `/master/shops/${selected.shopId}/shop-type`,
+        { shopType: pickType },
+        `Shop type → ${SHOP_TYPE_LABELS[pickType] || pickType}`
+      );
+    }
   }
 
   async function changeMasterPassword(e: FormEvent) {
@@ -332,6 +375,13 @@ export default function MasterAdmin() {
                       <p className="text-sm text-slate-600 mt-1">
                         {selected.ownerName} · {selected.phone} · {selected.email}
                       </p>
+                      {selected.shopType ? (
+                        <p className="text-xs font-semibold text-sky-800 mt-1">
+                          Type: {SHOP_TYPE_LABELS[selected.shopType] || selected.shopType}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-amber-700 mt-1">Shop type not set yet — pick on approve</p>
+                      )}
                     </div>
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase ${statusClass(selected.status)}`}>
                       {selected.status}
@@ -509,7 +559,8 @@ export default function MasterAdmin() {
                         <div>
                           <div className="text-sm font-bold text-slate-900">Payment & access</div>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            Approve after Firebase is connected so the shop can use POS.
+                            On approve you must choose the shop type — POS features & starter catalog are applied
+                            automatically.
                           </p>
                         </div>
                         {!selected.firebaseConfigured && (
@@ -522,13 +573,7 @@ export default function MasterAdmin() {
                             type="button"
                             disabled={busy}
                             className="btn btn-primary"
-                            onClick={() =>
-                              void act(
-                                `/master/shops/${selected.shopId}/approve`,
-                                { paymentNote: "Payment confirmed by Master Admin" },
-                                "Approved — payment confirmed, shop unlocked"
-                              )
-                            }
+                            onClick={() => openTypeModal("approve")}
                           >
                             <CheckCircle2 size={16} /> Confirm payment &amp; approve
                           </button>
@@ -536,15 +581,30 @@ export default function MasterAdmin() {
                             type="button"
                             disabled={busy}
                             className="btn btn-muted"
-                            onClick={() =>
-                              void act(
-                                `/master/shops/${selected.shopId}/mark-paid`,
-                                { paymentNote: "Monthly payment renewed" },
-                                "Payment renewed (+30 days)"
-                              )
-                            }
+                            onClick={() => {
+                              if (selected.shopType) {
+                                void act(
+                                  `/master/shops/${selected.shopId}/mark-paid`,
+                                  {
+                                    paymentNote: "Monthly payment renewed",
+                                    shopType: selected.shopType,
+                                  },
+                                  "Payment renewed (+30 days)"
+                                );
+                              } else {
+                                openTypeModal("renew");
+                              }
+                            }}
                           >
                             <Wallet size={16} /> Mark paid / renew
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="btn btn-muted"
+                            onClick={() => openTypeModal("change")}
+                          >
+                            Change shop type
                           </button>
                           <button
                             type="button"
@@ -627,6 +687,53 @@ export default function MasterAdmin() {
           </section>
         </div>
       </div>
+
+      {typeModal && selected && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white border border-slate-200 shadow-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <div className="text-sm font-bold text-slate-900">
+                {typeModal === "change"
+                  ? "Change shop type"
+                  : typeModal === "renew"
+                    ? "Renew — set shop type"
+                    : "What kind of shop is this?"}
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {selected.shopName} — features and starter categories will match this type.
+              </p>
+            </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto">
+              {SHOP_TYPE_OPTIONS.map((opt) => {
+                const on = pickType === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setPickType(opt.id)}
+                    className={`text-left rounded-xl border px-3 py-3 transition-colors ${
+                      on
+                        ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500"
+                        : "border-slate-200 hover:border-slate-300 bg-white"
+                    }`}
+                  >
+                    <div className="text-sm font-bold text-slate-900">{opt.label}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">{opt.hint}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="px-5 py-4 border-t border-slate-100 flex justify-end gap-2">
+              <button type="button" className="btn btn-muted" disabled={busy} onClick={() => setTypeModal(null)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" disabled={busy || !pickType} onClick={() => void confirmTypeModal()}>
+                {typeModal === "approve" ? "Approve & apply" : typeModal === "change" ? "Apply type" : "Renew"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

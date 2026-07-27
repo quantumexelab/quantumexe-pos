@@ -28,6 +28,8 @@ export type ShopRecord = {
   firebaseClientEmail?: string;
   firebasePrivateKey?: string;
   firebaseProvisionedAt?: string | null;
+  /** Business template applied on approve (clothing, restaurant, …). */
+  shopType?: string;
 };
 
 const SHOPS_COL = "pos_shops";
@@ -290,16 +292,34 @@ export async function updateShop(
   return next;
 }
 
-export async function approveShop(shopId: string, paymentNote = "Payment confirmed") {
+export async function approveShop(
+  shopId: string,
+  opts: { paymentNote?: string; shopType?: string } | string = {}
+) {
+  const paymentNote =
+    typeof opts === "string" ? opts : opts.paymentNote || "Payment confirmed";
+  const shopType = typeof opts === "string" ? undefined : opts.shopType;
+
   const now = new Date();
   const nextDue = new Date(now.getTime() + 30 * 86400000);
-  return updateShop(shopId, {
+  const patch: Partial<ShopRecord> = {
     status: "active",
     paymentNote,
     lastPaidAt: now.toISOString(),
     nextDueAt: nextDue.toISOString(),
     approvedAt: now.toISOString(),
-  });
+  };
+  if (shopType) patch.shopType = shopType;
+  return updateShop(shopId, patch);
+}
+
+/** Set or change shop type and re-apply feature template (does not wipe products). */
+export async function setShopType(shopId: string, shopType: string) {
+  const { isShopType, applyShopTemplate } = await import("./shopTemplates.js");
+  if (!isShopType(shopType)) throw new Error("Invalid shop type");
+  const shop = await updateShop(shopId, { shopType });
+  await applyShopTemplate(shop, shopType);
+  return shop;
 }
 
 export async function revokeShop(shopId: string) {

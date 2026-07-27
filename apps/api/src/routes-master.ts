@@ -15,6 +15,7 @@ import {
   resetShopPassword,
   revokeShop,
   setShopFirebase,
+  setShopType,
   toPublicShop,
   verifyMasterLogin,
 } from "./master/shopRegistry.js";
@@ -113,7 +114,22 @@ router.get("/shop/access", requireAuth, async (req, res) => {
       return res.json(ok({ status: "active", role: "MasterAdmin" }));
     }
     const access = await refreshLocalAccessFromRegistry(req.user?.shopId ?? null);
-    res.json(ok(access));
+    const shopType = access.shop?.shopType || null;
+    let features = null;
+    if (access.shopId) {
+      try {
+        const { warmShopFirestore } = await import("./master/shopFirebase.js");
+        const { runWithShop } = await import("./shopContext.js");
+        await warmShopFirestore(access.shopId);
+        const row = await runWithShop(access.shopId, async () =>
+          prisma.setting.findUnique({ where: { key: "features_json" } })
+        );
+        if (row?.value) features = JSON.parse(row.value);
+      } catch {
+        /* ignore */
+      }
+    }
+    res.json(ok({ ...access, shopType, features }));
   } catch (e) {
     res.status(500).json(fail(e instanceof Error ? e.message : "Access check failed", 500));
   }
@@ -185,11 +201,43 @@ router.post("/master/shops/:shopId/approve", requireAuth, requireRoles("MasterAd
   try {
     const shopId = String(req.params.shopId);
     const note = String(req.body?.paymentNote || "Payment confirmed");
-    const shop = await approveShop(shopId, note);
-    res.json(ok(toPublicShop(shop), "Shop approved — payment confirmed"));
+    const shopType = String(req.body?.shopType || "").trim();
+    const { isShopType, applyShopTemplate, SHOP_TYPE_LABELS } = await import("./master/shopTemplates.js");
+    if (!isShopType(shopType)) {
+      return res.status(400).json(fail("Select a shop type (clothing, restaurant, grocery, …)"));
+    }
+    let shop = await approveShop(shopId, { paymentNote: note, shopType });
+    await applyShopTemplate(shop, shopType);
+    shop = (await import("./master/shopRegistry.js").then((m) => m.getShop(shopId))) || shop;
+    res.json(
+      ok(toPublicShop(shop!), `Approved as ${SHOP_TYPE_LABELS[shopType]} — template applied`)
+    );
   } catch (e) {
     res.status(400).json(fail(e instanceof Error ? e.message : "Approve failed"));
   }
+});
+
+router.post("/master/shops/:shopId/shop-type", requireAuth, requireRoles("MasterAdmin"), async (req, res) => {
+  try {
+    const shopType = String(req.body?.shopType || "").trim();
+    const shop = await setShopType(String(req.params.shopId), shopType);
+    res.json(ok(toPublicShop(shop), "Shop type updated — features re-applied"));
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Shop type update failed"));
+  }
+});
+
+router.get("/master/shop-types", requireAuth, requireRoles("MasterAdmin"), async (_req, res) => {
+  const { SHOP_TEMPLATES } = await import("./master/shopTemplates.js");
+  res.json(
+    ok(
+      Object.values(SHOP_TEMPLATES).map((t) => ({
+        id: t.id,
+        label: t.label,
+        modules: t.features.modules,
+      }))
+    )
+  );
 });
 
 router.post("/master/shops/:shopId/revoke", requireAuth, requireRoles("MasterAdmin"), async (req, res) => {
@@ -230,8 +278,23 @@ router.post("/master/shops/:shopId/reset-password", requireAuth, requireRoles("M
 router.post("/master/shops/:shopId/mark-paid", requireAuth, requireRoles("MasterAdmin"), async (req, res) => {
   try {
     const note = String(req.body?.paymentNote || "Monthly payment confirmed");
-    const shop = await approveShop(String(req.params.shopId), note);
-    res.json(ok(toPublicShop(shop), "Payment recorded — access active for 30 days"));
+    const shopId = String(req.params.shopId);
+    const existing = await import("./master/shopRegistry.js").then((m) => m.getShop(shopId));
+    const shopTypeBody = String(req.body?.shopType || "").trim();
+    const { isShopType, applyShopTemplate } = await import("./master/shopTemplates.js");
+
+    // Renew: keep existing type; if never typed, require shopType
+    let shopType = existing?.shopType || shopTypeBody;
+    if (!isShopType(shopType)) {
+      return res.status(400).json(fail("Shop type required (set type on first approve / renew)"));
+    }
+
+    let shop = await approveShop(shopId, { paymentNote: note, shopType });
+    if (!existing?.shopType || (shopTypeBody && shopTypeBody !== existing.shopType)) {
+      await applyShopTemplate(shop, shopType);
+      shop = (await import("./master/shopRegistry.js").then((m) => m.getShop(shopId))) || shop;
+    }
+    res.json(ok(toPublicShop(shop!), "Payment recorded — access active for 30 days"));
   } catch (e) {
     res.status(400).json(fail(e instanceof Error ? e.message : "Payment update failed"));
   }

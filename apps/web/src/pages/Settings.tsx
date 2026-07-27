@@ -611,6 +611,14 @@ export default function SettingsPage() {
               <span className="inline-flex mt-2 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
                 Version {APP_VERSION}
               </span>
+              {settings.shop_type ? (
+                <div className="mt-2 text-sm text-gray-600">
+                  Shop type:{" "}
+                  <span className="font-semibold text-gray-900">
+                    {settings.shop_type_label || settings.shop_type}
+                  </span>
+                </div>
+              ) : null}
             </div>
             <p className="text-sm text-gray-600 max-w-xl mx-auto">
               A highly optimized and user-friendly Point of Sale system tailored for seamless restaurant and retail

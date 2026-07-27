@@ -1,4 +1,5 @@
 import axios from "axios";
+import { cacheShopFeatures, parseFeatures } from "./shopFeatures";
 
 /** Production: set VITE_API_BASE to Firebase Hosting URL (e.g. https://quantumexe-pos.web.app) when API runs on Cloud Functions. */
 const api = axios.create({
@@ -20,6 +21,9 @@ export type User = {
   role: string;
   role_id: number;
   shop_status?: string;
+  shopId?: string | null;
+  shopType?: string | null;
+  features?: unknown;
 };
 
 export type ShopAccess = {
@@ -42,13 +46,18 @@ export const masterApi = {
     const { data } = await api.get("/master/shops");
     return (data?.data || []) as Shop[];
   },
-  async approve(shopId: string, paymentNote?: string) {
-    const { data } = await api.post(`/master/shops/${shopId}/approve`, { paymentNote });
+  async approve(shopId: string, paymentNote?: string, shopType?: string) {
+    const { data } = await api.post(`/master/shops/${shopId}/approve`, { paymentNote, shopType });
     if (!data?.success) throw new Error(data?.message || "Approve failed");
     return data;
   },
-  async markPaid(shopId: string, paymentNote?: string) {
-    const { data } = await api.post(`/master/shops/${shopId}/mark-paid`, { paymentNote });
+  async setShopType(shopId: string, shopType: string) {
+    const { data } = await api.post(`/master/shops/${shopId}/shop-type`, { shopType });
+    if (!data?.success) throw new Error(data?.message || "Shop type update failed");
+    return data;
+  },
+  async markPaid(shopId: string, paymentNote?: string, shopType?: string) {
+    const { data } = await api.post(`/master/shops/${shopId}/mark-paid`, { paymentNote, shopType });
     if (!data?.success) throw new Error(data?.message || "Mark paid failed");
     return data;
   },
@@ -86,6 +95,7 @@ export const auth = {
       if (data.success && data.token) {
         sessionStorage.setItem("token", data.token);
         sessionStorage.setItem("user", JSON.stringify(data.user));
+        cacheShopFeatures(data.user?.shopType, parseFeatures(data.user?.features));
       }
       return data;
     } catch (e: unknown) {
@@ -99,6 +109,7 @@ export const auth = {
   logout() {
     sessionStorage.removeItem("token");
     sessionStorage.removeItem("user");
+    cacheShopFeatures(null, null);
   },
   getUser(): User | null {
     const raw = sessionStorage.getItem("user");

@@ -101,6 +101,19 @@ router.post("/auth/login", async (req, res) => {
   }
 
   const token = signToken({ ...user, role: user.role.name, shopId });
+  const shopType = remoteShop?.shopType || null;
+  let features = null;
+  if (shopId && shopType) {
+    try {
+      const row = await runWithShop(shopId, async () =>
+        prisma.setting.findUnique({ where: { key: "features_json" } })
+      );
+      if (row?.value) features = JSON.parse(row.value);
+    } catch {
+      /* ignore */
+    }
+  }
+
   return res.json({
     success: true,
     message: "Login successful",
@@ -116,6 +129,8 @@ router.post("/auth/login", async (req, res) => {
       ststus: user.status.name,
       shop_status,
       shopId,
+      shopType,
+      features,
       firebaseDedicated: Boolean(remoteShop && shopHasFirebase(remoteShop)),
     },
   });
