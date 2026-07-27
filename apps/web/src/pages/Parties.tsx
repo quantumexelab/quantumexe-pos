@@ -16,11 +16,12 @@ import {
   Printer,
   RefreshCw,
   Search,
+  Trash2,
   Upload,
   UserPlus,
   Users,
 } from "lucide-react";
-import api from "../api";
+import api, { auth } from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
 import { BrandLogo } from "../components/BrandLogo";
 
@@ -2570,6 +2571,26 @@ export function ManageUsers() {
     load();
   }
 
+  async function deleteUser(row: { id: number; name?: string }) {
+    const me = auth.getUser();
+    if (me?.id === row.id) {
+      setError("You cannot delete your own account while logged in");
+      return;
+    }
+    if (!confirm(`Delete user "${row.name || row.id}"? This cannot be undone.`)) return;
+    setError("");
+    try {
+      await api.delete(`/users/${row.id}`);
+      if (editing?.id === row.id) {
+        setShowForm(false);
+        setEditing(null);
+      }
+      await load();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err.message || "Failed to delete user");
+    }
+  }
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const rowsNow = pageRowsRef.current;
@@ -2594,6 +2615,10 @@ export function ManageUsers() {
         e.preventDefault();
         const row = rowsNow[selectedIdxRef.current];
         if (row) openEdit(row);
+      } else if (key === "d") {
+        e.preventDefault();
+        const row = rowsNow[selectedIdxRef.current];
+        if (row) void deleteUser(row);
       } else if (key === "t") {
         e.preventDefault();
         const row = rowsNow[selectedIdxRef.current];
@@ -2616,6 +2641,7 @@ export function ManageUsers() {
             <span><kbd className="px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200">↑↓</kbd> Navigate</span>
             <span><kbd className="px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200">ALT+A</kbd> Add</span>
             <span><kbd className="px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200">ALT+E</kbd> Edit</span>
+            <span><kbd className="px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200">ALT+D</kbd> Delete</span>
             <span><kbd className="px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200">ALT+T</kbd> Status</span>
             <span><kbd className="px-1.5 py-0.5 rounded bg-gray-100 border border-gray-200">ALT+S</kbd> Search</span>
           </div>
@@ -2787,17 +2813,31 @@ export function ManageUsers() {
                       </button>
                     </td>
                     <td className="px-3 py-3">
-                      <button
-                        type="button"
-                        title="Edit"
-                        className="w-8 h-8 rounded-full bg-sky-500 text-white grid place-items-center hover:bg-sky-600"
-                        onClick={(ev) => {
-                          ev.stopPropagation();
-                          openEdit(r);
-                        }}
-                      >
-                        <Pencil size={14} />
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          title="Edit"
+                          className="w-8 h-8 rounded-full bg-sky-500 text-white grid place-items-center hover:bg-sky-600"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            openEdit(r);
+                          }}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          title="Delete"
+                          className="w-8 h-8 rounded-full bg-rose-500 text-white grid place-items-center hover:bg-rose-600 disabled:opacity-40"
+                          disabled={auth.getUser()?.id === r.id}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            void deleteUser(r);
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

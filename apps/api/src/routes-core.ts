@@ -364,6 +364,33 @@ router.patch("/users/:id/status", requireAuth, async (req, res) => {
   res.json(ok(updated, "Status updated"));
 });
 
+router.delete("/users/:id", requireAuth, async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json(fail("Invalid user id"));
+  if (req.user?.id === id) {
+    return res.status(400).json(fail("You cannot delete your own account while logged in"));
+  }
+  const existing = await prisma.user.findUnique({ where: { id }, include: { role: true } });
+  if (!existing) return res.status(404).json(fail("User not found", 404));
+
+  const isAdmin = String(existing.role?.name || "").toLowerCase().includes("admin");
+  if (isAdmin) {
+    const all = await prisma.user.findMany({ include: { role: true, status: true } });
+    const otherActiveAdmins = all.filter(
+      (u) =>
+        u.id !== id &&
+        String(u.role?.name || "").toLowerCase().includes("admin") &&
+        String(u.status?.name || "").toLowerCase() === "active"
+    );
+    if (otherActiveAdmins.length === 0) {
+      return res.status(400).json(fail("Cannot delete the last active Admin user"));
+    }
+  }
+
+  await prisma.user.delete({ where: { id } });
+  res.json(ok({ id }, "User deleted"));
+});
+
 // ---------- Categories / Brands / Units / Types ----------
 const crudName = (model: "category" | "brand" | "unit" | "productType", base: string) => {
   router.get(base, requireAuth, async (_req, res) => {
