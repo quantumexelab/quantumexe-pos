@@ -1,53 +1,65 @@
 # QUANTUMEXE POS
 
-## Working setup (`info@quantumexe.com`, no service-account JSON key)
+Hybrid retail POS: **shop PC SQLite (primary)** + **Firestore cloud backup** when online.
 
-Org policy blocks downloading keys. So we use:
+## Windows shop PC (recommended) — install like an app
 
-| Layer | Where |
-|-------|--------|
-| **Database** | Firebase Firestore (`USE_FIRESTORE=1` on Functions) |
-| **API** | Firebase Cloud Functions (default credentials — **no JSON key**) |
-| **Website** | Vercel |
+### Build the installer (on your build machine, once)
 
-### 1) Upgrade Firebase to Blaze (you must click)
+1. Install [Node.js LTS](https://nodejs.org) (build PC only).
+2. In the project folder double-click **`Build-Windows-Installer.bat`**  
+   (or run `npm run desktop:dist`).
+3. Get the setup file:
+   `apps\desktop\release\QUANTUMEXE-POS-Setup-1.0.0.exe`
 
-https://console.firebase.google.com/project/quantumexe-pos/usage/details  
-→ **Modify plan** → **Blaze**
+### Install on any Windows PC
 
-(Free quota exists; light demo use is usually $0.)
+1. Copy the **Setup .exe** to the shop PC.
+2. Run it → Next → Install (creates Desktop shortcut).
+3. Open **QUANTUMEXE POS** — **no Node.js / npm needed** on the shop PC.
+4. Login: `0771234567` / `123456`
 
-### 2) Deploy API (Cloud Functions + Hosting rewrite)
+Data is stored on that PC under the app user data folder. Optional cloud backup: put a `desktop.env` next to the bundle (see `desktop.env.example` inside resources) with `SYNC_TO_FIRESTORE=1` and Firebase keys.
 
-```bash
-npx firebase login
-npx firebase use quantumexe-pos
-npx firebase deploy --only functions,hosting,firestore
-```
+### Remote updates (from home — no shop visit)
 
-API URL: `https://quantumexe-pos.web.app/api/...`
+After shops install **v1.0.0+** with auto-update:
 
-### 3) Vercel (frontend only)
+1. Change version in [`apps/desktop/package.json`](apps/desktop/package.json) (e.g. `1.0.0` → `1.0.1`).
+2. Create a GitHub token with `repo` scope → `set GH_TOKEN=...`
+3. Run **`Publish-Update.bat`** (builds + uploads GitHub Release).
+4. Shop PC: open app → “Update available” → download → **Restart now**.
 
-Environment variable:
-
-```
-VITE_API_BASE=https://quantumexe-pos.web.app
-```
-
-(Do **not** put `/api` at the end.)
-
-Redeploy Vercel. Then seed once:
-
-```bash
-curl -X POST https://quantumexe-pos.web.app/api/setup/seed
-```
-
-Login: `0771234567` / `123456`
+Repo used for releases: `quantumexelab/quantumexe-pos`.
 
 ---
 
-## Why not the JSON key?
+## Developer / browser mode
 
-Company org policy still blocks `Generate private key`.  
-Cloud Functions run **inside Google**, so Admin SDK works **without** that download.
+```bash
+npm install
+npm run db:push -w apps/api
+npm run db:seed -w apps/api
+npm run dev
+```
+
+Or double-click **`Start-POS-Dev.bat`**.
+
+- Web: http://localhost:5173  
+- API: http://localhost:4000  
+
+### Sync API (local hybrid)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/sync/status` | Last push/pull, errors |
+| POST | `/api/sync/push` | Push SQLite → Firestore |
+| POST | `/api/sync/pull` | Restore cloud → local |
+
+Set in `apps/api/.env`: `SYNC_TO_FIRESTORE=1` + Firebase Admin fields. Leave `USE_FIRESTORE` unset on the shop PC.
+
+---
+
+## Cloud-only demo (Vercel)
+
+https://quantumexe-pos.vercel.app — remote demo. Day-to-day shop sales should use the **Windows installer** so offline works.

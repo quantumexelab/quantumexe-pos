@@ -11,6 +11,15 @@ import api from "../api";
 import { ErrorBox } from "../components/ui";
 import ConnectionCenter from "../components/ConnectionCenter";
 import { APP_VERSION } from "../version";
+import { openCustomerDisplayWindow } from "../customerDisplay/channel";
+import {
+  connectPoleDisplay,
+  disconnectPoleDisplay,
+  poleDisplayConnected,
+  poleDisplaySupported,
+  showPoleIdle,
+  writePoleLines,
+} from "../customerDisplay/pole";
 
 type Tab = "connection" | "license" | "print" | "pos" | "display" | "about";
 
@@ -27,7 +36,8 @@ const DEFAULTS: Record<string, string> = {
   quick_sale_mode: "0",
   customer_display_enabled: "1",
   print_language: "English",
-  bill_printer: "",
+  bill_printer: "xp-q80t",
+  label_printer: "xp-361",
   receipt_header: "WELCOME TO OUR STORE",
   receipt_footer: "Thank you for your purchase!",
   show_logo: "1",
@@ -92,6 +102,7 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [poleConnected, setPoleConnected] = useState(false);
 
   function selectTab(id: Tab) {
     setTab(id);
@@ -366,12 +377,24 @@ export default function SettingsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-600">Bill Printer</label>
+                  <label className="text-xs font-semibold text-gray-600">Bill / Receipt Printer</label>
                   <select className="input mt-1" value={settings.bill_printer} onChange={(e) => setField("bill_printer", e.target.value)}>
-                    <option value="">-- Use System Default Printer --</option>
-                    <option value="thermal">Thermal Printer</option>
+                    <option value="xp-q80t">Xprinter XP-Q80T Thermal Receipt (80mm)</option>
+                    <option value="thermal">Other Thermal Receipt (80mm)</option>
                     <option value="a4">A4 Printer</option>
                   </select>
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    POS invoices print here. In Windows print dialog, choose <strong>XP-Q80T</strong>.
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600">Barcode Label Printer</label>
+                  <select className="input mt-1" value={settings.label_printer || "xp-361"} onChange={(e) => setField("label_printer", e.target.value)}>
+                    <option value="xp-361">Xprinter XP-361 Thermal Barcode (80mm)</option>
+                  </select>
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    Store Release stickers (barcode + price). Choose <strong>XP-361</strong> in the print dialog.
+                  </div>
                 </div>
                 <div className="md:col-span-2">
                   <label className="text-xs font-semibold text-gray-600">Header Text</label>
@@ -517,6 +540,68 @@ export default function SettingsPage() {
 
       {tab === "display" && (
         <div className="space-y-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+            <div className="text-sm font-bold text-gray-800">Customer Price Display</div>
+            <div className="text-xs text-gray-500">
+              Open a second-screen window for dual monitors, or connect a CD-7220 pole display (USB/COM via Web Serial).
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  openCustomerDisplayWindow();
+                  setMsg("Customer display window opened — drag it to the second monitor");
+                }}
+              >
+                Open customer display window
+              </button>
+              {poleDisplaySupported() && (
+                <button
+                  type="button"
+                  className={`btn ${poleConnected || poleDisplayConnected() ? "btn-muted" : "btn-primary"}`}
+                  onClick={async () => {
+                    try {
+                      if (poleConnected || poleDisplayConnected()) {
+                        await disconnectPoleDisplay();
+                        setPoleConnected(false);
+                        setMsg("Pole display disconnected");
+                        return;
+                      }
+                      await connectPoleDisplay();
+                      const shop = settings.shop_display_name || settings.shop_name || "WELCOME";
+                      await writePoleLines(String(shop).slice(0, 20), "CUSTOMER DISPLAY");
+                      setPoleConnected(true);
+                      setMsg("CD-7220 pole display connected");
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : "Pole connect failed");
+                    }
+                  }}
+                >
+                  {poleConnected || poleDisplayConnected() ? "Disconnect CD-7220" : "Connect CD-7220 pole"}
+                </button>
+              )}
+              {(poleConnected || poleDisplayConnected()) && (
+                <button
+                  type="button"
+                  className="btn btn-muted"
+                  onClick={async () => {
+                    await showPoleIdle(settings.shop_display_name || settings.shop_name || "WELCOME");
+                    setMsg("Pole display reset to welcome");
+                  }}
+                >
+                  Test pole welcome
+                </button>
+              )}
+            </div>
+            {!poleDisplaySupported() && (
+              <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                Pole display needs Chrome/Edge with Web Serial (desktop). Second-monitor customer window works in all browsers.
+              </div>
+            )}
+            <Toggle label="Enable Customer Display sync from POS" checked={bool("customer_display_enabled")} onChange={(v) => setBool("customer_display_enabled", v)} />
+          </div>
+
           <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
             <div className="text-sm font-bold text-gray-800">Shop Branding</div>
             <div className="text-xs text-gray-500">Displayed on the customer-facing screen.</div>

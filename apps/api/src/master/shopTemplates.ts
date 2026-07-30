@@ -33,11 +33,13 @@ export type NavModuleId =
   | "sales"
   | "quotation"
   | "stock"
+  | "storeRelease"
   | "grn"
   | "products"
   | "supplier"
   | "customer"
   | "users"
+  | "employee"
   | "accounts"
   | "reports"
   | "settings"
@@ -48,6 +50,8 @@ export type ShopFeatures = {
   quickSaleMode: boolean;
   expireStockEmphasis: boolean;
   showBrand: boolean;
+  /** Master-controlled: fingerprint punch for attendance. Manual always stays available. */
+  fingerprintAttendance: boolean;
 };
 
 export type ShopTemplate = {
@@ -67,6 +71,7 @@ const CORE: NavModuleId[] = [
   "stock",
   "customer",
   "users",
+  "employee",
   "accounts",
   "reports",
   "settings",
@@ -78,10 +83,11 @@ export const SHOP_TEMPLATES: Record<ShopTypeId, ShopTemplate> = {
     id: "clothing",
     label: SHOP_TYPE_LABELS.clothing,
     features: {
-      modules: [...CORE, "quotation", "grn", "supplier"],
+      modules: [...CORE, "quotation", "grn", "storeRelease", "supplier"],
       quickSaleMode: false,
       expireStockEmphasis: false,
       showBrand: true,
+      fingerprintAttendance: false,
     },
     categories: ["Men", "Women", "Kids", "Accessories", "Footwear"],
     brands: ["House Brand", "Local", "Import"],
@@ -92,10 +98,11 @@ export const SHOP_TEMPLATES: Record<ShopTypeId, ShopTemplate> = {
     id: "restaurant",
     label: SHOP_TYPE_LABELS.restaurant,
     features: {
-      modules: [...CORE, "grn", "supplier"],
+      modules: [...CORE, "grn", "storeRelease", "supplier"],
       quickSaleMode: true,
       expireStockEmphasis: false,
       showBrand: false,
+      fingerprintAttendance: false,
     },
     categories: ["Meals", "Beverages", "Desserts", "Snacks", "Extras"],
     brands: [],
@@ -106,10 +113,11 @@ export const SHOP_TEMPLATES: Record<ShopTypeId, ShopTemplate> = {
     id: "grocery",
     label: SHOP_TYPE_LABELS.grocery,
     features: {
-      modules: [...CORE, "quotation", "grn", "supplier"],
+      modules: [...CORE, "quotation", "grn", "storeRelease", "supplier"],
       quickSaleMode: false,
       expireStockEmphasis: true,
       showBrand: true,
+      fingerprintAttendance: false,
     },
     categories: ["Rice & Grains", "Dairy", "Beverages", "Snacks", "Household", "Personal Care"],
     brands: ["Local", "Import"],
@@ -120,10 +128,11 @@ export const SHOP_TEMPLATES: Record<ShopTypeId, ShopTemplate> = {
     id: "pharmacy",
     label: SHOP_TYPE_LABELS.pharmacy,
     features: {
-      modules: [...CORE, "grn", "supplier"],
+      modules: [...CORE, "grn", "storeRelease", "supplier"],
       quickSaleMode: false,
       expireStockEmphasis: true,
       showBrand: true,
+      fingerprintAttendance: false,
     },
     categories: ["OTC", "Prescription", "Vitamins", "First Aid", "Personal Care"],
     brands: ["Generic", "Branded"],
@@ -134,10 +143,11 @@ export const SHOP_TEMPLATES: Record<ShopTypeId, ShopTemplate> = {
     id: "electronics",
     label: SHOP_TYPE_LABELS.electronics,
     features: {
-      modules: [...CORE, "quotation", "grn", "supplier"],
+      modules: [...CORE, "quotation", "grn", "storeRelease", "supplier"],
       quickSaleMode: false,
       expireStockEmphasis: false,
       showBrand: true,
+      fingerprintAttendance: false,
     },
     categories: ["Mobiles", "Accessories", "Computers", "Audio", "Home Appliances"],
     brands: ["Local", "Import"],
@@ -148,10 +158,11 @@ export const SHOP_TEMPLATES: Record<ShopTypeId, ShopTemplate> = {
     id: "general",
     label: SHOP_TYPE_LABELS.general,
     features: {
-      modules: [...CORE, "quotation", "grn", "supplier"],
+      modules: [...CORE, "quotation", "grn", "storeRelease", "supplier"],
       quickSaleMode: false,
       expireStockEmphasis: false,
       showBrand: true,
+      fingerprintAttendance: false,
     },
     categories: ["General", "Misc"],
     brands: ["House Brand"],
@@ -191,18 +202,24 @@ async function seedNamed(
 /** Apply feature flags + starter catalog into the shop's POS database. */
 export async function applyShopTemplate(shop: ShopRecord, shopType: ShopTypeId): Promise<void> {
   const template = SHOP_TEMPLATES[shopType];
+  const fingerprintOn = Boolean(shop.fingerprintAttendance);
+  const features: ShopFeatures = {
+    ...template.features,
+    fingerprintAttendance: fingerprintOn,
+  };
   await warmShopFirestore(shop.shopId);
 
   await runWithShop(shop.shopId, async () => {
     await upsertSetting("shop_type", shopType);
     await upsertSetting("shop_type_label", template.label);
-    await upsertSetting("features_json", JSON.stringify(template.features));
-    await upsertSetting("quick_sale_mode", template.features.quickSaleMode ? "1" : "0");
+    await upsertSetting("features_json", JSON.stringify(features));
+    await upsertSetting("quick_sale_mode", features.quickSaleMode ? "1" : "0");
     await upsertSetting(
       "expire_stock_emphasis",
-      template.features.expireStockEmphasis ? "1" : "0"
+      features.expireStockEmphasis ? "1" : "0"
     );
-    await upsertSetting("show_brand", template.features.showBrand ? "1" : "0");
+    await upsertSetting("show_brand", features.showBrand ? "1" : "0");
+    await upsertSetting("fingerprint_attendance", fingerprintOn ? "1" : "0");
     await upsertSetting("shop_name", shop.shopName);
     await upsertSetting("business_name", shop.shopName);
 
@@ -211,4 +228,33 @@ export async function applyShopTemplate(shop: ShopRecord, shopType: ShopTypeId):
     await seedNamed("unit", template.units, shop.shopId);
     await seedNamed("productType", template.productTypes, shop.shopId);
   });
+}
+
+/** Master Admin: turn fingerprint attendance on/off for a shop (keeps manual entry). */
+export async function setShopFingerprintAttendance(shopId: string, enabled: boolean): Promise<ShopRecord> {
+  const { updateShop, getShop } = await import("./shopRegistry.js");
+  const shop = await updateShop(shopId, { fingerprintAttendance: enabled });
+  await warmShopFirestore(shop.shopId);
+
+  await runWithShop(shop.shopId, async () => {
+    let features: ShopFeatures = {
+      modules: [...CORE],
+      quickSaleMode: false,
+      expireStockEmphasis: false,
+      showBrand: true,
+      fingerprintAttendance: enabled,
+    };
+    const row = await prisma.setting.findUnique({ where: { key: "features_json" } });
+    if (row?.value) {
+      try {
+        features = { ...features, ...JSON.parse(row.value), fingerprintAttendance: enabled };
+      } catch {
+        /* use defaults */
+      }
+    }
+    await upsertSetting("features_json", JSON.stringify(features));
+    await upsertSetting("fingerprint_attendance", enabled ? "1" : "0");
+  });
+
+  return (await getShop(shopId)) || shop;
 }

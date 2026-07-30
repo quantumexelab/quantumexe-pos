@@ -4,9 +4,18 @@ import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer
 import api from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
 import { printProductLabels } from "../print/label";
+import { exportTable } from "../export/tableExport";
 
 function lkr(n: number) {
   return `LKR ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Case-insensitive match against any of the given fields. */
+function matchesQuery(q: string, ...parts: unknown[]) {
+  const needle = String(q || "").trim().toLowerCase();
+  if (!needle) return true;
+  const hay = parts.map((p) => String(p ?? "")).join(" ").toLowerCase();
+  return hay.includes(needle);
 }
 
 export function ProductsHome() {
@@ -60,13 +69,11 @@ export function ProductList() {
   const filtered = useMemo(() => {
     return rows.filter((p) => {
       if (typeId && String(p.productTypeId || "") !== String(typeId)) return false;
-      if (query) {
-        const q = query.toLowerCase();
-        const barcode = p.variants?.[0]?.barcode || "";
-        const hay = `${p.id} ${p.name || ""} ${p.code || ""} ${barcode}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
+      if (!query.trim()) return true;
+      const barcodes = (p.variants || []).map((v: any) => v.barcode).join(" ");
+      const sizes = (p.variants || []).map((v: any) => v.size).join(" ");
+      const colors = (p.variants || []).map((v: any) => v.color).join(" ");
+      return matchesQuery(query, p.id, p.name, p.code, barcodes, sizes, colors);
     });
   }, [rows, typeId, query]);
 
@@ -98,6 +105,7 @@ export function ProductList() {
       variants.map((v: any) => ({
         productName: p.name,
         size: v.size,
+        color: v.color,
         variantName: v.name,
         barcode: v.barcode || p.code || `P${p.id}-V${v.id}`,
         price: Number(v.price || 0),
@@ -110,6 +118,7 @@ export function ProductList() {
     const items: Array<{
       productName: string;
       size?: string | null;
+      color?: string | null;
       variantName?: string | null;
       barcode: string;
       price: number;
@@ -120,6 +129,7 @@ export function ProductList() {
         items.push({
           productName: p.name,
           size: v.size,
+          color: v.color,
           variantName: v.name,
           barcode: v.barcode || p.code || `P${p.id}-V${v.id}`,
           price: Number(v.price || 0),
@@ -137,31 +147,21 @@ export function ProductList() {
   }
 
   function exportData(type: "csv" | "excel" | "pdf") {
-    if (type === "pdf") {
-      window.print();
+    const header = ["PR ID", "PRODUCT NAME", "PRODUCT CODE", "BARCODE", "CATEGORY", "BRAND", "UNIT"];
+    const body = filtered.map((p) => [
+      p.id,
+      p.name,
+      p.code,
+      p.variants?.[0]?.barcode || "",
+      p.category?.name || "",
+      p.brand?.name || "",
+      p.unit?.name || "",
+    ]);
+    if (!body.length) {
+      alert("No products to export");
       return;
     }
-    const header = ["PR ID", "PRODUCT NAME", "PRODUCT CODE", "BARCODE", "CATEGORY", "BRAND", "UNIT"];
-    const body = filtered.map((p) =>
-      [
-        p.id,
-        p.name,
-        p.code,
-        p.variants?.[0]?.barcode || "",
-        p.category?.name || "",
-        p.brand?.name || "",
-        p.unit?.name || "",
-      ]
-        .map((v) => JSON.stringify(String(v ?? "")))
-        .join(",")
-    );
-    const blob = new Blob([[header.join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "product-list.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    exportTable(type, "product-list", "QUANTUMEXE — Product List", header, body);
   }
 
   return (
@@ -203,10 +203,14 @@ export function ProductList() {
           <div>
             <label className="text-xs font-semibold text-gray-600">Product ID / Name</label>
             <input
+              data-page-search
               className="input mt-1"
               placeholder="Search by ID, Name, Code, or Barcode"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
           <button type="submit" className="btn btn-primary h-[42px] px-5">
@@ -256,7 +260,7 @@ export function ProductList() {
                         <Eye size={14} />
                       </button>
                       <Link
-                        to="/products/create-product"
+                        to={`/products/edit-product/${p.id}`}
                         title="Edit"
                         className="w-8 h-8 rounded-full bg-blue-500 text-white grid place-items-center hover:bg-blue-600"
                       >
@@ -357,7 +361,7 @@ export function ProductList() {
               <button className="btn btn-muted text-red-600" onClick={() => deactivate(selected.id)}>
                 Deactivate
               </button>
-              <Link className="btn btn-primary" to="/products/create-product">
+              <Link className="btn btn-primary" to={`/products/edit-product/${selected.id}`}>
                 Edit
               </Link>
             </div>
@@ -371,9 +375,15 @@ export function ProductList() {
 
 export function CreateProduct() {
   const navigate = useNavigate();
+  const { id: editId } = useParams();
+  const isEdit = Boolean(editId);
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
+  const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loadingProduct, setLoadingProduct] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
@@ -390,15 +400,15 @@ export function CreateProduct() {
     productTypeId: "",
   });
   const [inventory, setInventory] = useState({
-    cost: 0,
-    price: 0,
-    quantity: 0,
-    lowThreshold: 5,
+    cost: "",
+    price: "",
+    quantity: "",
+    lowThreshold: "",
     expireDate: "",
   });
-  const [variations, setVariations] = useState<Array<{ name: string; barcode: string; price: number; cost: number; size: string }>>([
-    { name: "Default", barcode: "", price: 0, cost: 0, size: "" },
-  ]);
+  const [variations, setVariations] = useState<
+    Array<{ id?: number; name: string; barcode: string; price: string; cost: string; size: string; color: string }>
+  >([{ name: "Default", barcode: "", price: "", cost: "", size: "", color: "" }]);
 
   async function loadLookups() {
     const [c, b, u, t] = await Promise.all([
@@ -417,12 +427,102 @@ export function CreateProduct() {
     loadLookups();
   }, []);
 
+  useEffect(() => {
+    if (!isEdit || !editId) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingProduct(true);
+      setError("");
+      try {
+        const { data } = await api.get(`/products/${editId}`);
+        if (!data.success || !data.data) throw new Error(data.message || "Product not found");
+        if (cancelled) return;
+        const p = data.data;
+        const vars = p.variants || [];
+        const primary = vars[0];
+        const stock = primary?.stocks?.[0];
+        setBasic({
+          name: p.name || "",
+          code: p.code || "",
+          barcode: primary?.barcode || "",
+          categoryId: p.categoryId != null ? String(p.categoryId) : "",
+          brandId: p.brandId != null ? String(p.brandId) : "",
+          unitId: p.unitId != null ? String(p.unitId) : "",
+          productTypeId: p.productTypeId != null ? String(p.productTypeId) : "",
+        });
+        setInventory({
+          cost: primary?.cost != null ? String(primary.cost) : "",
+          price: primary?.price != null ? String(primary.price) : "",
+          quantity: stock?.quantity != null ? String(stock.quantity) : "",
+          lowThreshold: stock?.lowThreshold != null ? String(stock.lowThreshold) : "",
+          expireDate: stock?.expireDate ? String(stock.expireDate).slice(0, 10) : "",
+        });
+        setVariations(
+          vars.length
+            ? vars.map((v: any) => ({
+                id: v.id,
+                name: v.name || "Default",
+                barcode: v.barcode || "",
+                price: v.price != null ? String(v.price) : "",
+                cost: v.cost != null ? String(v.cost) : "",
+                size: v.size || "",
+                color: v.color || "",
+              }))
+            : [{ name: "Default", barcode: "", price: "", cost: "", size: "", color: "" }]
+        );
+        setMsg(`Editing product #${p.id}`);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load product");
+      } finally {
+        if (!cancelled) setLoadingProduct(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isEdit, editId]);
+
   async function saveQuickAdd(e: FormEvent) {
     e.preventDefault();
-    if (!quickAdd?.name.trim()) return;
-    await api.post(`/${quickAdd.type}`, { name: quickAdd.name.trim() });
-    setQuickAdd(null);
-    await loadLookups();
+    const trimmed = quickAdd?.name.trim() || "";
+    if (!trimmed || !quickAdd) return;
+
+    const lookup =
+      quickAdd.type === "categories"
+        ? categories
+        : quickAdd.type === "brands"
+          ? brands
+          : quickAdd.type === "units"
+            ? units
+            : types;
+    const kind =
+      quickAdd.type === "categories"
+        ? "Category"
+        : quickAdd.type === "brands"
+          ? "Brand"
+          : quickAdd.type === "units"
+            ? "Unit"
+            : "Product type";
+    const existing = lookup.find((r) => String(r.name || "").trim().toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      const msg =
+        existing.name !== trimmed
+          ? `Warning: ${kind} "${trimmed}" already exists as "${existing.name}". Duplicate names are not allowed.`
+          : `Warning: ${kind} "${existing.name}" already exists. Duplicate names are not allowed.`;
+      alert(msg);
+      setError(msg);
+      return;
+    }
+
+    try {
+      await api.post(`/${quickAdd.type}`, { name: trimmed });
+      setQuickAdd(null);
+      await loadLookups();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err.message || `Failed to add ${kind}`;
+      alert(/already exists|duplicate/i.test(msg) ? `Warning: ${msg}` : msg);
+      setError(msg);
+    }
   }
 
   function validateStep() {
@@ -433,7 +533,10 @@ export function CreateProduct() {
       }
     }
     if (step === 1) {
-      if (inventory.price < 0 || inventory.cost < 0) return "Invalid pricing";
+      const price = Number(inventory.price);
+      const cost = Number(inventory.cost);
+      if (inventory.price !== "" && (Number.isNaN(price) || price < 0)) return "Invalid selling price";
+      if (inventory.cost !== "" && (Number.isNaN(cost) || cost < 0)) return "Invalid cost price";
     }
     if (step === 2) {
       if (!variations.length || !variations[0].name.trim()) return "At least one variation is required";
@@ -448,12 +551,126 @@ export function CreateProduct() {
       return;
     }
     setError("");
+    // Carry inventory prices into the default variation when leaving Inventory step
+    if (step === 1) {
+      setVariations((prev) =>
+        prev.map((v, i) =>
+          i === 0
+            ? {
+                ...v,
+                cost: v.cost !== "" ? v.cost : inventory.cost,
+                price: v.price !== "" ? v.price : inventory.price,
+              }
+            : v
+        )
+      );
+    }
     setStep((s) => Math.min(3, s + 1));
   }
 
   function back() {
     setError("");
     setStep((s) => Math.max(0, s - 1));
+  }
+
+  function downloadProductTemplate() {
+    const headers = [
+      "name",
+      "code",
+      "barcode",
+      "category",
+      "brand",
+      "unit",
+      "product_type",
+      "variant_name",
+      "size",
+      "color",
+      "cost",
+      "price",
+      "quantity",
+      "low_threshold",
+    ];
+    const samples = [
+      ["Classic Tee", "TEE-001", "8901000000001", "Apparel", "House Brand", "Pcs", "Clothing", "Default", "M", "Black", "500", "1200", "10", "5"],
+      ["Classic Tee", "TEE-002", "8901000000002", "Apparel", "House Brand", "Pcs", "Clothing", "Default", "L", "Black", "500", "1200", "8", "5"],
+      ["Denim Jean", "JN-001", "", "Apparel", "House Brand", "Pcs", "Clothing", "Default", "32", "Blue", "1500", "3500", "5", "3"],
+    ];
+    const escape = (v: string) => {
+      if (/[",\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+      return v;
+    };
+    const lines = [headers.join(","), ...samples.map((r) => r.map(escape).join(","))];
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "quantumexe-product-import-template.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setMsg("Template downloaded — fill the CSV then use Bulk Import");
+    setError("");
+  }
+
+  function parseCsv(text: string): Array<Record<string, string>> {
+    const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) return [];
+    const split = (line: string) => {
+      const out: string[] = [];
+      let cur = "";
+      let inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQ && line[i + 1] === '"') {
+            cur += '"';
+            i++;
+          } else inQ = !inQ;
+        } else if (ch === "," && !inQ) {
+          out.push(cur.trim());
+          cur = "";
+        } else cur += ch;
+      }
+      out.push(cur.trim());
+      return out;
+    };
+    const headers = split(lines[0]).map((h) => h.trim().toLowerCase());
+    return lines.slice(1).map((line) => {
+      const cols = split(line);
+      const row: Record<string, string> = {};
+      headers.forEach((h, i) => {
+        row[h] = cols[i] ?? "";
+      });
+      return row;
+    });
+  }
+
+  async function onBulkImportFile(file: File | null) {
+    if (!file) return;
+    setImporting(true);
+    setError("");
+    setMsg("");
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text).filter((r) => (r.name || r.product_name) && (r.code || r.product_code));
+      if (!rows.length) throw new Error("No valid rows found. Use Get Template and fill name + code columns.");
+      const { data } = await api.post("/products/import", { rows });
+      if (!data.success) throw new Error(data.message || "Import failed");
+      const imported = data.data?.imported ?? 0;
+      const failed = data.data?.failed ?? 0;
+      const errs = (data.data?.errors || []) as string[];
+      setMsg(`Imported ${imported} product(s)` + (failed ? ` · ${failed} failed` : ""));
+      if (errs.length) setError(errs.slice(0, 5).join(" | "));
+      if (imported > 0) {
+        setTimeout(() => navigate("/products/product-list"), 800);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bulk import failed");
+    } finally {
+      setImporting(false);
+      if (importRef.current) importRef.current.value = "";
+    }
   }
 
   async function saveProduct() {
@@ -466,7 +683,7 @@ export function CreateProduct() {
     setError("");
     try {
       const primary = variations[0];
-      const { data } = await api.post("/products/create", {
+      const payload = {
         name: basic.name,
         code: basic.code,
         barcode: basic.barcode || primary.barcode || undefined,
@@ -477,26 +694,48 @@ export function CreateProduct() {
         price: Number(primary.price || inventory.price || 0),
         cost: Number(primary.cost || inventory.cost || 0),
         quantity: Number(inventory.quantity || 0),
-      });
-      if (!data.success) throw new Error(data.message);
+        lowThreshold: Number(inventory.lowThreshold || 5),
+        variantName: primary.name || "Default",
+        size: primary.size || undefined,
+        color: primary.color || undefined,
+        variants: variations.map((v, i) => ({
+          id: v.id,
+          name: v.name || "Default",
+          barcode: i === 0 ? basic.barcode || v.barcode || undefined : v.barcode || undefined,
+          price: Number(v.price || (i === 0 ? inventory.price : 0) || 0),
+          cost: Number(v.cost || (i === 0 ? inventory.cost : 0) || 0),
+          size: v.size || undefined,
+          color: v.color || undefined,
+          quantity: i === 0 ? Number(inventory.quantity || 0) : undefined,
+          lowThreshold: i === 0 ? Number(inventory.lowThreshold || 5) : undefined,
+        })),
+      };
 
-      // create extra variations if more than default
-      const productId = data.data?.id;
-      if (productId && variations.length > 1) {
-        for (const v of variations.slice(1)) {
-          await api.post(`/products/${productId}/variants`, {
-            name: v.name,
-            barcode: v.barcode || undefined,
-            price: Number(v.price || 0),
-            cost: Number(v.cost || 0),
-            size: v.size || undefined,
-            quantity: 0,
-          });
+      if (isEdit && editId) {
+        const { data } = await api.put(`/products/update/${editId}`, payload);
+        if (!data.success) throw new Error(data.message);
+      } else {
+        const { data } = await api.post("/products/create", payload);
+        if (!data.success) throw new Error(data.message);
+
+        const productId = data.data?.id;
+        if (productId && variations.length > 1) {
+          for (const v of variations.slice(1)) {
+            await api.post(`/products/${productId}/variants`, {
+              name: v.name,
+              barcode: v.barcode || undefined,
+              price: Number(v.price || 0),
+              cost: Number(v.cost || 0),
+              size: v.size || undefined,
+              color: v.color || undefined,
+              quantity: 0,
+            });
+          }
         }
       }
       navigate("/products/product-list");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create product");
+      setError(err instanceof Error ? err.message : isEdit ? "Failed to update product" : "Failed to create product");
     } finally {
       setSaving(false);
     }
@@ -528,8 +767,12 @@ export function CreateProduct() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-xs text-gray-500 mb-1">Products &gt; Create Product</div>
-          <h1 className="text-2xl font-bold text-gray-800">Create New Product</h1>
+          <div className="text-xs text-gray-500 mb-1">
+            Products &gt; {isEdit ? "Edit Product" : "Create Product"}
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800">
+            {isEdit ? "Edit Product" : "Create New Product"}
+          </h1>
         </div>
         <div className="text-[11px] text-gray-500 flex flex-wrap gap-x-3 gap-y-1">
           <span><kbd className="px-1.5 py-0.5 rounded bg-gray-100 border">F1-F4</kbd> Quick Add</span>
@@ -540,7 +783,13 @@ export function CreateProduct() {
         </div>
       </div>
 
+      {loadingProduct && (
+        <div className="text-sm text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">Loading product…</div>
+      )}
       {error && <ErrorBox text={error} />}
+      {msg && (
+        <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">{msg}</div>
+      )}
 
       <div className="bg-white border border-gray-200 rounded-xl p-3">
         <div className="grid grid-cols-4 gap-2">
@@ -642,23 +891,57 @@ export function CreateProduct() {
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <FieldLabel text="Cost Price" />
-                <input type="number" className="input" value={inventory.cost} onChange={(e) => setInventory({ ...inventory, cost: Number(e.target.value) || 0 })} />
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="Enter cost price"
+                  autoComplete="off"
+                  value={inventory.cost}
+                  onChange={(e) => setInventory({ ...inventory, cost: e.target.value })}
+                />
               </div>
               <div>
                 <FieldLabel text="Selling Price" />
-                <input type="number" className="input" value={inventory.price} onChange={(e) => setInventory({ ...inventory, price: Number(e.target.value) || 0 })} />
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="Enter selling price"
+                  autoComplete="off"
+                  value={inventory.price}
+                  onChange={(e) => setInventory({ ...inventory, price: e.target.value })}
+                />
               </div>
               <div>
                 <FieldLabel text="Opening Quantity" />
-                <input type="number" className="input" value={inventory.quantity} onChange={(e) => setInventory({ ...inventory, quantity: Number(e.target.value) || 0 })} />
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="Enter opening qty"
+                  autoComplete="off"
+                  value={inventory.quantity}
+                  onChange={(e) => setInventory({ ...inventory, quantity: e.target.value })}
+                />
               </div>
               <div>
                 <FieldLabel text="Low Stock Threshold" />
-                <input type="number" className="input" value={inventory.lowThreshold} onChange={(e) => setInventory({ ...inventory, lowThreshold: Number(e.target.value) || 0 })} />
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="e.g. 5"
+                  autoComplete="off"
+                  value={inventory.lowThreshold}
+                  onChange={(e) => setInventory({ ...inventory, lowThreshold: e.target.value })}
+                />
               </div>
               <div>
                 <FieldLabel text="Expire Date" />
-                <input type="date" className="input" value={inventory.expireDate} onChange={(e) => setInventory({ ...inventory, expireDate: e.target.value })} />
+                <input
+                  type="date"
+                  className="input"
+                  autoComplete="off"
+                  value={inventory.expireDate}
+                  onChange={(e) => setInventory({ ...inventory, expireDate: e.target.value })}
+                />
               </div>
             </div>
           </>
@@ -672,7 +955,17 @@ export function CreateProduct() {
                 type="button"
                 className="btn btn-muted text-sm"
                 onClick={() =>
-                  setVariations((prev) => [...prev, { name: `Variant ${prev.length + 1}`, barcode: "", price: inventory.price, cost: inventory.cost, size: "" }])
+                  setVariations((prev) => [
+                    ...prev,
+                    {
+                      name: `Variant ${prev.length + 1}`,
+                      barcode: "",
+                      price: inventory.price,
+                      cost: inventory.cost,
+                      size: "",
+                      color: "",
+                    },
+                  ])
                 }
               >
                 + Add Variant
@@ -680,13 +973,14 @@ export function CreateProduct() {
             </div>
             <div className="space-y-3">
               {variations.map((v, idx) => (
-                <div key={idx} className="grid md:grid-cols-5 gap-3 border border-gray-200 rounded-xl p-3">
+                <div key={idx} className="grid md:grid-cols-3 lg:grid-cols-6 gap-3 border border-gray-200 rounded-xl p-3">
                   <input className="input" placeholder="Name" value={v.name} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} />
-                  <input className="input" placeholder="Barcode" value={v.barcode} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, barcode: e.target.value } : x)))} />
-                  <input className="input" type="number" placeholder="Cost" value={v.cost} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, cost: Number(e.target.value) || 0 } : x)))} />
-                  <input className="input" type="number" placeholder="Price" value={v.price} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, price: Number(e.target.value) || 0 } : x)))} />
+                  <input className="input" placeholder="Barcode" autoComplete="off" value={v.barcode} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, barcode: e.target.value } : x)))} />
+                  <input className="input" type="number" placeholder="Cost" autoComplete="off" value={v.cost} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, cost: e.target.value } : x)))} />
+                  <input className="input" type="number" placeholder="Price" autoComplete="off" value={v.price} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} />
+                  <input className="input" placeholder="Size" value={v.size} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, size: e.target.value } : x)))} />
                   <div className="flex gap-2">
-                    <input className="input" placeholder="Size" value={v.size} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, size: e.target.value } : x)))} />
+                    <input className="input" placeholder="Color" value={v.color} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, color: e.target.value } : x)))} />
                     {variations.length > 1 && (
                       <button type="button" className="btn btn-muted" onClick={() => setVariations((prev) => prev.filter((_, i) => i !== idx))}>
                         <X size={16} />
@@ -715,14 +1009,23 @@ export function CreateProduct() {
               </div>
               <div className="border border-gray-200 rounded-xl p-4 space-y-1">
                 <div className="font-semibold text-gray-800 mb-2">Inventory & Variations</div>
-                <div>Opening Qty: <strong>{inventory.quantity}</strong></div>
-                <div>Cost / Price: <strong>{lkr(inventory.cost)} / {lkr(inventory.price)}</strong></div>
-                <div>Threshold: <strong>{inventory.lowThreshold}</strong></div>
+                <div>Opening Qty: <strong>{inventory.quantity === "" ? "-" : inventory.quantity}</strong></div>
+                <div>
+                  Cost / Price:{" "}
+                  <strong>
+                    {lkr(Number(inventory.cost || 0))} / {lkr(Number(inventory.price || 0))}
+                  </strong>
+                </div>
+                <div>Threshold: <strong>{inventory.lowThreshold === "" ? "-" : inventory.lowThreshold}</strong></div>
                 <div>Expire: <strong>{inventory.expireDate || "-"}</strong></div>
                 <div>Variants: <strong>{variations.length}</strong></div>
                 <ul className="mt-2 space-y-1 text-gray-600">
                   {variations.map((v, i) => (
-                    <li key={i}>• {v.name} — {lkr(v.price)}</li>
+                    <li key={i}>
+                      • {v.name}
+                      {v.size ? ` · Size ${v.size}` : ""}
+                      {v.color ? ` · ${v.color}` : ""} — {lkr(Number(v.price || 0))}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -731,11 +1034,30 @@ export function CreateProduct() {
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          <div className="text-xs text-gray-500 flex items-center gap-2">
-            <span className="font-semibold">OR ADD MULTIPLE PRODUCTS:</span>
-            <button type="button" className="btn btn-muted text-xs" onClick={() => alert("Template download coming soon")}>Get Template</button>
-            <button type="button" className="btn btn-muted text-xs" onClick={() => alert("Use Products Import API for CSV upload")}>Bulk Import</button>
-          </div>
+          {!isEdit && (
+            <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
+              <span className="font-semibold">OR ADD MULTIPLE PRODUCTS:</span>
+              <button type="button" className="btn btn-muted text-xs" onClick={downloadProductTemplate}>
+                Get Template
+              </button>
+              <button
+                type="button"
+                className="btn btn-muted text-xs"
+                disabled={importing}
+                onClick={() => importRef.current?.click()}
+              >
+                {importing ? "Importing…" : "Bulk Import"}
+              </button>
+              <input
+                ref={importRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => void onBulkImportFile(e.target.files?.[0] || null)}
+              />
+            </div>
+          )}
+          {isEdit && <div />}
           <div className="flex gap-2">
             {step > 0 && (
               <button type="button" className="btn btn-muted" onClick={back}>
@@ -743,12 +1065,12 @@ export function CreateProduct() {
               </button>
             )}
             {step < 3 ? (
-              <button type="button" className="btn btn-primary" onClick={next}>
+              <button type="button" className="btn btn-primary" onClick={next} disabled={loadingProduct}>
                 Next Step &gt;
               </button>
             ) : (
-              <button type="button" className="btn btn-primary" disabled={saving} onClick={saveProduct}>
-                {saving ? "Saving..." : "Save Product"}
+              <button type="button" className="btn btn-primary" disabled={saving || loadingProduct} onClick={saveProduct}>
+                {saving ? "Saving..." : isEdit ? "Update Product" : "Save Product"}
               </button>
             )}
           </div>
@@ -790,8 +1112,6 @@ export function DeactivatedProducts() {
   const [loading, setLoading] = useState(false);
   const [typeId, setTypeId] = useState("");
   const [query, setQuery] = useState("");
-  const [appliedTypeId, setAppliedTypeId] = useState("");
-  const [appliedQuery, setAppliedQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -820,15 +1140,12 @@ export function DeactivatedProducts() {
 
   const filtered = useMemo(() => {
     return rows.filter((p) => {
-      if (appliedTypeId && String(p.productTypeId || "") !== String(appliedTypeId)) return false;
-      if (appliedQuery) {
-        const q = appliedQuery.toLowerCase();
-        const hay = `${p.id} ${p.name || ""} ${p.code || ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
+      if (typeId && String(p.productTypeId || "") !== String(typeId)) return false;
+      if (!query.trim()) return true;
+      const barcodes = (p.variants || []).map((v: any) => v.barcode).join(" ");
+      return matchesQuery(query, p.id, p.name, p.code, barcodes);
     });
-  }, [rows, appliedTypeId, appliedQuery]);
+  }, [rows, typeId, query]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -838,20 +1155,16 @@ export function DeactivatedProducts() {
 
   useEffect(() => {
     setSelectedIdx(0);
-  }, [currentPage, appliedTypeId, appliedQuery, filtered.length]);
+  }, [currentPage, typeId, query, filtered.length]);
 
   function onSearch(e?: FormEvent) {
     e?.preventDefault();
-    setAppliedTypeId(typeId);
-    setAppliedQuery(query.trim());
     setPage(1);
   }
 
   function clearFilters() {
     setTypeId("");
     setQuery("");
-    setAppliedTypeId("");
-    setAppliedQuery("");
     setPage(1);
     load();
   }
@@ -919,10 +1232,14 @@ export function DeactivatedProducts() {
             <label className="text-xs font-semibold text-gray-600">Product ID / Name / Code</label>
             <input
               ref={queryRef}
+              data-page-search
               className="input mt-1"
               placeholder="Enter Product ID, Name or Code..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
           <button
@@ -1178,7 +1495,8 @@ function NamedCatalogManage({
   const [editing, setEditing] = useState<any | null>(null);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 100;
+  const [okMsg, setOkMsg] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const pageRowsRef = useRef<any[]>([]);
@@ -1189,7 +1507,7 @@ function NamedCatalogManage({
     setLoading(true);
     setError("");
     try {
-      const { data } = await api.get(base);
+      const { data } = await api.get(base, { params: { _: Date.now() } });
       setRows(data.data || []);
     } catch (e: any) {
       setError(e.message || `Failed to load ${countLabel}`);
@@ -1224,33 +1542,89 @@ function NamedCatalogManage({
 
   async function save(e?: FormEvent) {
     e?.preventDefault();
-    if (!name.trim()) {
+    const trimmed = name.trim();
+    if (!trimmed) {
       nameInputRef.current?.focus();
       return;
     }
+    const existing = rows.find(
+      (r) =>
+        r.id !== editing?.id &&
+        String(r.name || "").trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (existing) {
+      const kind = nameLabel.replace(/ Name$/i, "") || entityLabel;
+      const msg =
+        existing.name.trim().toLowerCase() === trimmed.toLowerCase() && existing.name.trim() !== trimmed
+          ? `Warning: ${kind} "${trimmed}" already exists as "${existing.name}" (same name, different capitalization). Duplicate names are not allowed.`
+          : `Warning: ${kind} "${existing.name}" already exists. Duplicate names are not allowed.`;
+      setError(msg);
+      setOkMsg("");
+      alert(msg);
+      return;
+    }
     setError("");
+    setOkMsg("");
     try {
       if (editing) {
-        await api.put(`${base}/${editing.id}`, { name: name.trim() });
+        const editingId = editing.id;
+        const { data } = await api.put(`${base}/${editingId}`, { name: trimmed });
+        if (data && data.success === false) throw new Error(data.message || "Update failed");
+        const updated = data?.data || { ...editing, name: trimmed };
+        setRows((prev) =>
+          prev.map((r) => (r.id === editingId ? { ...r, ...updated, name: updated.name || trimmed } : r))
+        );
         setEditing(null);
+        setOkMsg("Updated");
       } else {
-        await api.post(base, { name: name.trim() });
+        const { data } = await api.post(base, { name: trimmed });
+        if (data && data.success === false) throw new Error(data.message || "Create failed");
+        const created = data?.data;
+        if (created) {
+          setRows((prev) => [created, ...prev.filter((r) => r.id !== created.id)]);
+          setOkMsg(`Added "${trimmed}"`);
+        } else {
+          throw new Error(data?.message || "Create failed — no data returned");
+        }
       }
       setName("");
-      load();
+      setPage(1);
+      void load();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || "Failed to save");
+      const msg = err?.response?.data?.message || err.message || "Failed to save";
+      setError(msg);
+      if (/already exists|duplicate/i.test(msg)) {
+        alert(`Warning: ${msg}`);
+      }
     }
   }
 
   async function remove(id: number) {
-    if (!confirm(`Delete this ${entityLabel}?`)) return;
-    await api.delete(`${base}/${id}`);
-    if (editingRef.current?.id === id) {
-      setEditing(null);
-      setName("");
+    const row = rows.find((r) => r.id === id);
+    const labelName = row?.name ? `"${row.name}"` : `this ${entityLabel}`;
+    if (!confirm(`Delete ${labelName}?`)) return;
+    setError("");
+    setOkMsg("");
+    try {
+      const { data } = await api.delete(`${base}/${id}`);
+      if (data && data.success === false) {
+        throw new Error(data.message || `Cannot delete ${entityLabel}`);
+      }
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      if (editingRef.current?.id === id) {
+        setEditing(null);
+        setName("");
+      }
+      setOkMsg("Deleted");
+      void load();
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message || err.message || `Failed to delete ${entityLabel}`;
+      setError(msg);
+      // Popup so Store Keeper / Admin clearly sees why delete was blocked
+      alert(msg);
+      void load();
     }
-    load();
   }
 
   function startEdit(row: any) {
@@ -1311,6 +1685,9 @@ function NamedCatalogManage({
         </div>
       </div>
       {error && <ErrorBox text={error} />}
+      {okMsg && (
+        <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">{okMsg}</div>
+      )}
 
       <form onSubmit={save} className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
         <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1.4fr_auto] gap-3 items-end">
@@ -1318,6 +1695,7 @@ function NamedCatalogManage({
             <label className="text-xs font-semibold text-gray-600">Search</label>
             <input
               ref={searchInputRef}
+              data-page-search
               className="input mt-1"
               placeholder={searchPlaceholder}
               value={search}
@@ -1585,16 +1963,13 @@ export function StockList() {
     return rows.filter((r) => {
       if (categoryId && String(r.categoryId || "") !== String(categoryId)) return false;
       if (unitId && String(r.unitId || "") !== String(unitId)) return false;
-      // supplier filter kept for UI parity; seed data has no product-supplier link
-      if (supplierId) return true;
-      if (query) {
-        const q = query.toLowerCase();
-        const hay = `${r.productID || ""} ${r.productName || r.displayName || ""} ${r.barcode || ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
+      // Supplier dropdown kept for UI; products are not linked to suppliers yet
+      if (!matchesQuery(query, r.productID, r.productName, r.displayName, r.barcode, r.size, r.color, r.variant_name)) {
+        return false;
       }
       return true;
     });
-  }, [rows, categoryId, unitId, supplierId, query]);
+  }, [rows, categoryId, unitId, query]);
 
   const stats = useMemo(() => {
     const totalProducts = filtered.length;
@@ -1630,10 +2005,6 @@ export function StockList() {
   }
 
   function exportData(type: "csv" | "excel" | "pdf") {
-    if (type === "pdf") {
-      window.print();
-      return;
-    }
     const header = [
       "PRODUCT ID",
       "PRODUCT NAME",
@@ -1643,30 +2014,26 @@ export function StockList() {
       "MRP",
       "SELLING PRICE",
       "SUPPLIER",
-      "STOCK QTY",
+      "STORE QTY",
+      "SHOP QTY",
     ];
-    const body = filtered.map((r) =>
-      [
-        r.productID,
-        r.productName || r.displayName,
-        r.barcode || "",
-        r.unit || "",
-        r.cost ?? 0,
-        r.mrp ?? r.price ?? 0,
-        r.sellingPrice ?? r.price ?? 0,
-        r.supplier || "-",
-        r.quantity ?? 0,
-      ]
-        .map((v) => JSON.stringify(String(v)))
-        .join(",")
-    );
-    const blob = new Blob([[header.join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `stock-list.${type === "excel" ? "csv" : "csv"}`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const body = filtered.map((r) => [
+      r.productID,
+      r.productName || r.displayName,
+      r.barcode || "",
+      r.unit || "",
+      r.cost ?? 0,
+      r.mrp ?? r.price ?? 0,
+      r.sellingPrice ?? r.price ?? 0,
+      r.supplier || "-",
+      r.storeQty ?? r.quantity ?? 0,
+      r.shopQty ?? 0,
+    ]);
+    if (!body.length) {
+      alert("No stock records to export");
+      return;
+    }
+    exportTable(type, "stock-list", "QUANTUMEXE — Stock List", header, body);
   }
 
   const cards = [
@@ -1753,10 +2120,14 @@ export function StockList() {
           <div>
             <label className="text-xs font-semibold text-gray-600">Product ID / Name</label>
             <input
+              data-page-search
               className="input mt-1"
               placeholder="Search product..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
           <button type="submit" className="btn btn-primary h-[42px] px-5">
@@ -1791,7 +2162,8 @@ export function StockList() {
                   "MRP",
                   "SELLING PRICE",
                   "SUPPLIER",
-                  "STOCK QTY",
+                  "STORE QTY",
+                  "SHOP QTY",
                   "ACTION",
                 ].map((h) => (
                   <th key={h} className="text-left font-semibold px-3 py-3 whitespace-nowrap">
@@ -1802,9 +2174,10 @@ export function StockList() {
             </thead>
             <tbody>
               {pageRows.map((r, idx) => {
-                const qty = Number(r.quantity || 0);
-                const low = qty > 0 && qty <= Number(r.lowThreshold || 5);
-                const out = qty <= 0;
+                const storeQty = Number(r.storeQty ?? r.quantity ?? 0);
+                const shopQty = Number(r.shopQty ?? 0);
+                const low = storeQty > 0 && storeQty <= Number(r.lowThreshold || 5);
+                const out = storeQty <= 0;
                 return (
                   <tr key={r.stockId || r.id} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                     <td className="px-3 py-3 font-semibold text-gray-800">{r.productID}</td>
@@ -1818,10 +2191,19 @@ export function StockList() {
                     <td className="px-3 py-3">
                       <span
                         className={`inline-flex min-w-8 h-8 px-2 items-center justify-center rounded-full text-xs font-bold ${
-                          out || low ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                          out || low ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
                         }`}
                       >
-                        {qty}
+                        {storeQty}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={`inline-flex min-w-8 h-8 px-2 items-center justify-center rounded-full text-xs font-bold ${
+                          shopQty <= 0 ? "bg-red-100 text-red-700" : "bg-sky-100 text-sky-700"
+                        }`}
+                      >
+                        {shopQty}
                       </span>
                     </td>
                     <td className="px-3 py-3">
@@ -1834,7 +2216,7 @@ export function StockList() {
               })}
               {!pageRows.length && (
                 <tr>
-                  <td colSpan={10} className="px-3 py-10 text-center text-gray-400">
+                  <td colSpan={11} className="px-3 py-10 text-center text-gray-400">
                     No stock records found
                   </td>
                 </tr>
@@ -1948,24 +2330,12 @@ export function OutOfStock() {
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
-      if (productQ) {
-        const q = productQ.toLowerCase();
-        const hay = `${r.productID || ""} ${r.productName || ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      if (categoryQ) {
-        const q = categoryQ.toLowerCase();
-        if (!(r.category || "").toLowerCase().includes(q)) return false;
-      }
-      if (supplierQ) {
-        const q = supplierQ.toLowerCase();
-        if (!(r.supplier || "-").toLowerCase().includes(q) && !suppliers.some((s) => s.name.toLowerCase().includes(q))) {
-          // keep UI filter parity
-        }
-      }
+      if (!matchesQuery(productQ, r.productID, r.productName, r.barcode, r.displayName)) return false;
+      if (categoryQ && !(r.category || "").toLowerCase().includes(categoryQ.toLowerCase().trim())) return false;
+      if (supplierQ && !(r.supplier || "-").toLowerCase().includes(supplierQ.toLowerCase().trim())) return false;
       return true;
     });
-  }, [rows, productQ, categoryQ, supplierQ, suppliers]);
+  }, [rows, productQ, categoryQ, supplierQ]);
 
   const stats = useMemo(
     () => ({
@@ -1996,23 +2366,22 @@ export function OutOfStock() {
   }
 
   function exportData(type: "csv" | "excel" | "pdf") {
-    if (type === "pdf") {
-      window.print();
+    const header = ["PV ID", "PRODUCT NAME", "UNIT", "COST PRICE", "MRP", "PRICE", "SUPPLIER", "STOCK"];
+    const body = filtered.map((r) => [
+      r.productID,
+      r.productName,
+      r.unit,
+      r.cost,
+      r.mrp,
+      r.price,
+      r.supplier || "-",
+      r.quantity,
+    ]);
+    if (!body.length) {
+      alert("No out-of-stock records to export");
       return;
     }
-    const header = ["PV ID", "PRODUCT NAME", "UNIT", "COST PRICE", "MRP", "PRICE", "SUPPLIER", "STOCK"];
-    const body = filtered.map((r) =>
-      [r.productID, r.productName, r.unit, r.cost, r.mrp, r.price, r.supplier || "-", r.quantity]
-        .map((v) => JSON.stringify(String(v ?? "")))
-        .join(",")
-    );
-    const blob = new Blob([[header.join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "out-of-stock.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    exportTable(type, "out-of-stock", "QUANTUMEXE — Out of Stock", header, body);
   }
 
   const cards = [
@@ -2051,10 +2420,14 @@ export function OutOfStock() {
           <div>
             <label className="text-xs font-semibold text-gray-600">Product</label>
             <input
+              data-page-search
               className="input mt-1"
               placeholder="search product..."
               value={productQ}
-              onChange={(e) => setProductQ(e.target.value)}
+              onChange={(e) => {
+                setProductQ(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
           <div>
@@ -2241,15 +2614,10 @@ export function LowStock() {
     return rows.filter((r) => {
       if (categoryId && String(r.categoryId || "") !== String(categoryId)) return false;
       if (unitId && String(r.unitId || "") !== String(unitId)) return false;
-      if (supplierId) return true;
-      if (query) {
-        const q = query.toLowerCase();
-        const hay = `${r.productID || ""} ${r.productName || ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
+      if (!matchesQuery(query, r.productID, r.productName, r.displayName, r.barcode, r.size, r.color)) return false;
       return true;
     });
-  }, [rows, categoryId, unitId, supplierId, query]);
+  }, [rows, categoryId, unitId, query]);
 
   const stats = useMemo(() => {
     const potentialLoss = filtered.reduce((s, r) => s + Number(r.quantity || 0) * Number(r.cost || 0), 0);
@@ -2283,32 +2651,22 @@ export function LowStock() {
   }
 
   function exportData(type: "csv" | "excel" | "pdf") {
-    if (type === "pdf") {
-      window.print();
+    const header = ["PRODUCT ID", "PRODUCT NAME", "UNIT", "COST PRICE", "MRP", "PRICE", "SUPPLIER", "STOCK STATUS"];
+    const body = filtered.map((r) => [
+      r.productID,
+      r.productName,
+      r.unit,
+      r.cost,
+      r.mrp,
+      r.price,
+      r.supplier || "",
+      `${r.quantity} Units - Critical`,
+    ]);
+    if (!body.length) {
+      alert("No low-stock records to export");
       return;
     }
-    const header = ["PRODUCT ID", "PRODUCT NAME", "UNIT", "COST PRICE", "MRP", "PRICE", "SUPPLIER", "STOCK STATUS"];
-    const body = filtered.map((r) =>
-      [
-        r.productID,
-        r.productName,
-        r.unit,
-        r.cost,
-        r.mrp,
-        r.price,
-        r.supplier || "",
-        `${r.quantity} Units - Critical`,
-      ]
-        .map((v) => JSON.stringify(String(v ?? "")))
-        .join(",")
-    );
-    const blob = new Blob([[header.join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "low-stock.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    exportTable(type, "low-stock", "QUANTUMEXE — Low Stock", header, body);
   }
 
   const cards = [
@@ -2387,10 +2745,14 @@ export function LowStock() {
           <div>
             <label className="text-xs font-semibold text-gray-600">Product ID / Name</label>
             <input
+              data-page-search
               className="input mt-1"
               placeholder="Search products..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
           <button
@@ -2875,23 +3237,21 @@ export function DamagedStock() {
   }
 
   function exportData(type: "csv" | "excel" | "pdf") {
-    if (type === "pdf") {
-      window.print();
+    const header = ["PRODUCT", "COST", "PRICE", "QTY", "REASON", "STATUS", "DATE"];
+    const body = filtered.map((r) => [
+      r.productName,
+      r.cost,
+      r.price,
+      r.qty,
+      r.reasonName,
+      r.statusName,
+      new Date(r.createdAt).toISOString(),
+    ]);
+    if (!body.length) {
+      alert("No damaged-stock records to export");
       return;
     }
-    const header = ["PRODUCT", "COST", "PRICE", "QTY", "REASON", "STATUS", "DATE"];
-    const body = filtered.map((r) =>
-      [r.productName, r.cost, r.price, r.qty, r.reasonName, r.statusName, new Date(r.createdAt).toISOString()]
-        .map((v) => JSON.stringify(String(v ?? "")))
-        .join(",")
-    );
-    const blob = new Blob([[header.join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "damaged-stock.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    exportTable(type, "damaged-stock", "QUANTUMEXE — Damaged Stock", header, body);
   }
 
   const cards = [
@@ -2936,7 +3296,16 @@ export function DamagedStock() {
         <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr_1fr_auto_auto] gap-3 items-end">
           <div>
             <label className="text-xs font-semibold text-gray-600">Product Name</label>
-            <input className="input mt-1" placeholder="Product name" value={productName} onChange={(e) => setProductName(e.target.value)} />
+            <input
+              data-page-search
+              className="input mt-1"
+              placeholder="Product name"
+              value={productName}
+              onChange={(e) => {
+                setProductName(e.target.value);
+                setPage(1);
+              }}
+            />
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">From Date</label>
@@ -3317,7 +3686,16 @@ export function GrnList() {
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">Bill Number</label>
-            <input className="input mt-1" placeholder="Bill number" value={billNo} onChange={(e) => setBillNo(e.target.value)} />
+            <input
+              data-page-search
+              className="input mt-1"
+              placeholder="Bill number"
+              value={billNo}
+              onChange={(e) => {
+                setBillNo(e.target.value);
+                setPage(1);
+              }}
+            />
           </div>
           <button type="submit" className="btn btn-primary h-[42px] px-5">
             <Search size={16} /> Search
@@ -3978,7 +4356,16 @@ export function QuotationList() {
         <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_1fr_auto_auto] gap-3 items-end">
           <div>
             <label className="text-xs font-semibold text-gray-600">Quotation No</label>
-            <input className="input mt-1" placeholder="Quotation No" value={quoteNo} onChange={(e) => setQuoteNo(e.target.value)} />
+            <input
+              data-page-search
+              className="input mt-1"
+              placeholder="Quotation No"
+              value={quoteNo}
+              onChange={(e) => {
+                setQuoteNo(e.target.value);
+                setPage(1);
+              }}
+            />
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">Customer</label>
@@ -4368,9 +4755,9 @@ export function QuotationForm({ edit = false }: { edit?: boolean }) {
             <div className="relative">
               <label className="text-xs font-semibold text-gray-600">Selected Customer</label>
               <div className="relative mt-1">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={14} className="input-icon" />
                 <input
-                  className="input pl-9"
+                  className="input has-icon"
                   placeholder="Identify Customer (F2)..."
                   value={customerQuery}
                   onChange={(e) => {
@@ -4415,9 +4802,9 @@ export function QuotationForm({ edit = false }: { edit?: boolean }) {
             <div className="relative">
               <label className="text-xs font-semibold text-gray-600">Product Discovery</label>
               <div className="relative mt-1">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={14} className="input-icon" />
                 <input
-                  className="input pl-9"
+                  className="input has-icon"
                   placeholder="Scan or Search Product (F1)..."
                   value={productQuery}
                   onChange={(e) => {

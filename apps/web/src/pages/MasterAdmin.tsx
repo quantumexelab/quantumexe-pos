@@ -38,6 +38,7 @@ type Shop = {
   firebaseConfigured?: boolean;
   firebaseProvisionedAt?: string | null;
   shopType?: string;
+  fingerprintAttendance?: boolean;
 };
 
 type PanelTab = "firebase" | "access" | "security";
@@ -616,6 +617,43 @@ export default function MasterAdmin() {
                           >
                             <ShieldOff size={16} /> Revoke
                           </button>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                          <div>
+                            <div className="text-sm font-bold text-slate-900">Fingerprint attendance</div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              When ON, the shop can punch attendance with a fingerprint reader. Manual entry always
+                              stays available.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span
+                              className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                selected.fingerprintAttendance
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-slate-200 text-slate-700"
+                              }`}
+                            >
+                              {selected.fingerprintAttendance ? "ON" : "OFF"}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className={`btn ${selected.fingerprintAttendance ? "btn-muted" : "btn-primary"}`}
+                              onClick={() =>
+                                void act(
+                                  `/master/shops/${selected.shopId}/fingerprint`,
+                                  { enabled: !selected.fingerprintAttendance },
+                                  selected.fingerprintAttendance
+                                    ? "Fingerprint attendance OFF"
+                                    : "Fingerprint attendance ON"
+                                )
+                              }
+                            >
+                              {selected.fingerprintAttendance ? "Turn OFF" : "Turn ON"}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}

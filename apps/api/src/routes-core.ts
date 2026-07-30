@@ -3,6 +3,14 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma, ok, fail, parseId, param } from "./lib.js";
 import { requireAuth, signToken } from "./auth.js";
+import {
+  LOC_SHOP,
+  LOC_STORE,
+  addToStoreStock,
+  ensureStockPair,
+  setStoreStock,
+  variantDisplayName,
+} from "./stockLocations.js";
 import os from "os";
 import fs from "fs";
 import path from "path";
@@ -393,6 +401,16 @@ router.delete("/users/:id", requireAuth, async (req, res) => {
 
 // ---------- Categories / Brands / Units / Types ----------
 const crudName = (model: "category" | "brand" | "unit" | "productType", base: string) => {
+  const label =
+    model === "productType" ? "Product type" : model === "category" ? "Category" : model === "brand" ? "Brand" : "Unit";
+
+  async function nameTaken(name: string, excludeId?: number) {
+    // @ts-expect-error dynamic
+    const rows = (await prisma[model].findMany()) as Array<{ id: number; name: string }>;
+    const needle = name.trim().toLowerCase();
+    return rows.some((r) => r.id !== excludeId && String(r.name || "").trim().toLowerCase() === needle);
+  }
+
   router.get(base, requireAuth, async (_req, res) => {
     // @ts-expect-error dynamic
     const rows = await prisma[model].findMany({
@@ -412,22 +430,88 @@ const crudName = (model: "category" | "brand" | "unit" | "productType", base: st
   router.post(base, requireAuth, async (req, res) => {
     const name = String(req.body?.name || "").trim();
     if (!name) return res.status(400).json(fail("Name required"));
-    // @ts-expect-error dynamic
-    const row = await prisma[model].create({ data: { name } });
-    res.json(ok(row, "Created"));
+    if (await nameTaken(name)) {
+      return res.status(400).json(fail(`${label} "${name}" already exists`));
+    }
+    try {
+      // @ts-expect-error dynamic
+      const row = await prisma[model].create({ data: { name } });
+      res.json(ok(row, "Created"));
+    } catch (e: any) {
+      if (String(e?.code) === "P2002" || /unique/i.test(String(e?.message || ""))) {
+        return res.status(400).json(fail(`${label} "${name}" already exists`));
+      }
+      throw e;
+    }
   });
   router.put(`${base}/:id`, requireAuth, async (req, res) => {
     const id = parseId(req.params.id);
     const name = String(req.body?.name || "").trim();
-    // @ts-expect-error dynamic
-    const row = await prisma[model].update({ where: { id }, data: { name } });
-    res.json(ok(row, "Updated"));
+    if (!name) return res.status(400).json(fail("Name required"));
+    if (await nameTaken(name, id)) {
+      return res.status(400).json(fail(`${label} "${name}" already exists`));
+    }
+    try {
+      // @ts-expect-error dynamic
+      const row = await prisma[model].update({ where: { id }, data: { name } });
+      res.json(ok(row, "Updated"));
+    } catch (e: any) {
+      if (String(e?.code) === "P2002" || /unique/i.test(String(e?.message || ""))) {
+        return res.status(400).json(fail(`${label} "${name}" already exists`));
+      }
+      throw e;
+    }
   });
   router.delete(`${base}/:id`, requireAuth, async (req, res) => {
     const id = parseId(req.params.id);
     // @ts-expect-error dynamic
-    await prisma[model].delete({ where: { id } });
-    res.json(ok(null, "Deleted"));
+    const row = await prisma[model].findUnique({ where: { id } });
+    if (!row) return res.status(404).json(fail(`${label} not found`, 404));
+
+    const fk =
+      model === "category"
+        ? "categoryId"
+        : model === "brand"
+          ? "brandId"
+          : model === "unit"
+            ? "unitId"
+            : "productTypeId";
+
+    const usedBy = (await prisma.product.findMany({
+      where: { [fk]: id } as any,
+      select: { id: true, name: true, code: true, active: true },
+      take: 8,
+      orderBy: { id: "desc" },
+    })) as Array<{ id: number; name: string; code: string; active: boolean }>;
+
+    const usedCount = await prisma.product.count({ where: { [fk]: id } as any });
+
+    if (usedCount > 0) {
+      const samples = usedBy
+        .map((p) => `"${p.name}" (${p.code})${p.active ? "" : " [deactivated]"}`)
+        .join(", ");
+      const more = usedCount > usedBy.length ? ` and ${usedCount - usedBy.length} more` : "";
+      return res.status(400).json(
+        fail(
+          `Cannot delete ${label.toLowerCase()} "${(row as { name?: string }).name || id}" — it is used by ${usedCount} product(s): ${samples}${more}. Remove or reassign those products first.`,
+          400
+        )
+      );
+    }
+
+    try {
+      // @ts-expect-error dynamic
+      await prisma[model].delete({ where: { id } });
+      res.json(ok(null, "Deleted"));
+    } catch (e: any) {
+      // FK / relation guard (SQLite / Prisma)
+      if (String(e?.code) === "P2003" || /foreign key|constraint/i.test(String(e?.message || ""))) {
+        return res.status(400).json(
+          fail(`Cannot delete ${label.toLowerCase()} — it is still used in the system.`)
+        );
+      }
+      throw e;
+    }
   });
 };
 
@@ -487,6 +571,23 @@ router.get("/products/check-code/:code", requireAuth, async (req, res) => {
   res.json(ok({ exists: !!found }));
 });
 
+router.get("/products/:id", requireAuth, async (req, res) => {
+  const id = parseId(req.params.id);
+  const product = await prisma.product.findUnique({
+    where: { id },
+    include: {
+      variants: { include: { stocks: true } },
+      category: true,
+      brand: true,
+      unit: true,
+      productType: true,
+      status: true,
+    },
+  });
+  if (!product) return res.status(404).json(fail("Product not found", 404));
+  res.json(ok(product));
+});
+
 router.post("/products/create", requireAuth, async (req, res) => {
   const schema = z.object({
     name: z.string().min(1),
@@ -500,6 +601,9 @@ router.post("/products/create", requireAuth, async (req, res) => {
     cost: z.number().default(0),
     barcode: z.string().optional(),
     quantity: z.number().default(0),
+    size: z.string().optional(),
+    color: z.string().optional(),
+    variantName: z.string().optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(fail(parsed.error.message));
@@ -516,42 +620,119 @@ router.post("/products/create", requireAuth, async (req, res) => {
       statusId: active!.id,
       variants: {
         create: {
-          name: "Default",
+          name: parsed.data.variantName || "Default",
           barcode: parsed.data.barcode || `BC${parsed.data.code}`,
           price: parsed.data.price,
           cost: parsed.data.cost,
+          size: parsed.data.size || null,
+          color: parsed.data.color || null,
         },
       },
     },
     include: { variants: true },
   });
-  await prisma.stock.create({
-    data: { variantId: product.variants[0].id, quantity: parsed.data.quantity },
-  });
+  await setStoreStock(prisma, product.variants[0].id, parsed.data.quantity);
   res.json(ok(product, "Product created"));
 });
 
 router.put("/products/update/:id", requireAuth, async (req, res) => {
   const id = parseId(req.params.id);
   const data = req.body || {};
-  const product = await prisma.product.update({
+  const existing = await prisma.product.findUnique({
+    where: { id },
+    include: { variants: { include: { stocks: true } } },
+  });
+  if (!existing) return res.status(404).json(fail("Product not found", 404));
+
+  if (data.code && String(data.code) !== existing.code) {
+    const clash = await prisma.product.findFirst({ where: { code: String(data.code) } });
+    if (clash) return res.status(400).json(fail("Product code already exists"));
+  }
+
+  await prisma.product.update({
     where: { id },
     data: {
-      name: data.name,
-      description: data.description,
-      categoryId: data.categoryId,
-      brandId: data.brandId,
-      unitId: data.unitId,
-      productTypeId: data.productTypeId,
+      name: data.name != null ? String(data.name) : existing.name,
+      code: data.code != null ? String(data.code) : existing.code,
+      description: data.description != null ? data.description : existing.description,
+      categoryId: data.categoryId != null ? Number(data.categoryId) : existing.categoryId,
+      brandId: data.brandId != null ? Number(data.brandId) : existing.brandId,
+      unitId: data.unitId != null ? Number(data.unitId) : existing.unitId,
+      productTypeId: data.productTypeId != null ? Number(data.productTypeId) : existing.productTypeId,
     },
-    include: { variants: true },
   });
-  if (data.price != null && product.variants[0]) {
+
+  const variants = Array.isArray(data.variants) ? data.variants : null;
+
+  if (variants?.length) {
+    for (let i = 0; i < variants.length; i++) {
+      const v = variants[i] || {};
+      const payload = {
+        name: String(v.name || "Default"),
+        barcode: v.barcode ? String(v.barcode) : null,
+        price: Number(v.price || 0),
+        cost: Number(v.cost || 0),
+        size: v.size ? String(v.size) : null,
+        color: v.color ? String(v.color) : null,
+      };
+      let variantId = v.id ? Number(v.id) : 0;
+      if (variantId && existing.variants.some((x) => x.id === variantId)) {
+        await prisma.productVariant.update({ where: { id: variantId }, data: payload });
+      } else {
+        const created = await prisma.productVariant.create({
+          data: { productId: id, ...payload },
+        });
+        variantId = created.id;
+        await setStoreStock(prisma, variantId, Number((v.quantity ?? (i === 0 ? data.quantity : 0)) || 0), {
+          lowThreshold: Number(v.lowThreshold ?? data.lowThreshold ?? 5) || 5,
+        });
+        continue;
+      }
+
+      if (v.quantity != null || v.lowThreshold != null || (i === 0 && (data.quantity != null || data.lowThreshold != null))) {
+        const qty = Number(v.quantity ?? (i === 0 ? data.quantity : undefined));
+        const low = Number(v.lowThreshold ?? (i === 0 ? data.lowThreshold : undefined));
+        const { store } = await ensureStockPair(prisma, variantId);
+        await prisma.stock.update({
+          where: { id: store.id },
+          data: {
+            ...(Number.isFinite(qty) ? { quantity: qty } : {}),
+            ...(Number.isFinite(low) ? { lowThreshold: low } : {}),
+          },
+        });
+      }
+    }
+  } else if (existing.variants[0]) {
     await prisma.productVariant.update({
-      where: { id: product.variants[0].id },
-      data: { price: Number(data.price), cost: data.cost != null ? Number(data.cost) : undefined },
+      where: { id: existing.variants[0].id },
+      data: {
+        name: data.variantName || existing.variants[0].name,
+        barcode: data.barcode != null ? String(data.barcode) : existing.variants[0].barcode,
+        price: data.price != null ? Number(data.price) : existing.variants[0].price,
+        cost: data.cost != null ? Number(data.cost) : existing.variants[0].cost,
+        size: data.size != null ? String(data.size) || null : existing.variants[0].size,
+        color: data.color != null ? String(data.color) || null : existing.variants[0].color,
+      },
     });
+    if (data.quantity != null || data.lowThreshold != null || data.expireDate != null) {
+      const { store } = await ensureStockPair(prisma, existing.variants[0].id);
+      await prisma.stock.update({
+        where: { id: store.id },
+        data: {
+          ...(data.quantity != null ? { quantity: Number(data.quantity) } : {}),
+          ...(data.lowThreshold != null ? { lowThreshold: Number(data.lowThreshold) } : {}),
+          ...(data.expireDate != null
+            ? { expireDate: data.expireDate ? new Date(String(data.expireDate)) : null }
+            : {}),
+        },
+      });
+    }
   }
+
+  const product = await prisma.product.findUnique({
+    where: { id },
+    include: { variants: { include: { stocks: true } }, category: true, brand: true, unit: true, productType: true },
+  });
   res.json(ok(product, "Updated"));
 });
 
@@ -586,82 +767,195 @@ router.post("/products/:id/variants", requireAuth, async (req, res) => {
       barcode: req.body?.barcode,
       price: Number(req.body?.price || 0),
       cost: Number(req.body?.cost || 0),
-      size: req.body?.size,
+      size: req.body?.size || null,
+      color: req.body?.color || null,
     },
   });
-  await prisma.stock.create({ data: { variantId: variant.id, quantity: Number(req.body?.quantity || 0) } });
+  await setStoreStock(prisma, variant.id, Number(req.body?.quantity || 0));
   res.json(ok(variant, "Variant added"));
 });
 
 router.post("/products/import", requireAuth, async (req, res) => {
-  res.json(ok({ imported: 0 }, "Import stub accepted (send JSON array via create endpoints)"));
+  const rows = (req.body?.rows || req.body?.products || []) as Array<Record<string, unknown>>;
+  if (!Array.isArray(rows) || !rows.length) {
+    return res.status(400).json(fail("No rows to import. Send { rows: [...] }"));
+  }
+
+  async function findOrCreateNamed(
+    model: "category" | "brand" | "unit" | "productType",
+    name: string
+  ) {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const delegate = (prisma as any)[model];
+    const existing = await delegate.findFirst({ where: { name: trimmed } });
+    if (existing) return existing.id as number;
+    const created = await delegate.create({ data: { name: trimmed } });
+    return created.id as number;
+  }
+
+  const active = await prisma.status.findFirst({ where: { name: "Active" } });
+  if (!active) return res.status(500).json(fail("Active status missing"));
+
+  let imported = 0;
+  const errors: string[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] || {};
+    const name = String(row.name || row.product_name || "").trim();
+    const code = String(row.code || row.product_code || "").trim();
+    if (!name || !code) {
+      errors.push(`Row ${i + 1}: name and code are required`);
+      continue;
+    }
+    try {
+      const existing = await prisma.product.findFirst({ where: { code } });
+      if (existing) {
+        errors.push(`Row ${i + 1}: code "${code}" already exists`);
+        continue;
+      }
+
+      const categoryId = await findOrCreateNamed("category", String(row.category || row.category_name || "General"));
+      const brandId = await findOrCreateNamed("brand", String(row.brand || row.brand_name || "Generic"));
+      const unitId = await findOrCreateNamed("unit", String(row.unit || row.unit_name || "Pcs"));
+      const productTypeId = await findOrCreateNamed(
+        "productType",
+        String(row.product_type || row.productType || row.type || "General")
+      );
+
+      const price = Number(row.price ?? row.selling_price ?? 0) || 0;
+      const cost = Number(row.cost ?? row.cost_price ?? 0) || 0;
+      const quantity = Number(row.quantity ?? row.qty ?? row.opening_qty ?? 0) || 0;
+      const barcode = String(row.barcode || "").trim() || `BC${code}`;
+      const size = String(row.size || "").trim() || null;
+      const color = String(row.color || "").trim() || null;
+      const variantName = String(row.variant_name || row.variant || "Default").trim() || "Default";
+      const lowThreshold = Number(row.low_threshold ?? row.lowThreshold ?? 5) || 5;
+
+      const product = await prisma.product.create({
+        data: {
+          name,
+          code,
+          categoryId: categoryId || undefined,
+          brandId: brandId || undefined,
+          unitId: unitId || undefined,
+          productTypeId: productTypeId || undefined,
+          statusId: active.id,
+          variants: {
+            create: {
+              name: variantName,
+              barcode,
+              price,
+              cost,
+              size,
+              color,
+            },
+          },
+        },
+        include: { variants: true },
+      });
+      await setStoreStock(prisma, product.variants[0].id, quantity, { lowThreshold });
+      imported += 1;
+    } catch (e) {
+      errors.push(`Row ${i + 1}: ${e instanceof Error ? e.message : "import failed"}`);
+    }
+  }
+
+  res.json(ok({ imported, failed: errors.length, errors: errors.slice(0, 20) }, `Imported ${imported} product(s)`));
 });
 
 // ---------- Stock ----------
+function mapVariationRow(
+  variant: {
+    id: number;
+    name: string;
+    barcode: string | null;
+    price: number;
+    cost: number;
+    size?: string | null;
+    color?: string | null;
+    product: {
+      name: string;
+      code: string;
+      categoryId: number | null;
+      unitId: number | null;
+      category?: { name: string } | null;
+      unit?: { name: string } | null;
+      brand?: { name: string } | null;
+    };
+  },
+  store: { id: number; quantity: number; lowThreshold: number; expireDate: Date | null },
+  shop: { id: number; quantity: number },
+  location: string
+) {
+  const activeQty = location === LOC_SHOP ? shop.quantity : store.quantity;
+  return {
+    id: variant.id,
+    stockId: location === LOC_SHOP ? shop.id : store.id,
+    displayName: variantDisplayName(variant),
+    productName: variant.product.name,
+    productID: variant.product.code,
+    variant_name: variant.name,
+    size: variant.size || null,
+    color: variant.color || null,
+    barcode: variant.barcode,
+    price: variant.price,
+    Price: variant.price,
+    cost: variant.cost,
+    mrp: variant.price,
+    sellingPrice: variant.price,
+    unit: variant.product.unit?.name || "-",
+    categoryId: variant.product.categoryId,
+    category: variant.product.category?.name || "-",
+    unitId: variant.product.unitId,
+    quantity: activeQty,
+    storeQty: store.quantity,
+    shopQty: shop.quantity,
+    expireDate: store.expireDate,
+    lowThreshold: store.lowThreshold,
+    supplier: "-",
+    location,
+    variant,
+  };
+}
+
 router.get("/stock/all-variations", requireAuth, async (req, res) => {
   const hasStock = req.query.hasStock === "true";
+  const location = String(req.query.location || LOC_STORE);
   const limit = Number(req.query.limit || 100);
-  const stocks = await prisma.stock.findMany({
-    where: hasStock ? { quantity: { gt: 0 } } : undefined,
-    include: {
-      variant: {
-        include: {
-          product: { include: { category: true, unit: true, brand: true } },
-        },
-      },
-    },
-    take: limit,
+  const variants = await prisma.productVariant.findMany({
+    where: { product: { active: true } },
+    include: { product: { include: { category: true, unit: true, brand: true } } },
+    orderBy: { id: "desc" },
+    take: Math.min(limit * 3, 1500),
   });
-  res.json(
-    ok(
-      stocks.map((s) => {
-        const size = (s.variant as { size?: string | null }).size;
-        const vname = s.variant.name;
-        const parts = [s.variant.product.name];
-        if (size) parts.push(`Size ${size}`);
-        else if (vname && vname.toLowerCase() !== "default") parts.push(vname);
-        return {
-        id: s.variantId,
-        stockId: s.id,
-        displayName: parts.join(" · "),
-        productName: s.variant.product.name,
-        productID: s.variant.product.code,
-        variant_name: s.variant.name,
-        size: size || null,
-        barcode: s.variant.barcode,
-        price: s.variant.price,
-        Price: s.variant.price,
-        cost: s.variant.cost,
-        mrp: s.variant.price,
-        sellingPrice: s.variant.price,
-        unit: s.variant.product.unit?.name || "-",
-        categoryId: s.variant.product.categoryId,
-        category: s.variant.product.category?.name || "-",
-        unitId: s.variant.product.unitId,
-        quantity: s.quantity,
-        expireDate: s.expireDate,
-        lowThreshold: s.lowThreshold,
-        supplier: "-",
-        variant: s.variant,
-      };
-      })
-    )
-  );
+  const rows = [];
+  for (const variant of variants) {
+    const { store, shop } = await ensureStockPair(prisma, variant.id);
+    const activeQty = location === LOC_SHOP ? shop.quantity : store.quantity;
+    if (hasStock && activeQty <= 0) continue;
+    rows.push(mapVariationRow(variant, store, shop, location));
+    if (rows.length >= limit) break;
+  }
+  res.json(ok(rows));
 });
 
-router.get("/stock/summary-cards", requireAuth, async (_req, res) => {
-  const stocks = await prisma.stock.findMany();
+router.get("/stock/summary-cards", requireAuth, async (req, res) => {
+  const location = String(req.query.location || LOC_STORE);
+  const stocks = await prisma.stock.findMany({ where: { location } });
   const total = stocks.length;
   const low = stocks.filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold).length;
   const out = stocks.filter((s) => s.quantity <= 0).length;
   const expireSoon = stocks.filter(
     (s) => s.expireDate && s.expireDate.getTime() - Date.now() < 30 * 86400000
   ).length;
-  res.json(ok({ total, low, out, expireSoon }));
+  res.json(ok({ total, low, out, expireSoon, location }));
 });
 
-router.get("/stock/low-stock", requireAuth, async (_req, res) => {
+router.get("/stock/low-stock", requireAuth, async (req, res) => {
+  const location = String(req.query.location || LOC_STORE);
   const stocks = await prisma.stock.findMany({
+    where: { location },
     include: {
       variant: {
         include: {
@@ -674,15 +968,18 @@ router.get("/stock/low-stock", requireAuth, async (_req, res) => {
   res.json(ok(rows));
 });
 
-router.get("/stock/low-stock/summary", requireAuth, async (_req, res) => {
-  const stocks = await prisma.stock.findMany();
+router.get("/stock/low-stock/summary", requireAuth, async (req, res) => {
+  const location = String(req.query.location || LOC_STORE);
+  const stocks = await prisma.stock.findMany({ where: { location } });
   const count = stocks.filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold).length;
   res.json(ok({ count }));
 });
 
 router.get("/stock/low-stock/search", requireAuth, async (req, res) => {
   const q = String(req.query.q || "").toLowerCase();
+  const location = String(req.query.location || LOC_STORE);
   const stocks = await prisma.stock.findMany({
+    where: { location },
     include: { variant: { include: { product: true } } },
   });
   const rows = stocks.filter(
@@ -694,9 +991,10 @@ router.get("/stock/low-stock/search", requireAuth, async (req, res) => {
   res.json(ok(rows));
 });
 
-router.get("/stock/out-of-stock", requireAuth, async (_req, res) => {
+router.get("/stock/out-of-stock", requireAuth, async (req, res) => {
+  const location = String(req.query.location || LOC_STORE);
   const stocks = await prisma.stock.findMany({
-    where: { quantity: { lte: 0 } },
+    where: { quantity: { lte: 0 }, location },
     include: {
       variant: {
         include: {
@@ -708,15 +1006,17 @@ router.get("/stock/out-of-stock", requireAuth, async (_req, res) => {
   res.json(ok(stocks));
 });
 
-router.get("/stock/out-of-stock/summary", requireAuth, async (_req, res) => {
-  const count = await prisma.stock.count({ where: { quantity: { lte: 0 } } });
+router.get("/stock/out-of-stock/summary", requireAuth, async (req, res) => {
+  const location = String(req.query.location || LOC_STORE);
+  const count = await prisma.stock.count({ where: { quantity: { lte: 0 }, location } });
   res.json(ok({ count }));
 });
 
 router.get("/stock/out-of-stock/search", requireAuth, async (req, res) => {
   const q = String(req.query.q || "").toLowerCase();
+  const location = String(req.query.location || LOC_STORE);
   const stocks = await prisma.stock.findMany({
-    where: { quantity: { lte: 0 } },
+    where: { quantity: { lte: 0 }, location },
     include: { variant: { include: { product: true } } },
   });
   res.json(ok(stocks.filter((s) => s.variant.product.name.toLowerCase().includes(q))));
@@ -724,9 +1024,10 @@ router.get("/stock/out-of-stock/search", requireAuth, async (req, res) => {
 
 router.get("/stock/expire-stock", requireAuth, async (req, res) => {
   const days = Number(req.query.days || 60);
+  const location = String(req.query.location || LOC_STORE);
   const soon = new Date(Date.now() + days * 86400000);
   const stocks = await prisma.stock.findMany({
-    where: { expireDate: { lte: soon } },
+    where: { expireDate: { lte: soon }, location },
     include: {
       variant: {
         include: {
@@ -740,7 +1041,9 @@ router.get("/stock/expire-stock", requireAuth, async (req, res) => {
 
 router.get("/stock/search", requireAuth, async (req, res) => {
   const q = String(req.query.q || "");
+  const location = String(req.query.location || LOC_STORE);
   const stocks = await prisma.stock.findMany({
+    where: { location },
     include: { variant: { include: { product: true } } },
   });
   const rows = stocks.filter(
@@ -752,11 +1055,15 @@ router.get("/stock/search", requireAuth, async (req, res) => {
 });
 
 router.get("/stock/get-stock-by-variant/:id", requireAuth, async (req, res) => {
-  const stock = await prisma.stock.findFirst({
-    where: { variantId: parseId(req.params.id) },
-    include: { variant: { include: { product: true } } },
+  const variantId = parseId(req.params.id);
+  const location = String(req.query.location || LOC_STORE);
+  const { store, shop } = await ensureStockPair(prisma, variantId);
+  const active = location === LOC_SHOP ? shop : store;
+  const variant = await prisma.productVariant.findUnique({
+    where: { id: variantId },
+    include: { product: true },
   });
-  res.json(ok(stock));
+  res.json(ok({ ...active, variant, storeQty: store.quantity, shopQty: shop.quantity }));
 });
 
 router.get("/reasons/all", requireAuth, async (_req, res) => {

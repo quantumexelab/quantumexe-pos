@@ -6,6 +6,15 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { prisma, ok, fail, parseId, param } from "./lib.js";
 import { requireAuth } from "./auth.js";
+import {
+  LOC_SHOP,
+  LOC_STORE,
+  addToStoreStock,
+  ensureStockPair,
+  getShopStock,
+  getStoreStock,
+  variantDisplayName,
+} from "./stockLocations.js";
 
 const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -325,17 +334,7 @@ router.post("/grn/add", requireAuth, async (req, res) => {
     include: { items: true },
   });
   for (const item of items) {
-    const stock = await prisma.stock.findFirst({ where: { variantId: Number(item.variantId) } });
-    if (stock) {
-      await prisma.stock.update({
-        where: { id: stock.id },
-        data: { quantity: stock.quantity + Number(item.qty) },
-      });
-    } else {
-      await prisma.stock.create({
-        data: { variantId: Number(item.variantId), quantity: Number(item.qty) },
-      });
-    }
+    await addToStoreStock(prisma, Number(item.variantId), Number(item.qty));
     await prisma.productVariant.update({
       where: { id: Number(item.variantId) },
       data: { cost: Number(item.cost) },
@@ -407,12 +406,15 @@ router.get("/pos/products/barcode/:code", requireAuth, async (req, res) => {
     include: { product: true, stocks: true },
   });
   if (!variant) return res.status(404).json(fail("Product not found", 404));
-  const qty = variant.stocks.reduce((s, x) => s + x.quantity, 0);
-  const size = (variant as { size?: string | null }).size;
+  const { shop } = await ensureStockPair(prisma, variant.id);
+  const qty = shop.quantity;
+  const size = (variant as { size?: string | null; color?: string | null }).size;
+  const color = (variant as { size?: string | null; color?: string | null }).color;
   const vname = variant.name;
   const displayParts = [variant.product.name];
   if (size) displayParts.push(`Size ${size}`);
-  else if (vname && vname.toLowerCase() !== "default") displayParts.push(vname);
+  if (color) displayParts.push(color);
+  if (!size && !color && vname && vname.toLowerCase() !== "default") displayParts.push(vname);
   res.json(
     ok({
       id: variant.id,
@@ -421,6 +423,7 @@ router.get("/pos/products/barcode/:code", requireAuth, async (req, res) => {
       productID: variant.product.code,
       barcode: variant.barcode,
       size: size || null,
+      color: color || null,
       variantName: vname,
       price: variant.price,
       quantity: qty,
@@ -457,9 +460,9 @@ router.post("/pos/invoice", requireAuth, async (req, res) => {
   }
 
   for (const item of normalized) {
-    const stock = await prisma.stock.findFirst({ where: { variantId: item.variantId } });
-    if (!stock || stock.quantity < item.qty) {
-      return res.status(400).json(fail(`Insufficient stock for variant ${item.variantId}`));
+    const shop = await getShopStock(prisma, item.variantId);
+    if (shop.quantity < item.qty) {
+      return res.status(400).json(fail(`Insufficient shop stock for variant ${item.variantId}`));
     }
   }
 
@@ -471,10 +474,10 @@ router.post("/pos/invoice", requireAuth, async (req, res) => {
 
   const invoice = await prisma.$transaction(async (tx) => {
     for (const item of normalized) {
-      const stock = await tx.stock.findFirst({ where: { variantId: item.variantId } });
+      const shop = await getShopStock(tx, item.variantId);
       await tx.stock.update({
-        where: { id: stock!.id },
-        data: { quantity: stock!.quantity - item.qty },
+        where: { id: shop.id },
+        data: { quantity: shop.quantity - item.qty },
       });
     }
     return tx.invoice.create({
@@ -516,7 +519,29 @@ router.get("/pos/invoice/:no", requireAuth, async (req, res) => {
     include: { items: { include: { variant: { include: { product: true } } } }, customer: true, user: true },
   });
   if (!row) return res.status(404).json(fail("Invoice not found", 404));
-  res.json(ok(row));
+  const prior = await prisma.return.findMany({
+    where: { invoiceId: row.id },
+    include: { items: true },
+  });
+  const returnedByVariant = new Map<number, number>();
+  for (const r of prior) {
+    for (const ri of r.items) {
+      returnedByVariant.set(ri.variantId, (returnedByVariant.get(ri.variantId) || 0) + ri.qty);
+    }
+  }
+  res.json(
+    ok({
+      ...row,
+      items: row.items.map((it) => {
+        const returnedQty = returnedByVariant.get(it.variantId) || 0;
+        return {
+          ...it,
+          returnedQty,
+          remainingQty: Math.max(0, it.qty - returnedQty),
+        };
+      }),
+    })
+  );
 });
 
 router.post("/pos/convert", requireAuth, async (req, res) => {
@@ -544,20 +569,38 @@ router.post("/pos/return", requireAuth, async (req, res) => {
   const items = (req.body?.items || []) as Array<{ id?: number; variantId?: number; returnQuantity: number; price?: number; discount?: number }>;
   if (!items.length) return res.status(400).json(fail("Items required"));
 
+  const priorReturns = await prisma.return.findMany({
+    where: { invoiceId: invoice.id },
+    include: { items: true },
+  });
+  const alreadyByVariant = new Map<number, number>();
+  for (const r of priorReturns) {
+    for (const ri of r.items) {
+      alreadyByVariant.set(ri.variantId, (alreadyByVariant.get(ri.variantId) || 0) + ri.qty);
+    }
+  }
+
   let total = 0;
   const createdItems = [];
   for (const item of items) {
     const invItem = invoice.items.find((x) => x.id === item.id) || invoice.items.find((x) => x.variantId === item.variantId);
     if (!invItem) return res.status(400).json(fail("Invalid return item"));
     const qty = Number(item.returnQuantity);
+    if (!Number.isFinite(qty) || qty <= 0) return res.status(400).json(fail("Return quantity must be > 0"));
+    const already = alreadyByVariant.get(invItem.variantId) || 0;
+    const remaining = invItem.qty - already;
+    if (qty > remaining) {
+      return res.status(400).json(fail(`Cannot return ${qty} — only ${remaining} left for this item`));
+    }
     const price = Number(item.price ?? invItem.price);
-    const discount = Number(item.discount || 0);
+    const lineDisc = Number(invItem.discount || 0);
+    const unitDisc = invItem.qty > 0 ? lineDisc / invItem.qty : 0;
+    const discount = Number(item.discount ?? unitDisc * qty);
     total += price * qty - discount;
     createdItems.push({ variantId: invItem.variantId, qty, price, discount });
-    const stock = await prisma.stock.findFirst({ where: { variantId: invItem.variantId } });
-    if (stock) {
-      await prisma.stock.update({ where: { id: stock.id }, data: { quantity: stock.quantity + qty } });
-    }
+    alreadyByVariant.set(invItem.variantId, already + qty);
+    const shop = await getShopStock(prisma, invItem.variantId);
+    await prisma.stock.update({ where: { id: shop.id }, data: { quantity: shop.quantity + qty } });
   }
 
   const ret = await prisma.return.create({
@@ -713,15 +756,15 @@ router.post("/quotations/:id/convert", requireAuth, async (req, res) => {
   // Call by creating invoice directly
   const items = quote.items;
   for (const item of items) {
-    const stock = await prisma.stock.findFirst({ where: { variantId: item.variantId } });
-    if (!stock || stock.quantity < item.qty) return res.status(400).json(fail("Insufficient stock"));
+    const shop = await getShopStock(prisma, item.variantId);
+    if (shop.quantity < item.qty) return res.status(400).json(fail("Insufficient shop stock"));
   }
   const count = await prisma.invoice.count();
   const invoiceNo = await nextNo("INV", count);
   const invoice = await prisma.$transaction(async (tx) => {
     for (const item of items) {
-      const stock = await tx.stock.findFirst({ where: { variantId: item.variantId } });
-      await tx.stock.update({ where: { id: stock!.id }, data: { quantity: stock!.quantity - item.qty } });
+      const shop = await getShopStock(tx, item.variantId);
+      await tx.stock.update({ where: { id: shop.id }, data: { quantity: shop.quantity - item.qty } });
     }
     await tx.quotation.update({ where: { id: quote.id }, data: { status: "Converted" } });
     return tx.invoice.create({
@@ -749,6 +792,197 @@ router.post("/quotations/:id/convert", requireAuth, async (req, res) => {
 });
 
 // ---------- Analytics / Dashboard ----------
+router.get("/analytics/store-dashboard", requireAuth, async (_req, res) => {
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const variants = await prisma.productVariant.findMany({
+      select: { id: true },
+      where: { product: { active: true } },
+      take: 500,
+    });
+    await Promise.all(variants.map((v) => ensureStockPair(prisma, v.id)));
+
+    const [storeStocks, shopStocks, grnCount, releaseCount, todayGrns, todayReleases, recentReleases] =
+      await Promise.all([
+        prisma.stock.findMany({ where: { location: LOC_STORE } }),
+        prisma.stock.findMany({ where: { location: LOC_SHOP } }),
+        prisma.grn.count(),
+        prisma.stockRelease.count(),
+        prisma.grn.count({ where: { createdAt: { gte: startOfDay } } }),
+        prisma.stockRelease.count({ where: { createdAt: { gte: startOfDay } } }),
+        prisma.stockRelease.findMany({
+          orderBy: { id: "desc" },
+          take: 5,
+          include: {
+            user: true,
+            items: { include: { variant: { include: { product: true } } } },
+          },
+        }),
+      ]);
+
+    const storeQty = storeStocks.reduce((s, r) => s + Number(r.quantity || 0), 0);
+    const shopQty = shopStocks.reduce((s, r) => s + Number(r.quantity || 0), 0);
+    const storeLow = storeStocks.filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold).length;
+    const storeOut = storeStocks.filter((s) => s.quantity <= 0).length;
+    const shopLow = shopStocks.filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold).length;
+    const shopOut = shopStocks.filter((s) => s.quantity <= 0).length;
+
+    res.json(
+      ok({
+        kpis: {
+          storeQty,
+          shopQty,
+          storeSkus: storeStocks.length,
+          shopSkus: shopStocks.length,
+          storeLow,
+          storeOut,
+          shopLow,
+          shopOut,
+          grnCount,
+          releaseCount,
+          todayGrns,
+          todayReleases,
+        },
+        recentReleases: recentReleases.map((r) => ({
+          id: r.id,
+          releaseNo: r.releaseNo,
+          createdAt: r.createdAt,
+          userName: r.user?.name || "-",
+          itemCount: r.items.length,
+          totalQty: r.items.reduce((s, i) => s + Number(i.qty || 0), 0),
+        })),
+      })
+    );
+  } catch (e) {
+    console.error("[store-dashboard]", e);
+    res.status(500).json(fail(e instanceof Error ? e.message : "Store dashboard failed", 500));
+  }
+});
+
+router.get("/store-release/list", requireAuth, async (req, res) => {
+  const limit = Number(req.query.limit || 100);
+  const rows = await prisma.stockRelease.findMany({
+    orderBy: { id: "desc" },
+    take: limit,
+    include: {
+      user: true,
+      items: { include: { variant: { include: { product: true } } } },
+    },
+  });
+  res.json(ok(rows));
+});
+
+router.get("/store-release/store-stock", requireAuth, async (req, res) => {
+  const hasStock = req.query.hasStock === "true";
+  const q = String(req.query.q || "").toLowerCase();
+  const limit = Number(req.query.limit || 200);
+  const variants = await prisma.productVariant.findMany({
+    where: { product: { active: true } },
+    include: { product: { include: { category: true, unit: true } } },
+    orderBy: { id: "desc" },
+    take: Math.min(limit * 3, 1500),
+  });
+  const rows = [];
+  for (const variant of variants) {
+    const { store, shop } = await ensureStockPair(prisma, variant.id);
+    if (hasStock && store.quantity <= 0) continue;
+    const displayName = variantDisplayName(variant);
+    if (q && !displayName.toLowerCase().includes(q) && !String(variant.barcode || "").includes(q)) continue;
+    rows.push({
+      variantId: variant.id,
+      displayName,
+      productName: variant.product.name,
+      productCode: variant.product.code,
+      barcode: variant.barcode,
+      price: variant.price,
+      size: (variant as { size?: string | null }).size || null,
+      color: (variant as { color?: string | null }).color || null,
+      variantName: variant.name,
+      storeQty: store.quantity,
+      shopQty: shop.quantity,
+      unit: variant.product.unit?.name || "-",
+    });
+    if (rows.length >= limit) break;
+  }
+  res.json(ok(rows));
+});
+
+router.post("/store-release/add", requireAuth, async (req, res) => {
+  const items = (req.body?.items || []) as Array<{ variantId: number; qty: number }>;
+  const note = req.body?.note ? String(req.body.note) : null;
+  if (!items.length) return res.status(400).json(fail("At least one item is required"));
+
+  const normalized = items.map((i) => ({
+    variantId: Number(i.variantId),
+    qty: Number(i.qty),
+  }));
+
+  for (const item of normalized) {
+    if (!item.variantId || !(item.qty > 0)) {
+      return res.status(400).json(fail("Each item needs variantId and qty > 0"));
+    }
+    const store = await getStoreStock(prisma, item.variantId);
+    if (store.quantity < item.qty) {
+      const variant = await prisma.productVariant.findUnique({
+        where: { id: item.variantId },
+        include: { product: true },
+      });
+      const label = variant ? variantDisplayName(variant) : `Variant ${item.variantId}`;
+      return res.status(400).json(fail(`Insufficient store stock for ${label}. Available: ${store.quantity}`));
+    }
+  }
+
+  const count = await prisma.stockRelease.count();
+  const releaseNo = await nextNo("REL", count);
+
+  const release = await prisma.$transaction(async (tx) => {
+    const row = await tx.stockRelease.create({
+      data: {
+        releaseNo,
+        userId: req.user!.id,
+        note,
+        items: {
+          create: normalized.map((i) => ({ variantId: i.variantId, qty: i.qty })),
+        },
+      },
+      include: {
+        user: true,
+        items: { include: { variant: { include: { product: true } } } },
+      },
+    });
+
+    for (const item of normalized) {
+      const { store, shop } = await ensureStockPair(tx, item.variantId);
+      await tx.stock.update({
+        where: { id: store.id },
+        data: { quantity: store.quantity - item.qty },
+      });
+      await tx.stock.update({
+        where: { id: shop.id },
+        data: { quantity: shop.quantity + item.qty },
+      });
+    }
+
+    return row;
+  });
+
+  res.json(ok(release, "Stock released to shop"));
+});
+
+router.get("/store-release/get-by-id/:id", requireAuth, async (req, res) => {
+  const row = await prisma.stockRelease.findUnique({
+    where: { id: parseId(req.params.id) },
+    include: {
+      user: true,
+      items: { include: { variant: { include: { product: true } } } },
+    },
+  });
+  if (!row) return res.status(404).json(fail("Release not found", 404));
+  res.json(ok(row));
+});
+
 router.get("/analytics/dashboard", requireAuth, async (_req, res) => {
   try {
     const startOfDay = new Date();
@@ -852,6 +1086,11 @@ router.get("/employees", requireAuth, async (_req, res) => {
 });
 
 router.post("/employees", requireAuth, async (req, res) => {
+  const fingerprintCode = req.body?.fingerprintCode != null ? String(req.body.fingerprintCode).trim() : "";
+  if (fingerprintCode) {
+    const clash = await prisma.employee.findFirst({ where: { fingerprintCode } });
+    if (clash) return res.status(400).json(fail(`Fingerprint code already used by ${clash.name}`));
+  }
   const row = await prisma.employee.create({
     data: {
       name: String(req.body?.name || ""),
@@ -859,14 +1098,24 @@ router.post("/employees", requireAuth, async (req, res) => {
       email: req.body?.email,
       roleTitle: req.body?.roleTitle,
       salaryBase: Number(req.body?.salaryBase || 0),
+      fingerprintCode: fingerprintCode || null,
     },
   });
   res.json(ok(row));
 });
 
 router.put("/employees/:id", requireAuth, async (req, res) => {
+  const id = parseId(req.params.id);
+  const fingerprintCode =
+    req.body?.fingerprintCode != null ? String(req.body.fingerprintCode).trim() : undefined;
+  if (fingerprintCode) {
+    const clash = await prisma.employee.findFirst({
+      where: { fingerprintCode, NOT: { id } },
+    });
+    if (clash) return res.status(400).json(fail(`Fingerprint code already used by ${clash.name}`));
+  }
   const row = await prisma.employee.update({
-    where: { id: parseId(req.params.id) },
+    where: { id },
     data: {
       name: req.body?.name,
       contact: req.body?.contact,
@@ -874,6 +1123,7 @@ router.put("/employees/:id", requireAuth, async (req, res) => {
       roleTitle: req.body?.roleTitle,
       salaryBase: req.body?.salaryBase != null ? Number(req.body.salaryBase) : undefined,
       active: req.body?.active,
+      ...(fingerprintCode !== undefined ? { fingerprintCode: fingerprintCode || null } : {}),
     },
   });
   res.json(ok(row));
@@ -888,17 +1138,117 @@ router.get("/employees/attendance", requireAuth, async (_req, res) => {
 });
 
 router.post("/employees/attendance", requireAuth, async (req, res) => {
-  const row = await prisma.attendance.create({
-    data: {
-      employeeId: Number(req.body?.employeeId),
-      userId: req.user!.id,
-      date: req.body?.date ? new Date(req.body.date) : new Date(),
-      checkIn: req.body?.checkIn,
-      checkOut: req.body?.checkOut,
-      note: req.body?.note,
-    },
+  const employeeId = Number(req.body?.employeeId);
+  if (!employeeId) return res.status(400).json(fail("employeeId required"));
+
+  const day = req.body?.date ? new Date(String(req.body.date)) : new Date();
+  if (Number.isNaN(day.getTime())) return res.status(400).json(fail("Invalid date"));
+  const start = new Date(day);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(day);
+  end.setHours(23, 59, 59, 999);
+
+  const existing = await prisma.attendance.findFirst({
+    where: { employeeId, date: { gte: start, lte: end } },
   });
-  res.json(ok(row));
+
+  const payload = {
+    checkIn: req.body?.checkIn != null ? String(req.body.checkIn) : existing?.checkIn || null,
+    checkOut: req.body?.checkOut != null ? String(req.body.checkOut) : existing?.checkOut || null,
+    note: req.body?.note != null ? String(req.body.note) : existing?.note || null,
+    method: String(req.body?.method || existing?.method || "manual"),
+    userId: req.user!.id,
+  };
+
+  const row = existing
+    ? await prisma.attendance.update({
+        where: { id: existing.id },
+        data: payload,
+        include: { employee: true, user: true },
+      })
+    : await prisma.attendance.create({
+        data: {
+          employeeId,
+          date: start,
+          ...payload,
+        },
+        include: { employee: true, user: true },
+      });
+
+  res.json(ok(row, existing ? "Attendance updated" : "Attendance marked"));
+});
+
+router.post("/employees/attendance/fingerprint", requireAuth, async (req, res) => {
+  const enabledRow = await prisma.setting.findUnique({ where: { key: "fingerprint_attendance" } });
+  let enabled = enabledRow?.value === "1";
+  if (!enabled) {
+    try {
+      const fj = await prisma.setting.findUnique({ where: { key: "features_json" } });
+      if (fj?.value) {
+        const f = JSON.parse(fj.value) as { fingerprintAttendance?: boolean };
+        enabled = Boolean(f.fingerprintAttendance);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!enabled) {
+    return res.status(403).json(fail("Fingerprint attendance is disabled by Master Admin"));
+  }
+
+  const code = String(req.body?.fingerprintCode || req.body?.code || "").trim();
+  if (!code) return res.status(400).json(fail("fingerprintCode required"));
+
+  const employee = await prisma.employee.findFirst({
+    where: { fingerprintCode: code, active: true },
+  });
+  if (!employee) return res.status(404).json(fail("Fingerprint not enrolled / employee not found", 404));
+
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+
+  const existing = await prisma.attendance.findFirst({
+    where: { employeeId: employee.id, date: { gte: start, lte: end } },
+  });
+
+  let action: "check-in" | "check-out" = "check-in";
+  let row;
+  if (!existing || !existing.checkIn) {
+    row = existing
+      ? await prisma.attendance.update({
+          where: { id: existing.id },
+          data: { checkIn: time, method: "fingerprint", userId: req.user!.id },
+          include: { employee: true, user: true },
+        })
+      : await prisma.attendance.create({
+          data: {
+            employeeId: employee.id,
+            date: start,
+            checkIn: time,
+            method: "fingerprint",
+            userId: req.user!.id,
+          },
+          include: { employee: true, user: true },
+        });
+    action = "check-in";
+  } else if (!existing.checkOut) {
+    row = await prisma.attendance.update({
+      where: { id: existing.id },
+      data: { checkOut: time, method: "fingerprint", userId: req.user!.id },
+      include: { employee: true, user: true },
+    });
+    action = "check-out";
+  } else {
+    return res.status(400).json(
+      fail(`${employee.name} already checked in (${existing.checkIn}) and out (${existing.checkOut}) today`)
+    );
+  }
+
+  res.json(ok({ ...row, action }, `${employee.name} — ${action} at ${time}`));
 });
 
 router.get("/employees/salaries", requireAuth, async (_req, res) => {

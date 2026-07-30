@@ -39,35 +39,36 @@ model User {
   returns      Return[]
   attendances  Attendance[]
   salaries     Salary[]
-  cashMoves    CashMovement[]
-  sessions     PosSession[]
-  createdAt    DateTime  @default(now())
+  cashMoves      CashMovement[]
+  sessions       PosSession[]
+  stockReleases  StockRelease[]
+  createdAt      DateTime  @default(now())
 }
 
 model Category {
   id        Int       @id @default(autoincrement())
-  name      String    @unique
+  name      String
   products  Product[]
   createdAt DateTime  @default(now())
 }
 
 model Brand {
   id        Int       @id @default(autoincrement())
-  name      String    @unique
+  name      String
   products  Product[]
   createdAt DateTime  @default(now())
 }
 
 model Unit {
   id        Int       @id @default(autoincrement())
-  name      String    @unique
+  name      String
   products  Product[]
   createdAt DateTime  @default(now())
 }
 
 model ProductType {
   id        Int       @id @default(autoincrement())
-  name      String    @unique
+  name      String
   products  Product[]
   createdAt DateTime  @default(now())
 }
@@ -100,22 +101,45 @@ model ProductVariant {
   price       Float    @default(0)
   cost        Float    @default(0)
   size        String?
+  color       String?
   product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   stocks      Stock[]
   invoiceItems InvoiceItem[]
   quotationItems QuotationItem[]
-  grnItems    GrnItem[]
+  grnItems          GrnItem[]
+  stockReleaseItems StockReleaseItem[]
 }
 
 model Stock {
-  id          Int       @id @default(autoincrement())
-  variantId   Int
-  quantity    Float     @default(0)
-  lowThreshold Float    @default(5)
-  expireDate  DateTime?
-  location    String?
-  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  damaged     DamagedStock[]
+  id           Int       @id @default(autoincrement())
+  variantId    Int
+  quantity     Float     @default(0)
+  lowThreshold Float     @default(5)
+  expireDate   DateTime?
+  location     String    @default("store")
+  variant      ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  damaged      DamagedStock[]
+
+  @@index([variantId, location])
+}
+
+model StockRelease {
+  id        Int      @id @default(autoincrement())
+  releaseNo String   @unique
+  userId    Int
+  note      String?
+  user      User     @relation(fields: [userId], references: [id])
+  items     StockReleaseItem[]
+  createdAt DateTime @default(now())
+}
+
+model StockReleaseItem {
+  id        Int            @id @default(autoincrement())
+  releaseId Int
+  variantId Int
+  qty       Float
+  release   StockRelease   @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
 }
 
 model DamagedStock {
@@ -303,16 +327,17 @@ model QuotationItem {
 }
 
 model Employee {
-  id          Int           @id @default(autoincrement())
-  name        String
-  contact     String?
-  email       String?
-  roleTitle   String?
-  salaryBase  Float         @default(0)
-  active      Boolean       @default(true)
-  attendances Attendance[]
-  salaries    Salary[]
-  createdAt   DateTime      @default(now())
+  id              Int           @id @default(autoincrement())
+  name            String
+  contact         String?
+  email           String?
+  roleTitle       String?
+  salaryBase      Float         @default(0)
+  active          Boolean       @default(true)
+  fingerprintCode String?
+  attendances     Attendance[]
+  salaries        Salary[]
+  createdAt       DateTime      @default(now())
 }
 
 model Attendance {
@@ -323,6 +348,7 @@ model Attendance {
   checkIn    String?
   checkOut   String?
   note       String?
+  method     String    @default("manual")
   employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   user       User?     @relation(fields: [userId], references: [id])
 }

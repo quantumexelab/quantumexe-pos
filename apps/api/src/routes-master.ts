@@ -227,6 +227,24 @@ router.post("/master/shops/:shopId/shop-type", requireAuth, requireRoles("Master
   }
 });
 
+router.post("/master/shops/:shopId/fingerprint", requireAuth, requireRoles("MasterAdmin"), async (req, res) => {
+  try {
+    const enabled = Boolean(req.body?.enabled);
+    const { setShopFingerprintAttendance } = await import("./master/shopTemplates.js");
+    const shop = await setShopFingerprintAttendance(String(req.params.shopId), enabled);
+    res.json(
+      ok(
+        toPublicShop(shop),
+        enabled
+          ? "Fingerprint attendance ON — manual entry still available"
+          : "Fingerprint attendance OFF — manual entry only"
+      )
+    );
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Fingerprint toggle failed"));
+  }
+});
+
 router.get("/master/shop-types", requireAuth, requireRoles("MasterAdmin"), async (_req, res) => {
   const { SHOP_TEMPLATES } = await import("./master/shopTemplates.js");
   res.json(

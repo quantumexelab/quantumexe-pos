@@ -24,6 +24,11 @@ import {
 import api, { auth } from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
 import { BrandLogo } from "../components/BrandLogo";
+import {
+  publishCustomerDisplay,
+  readCustomerDisplay,
+  subscribeCustomerDisplay,
+} from "../customerDisplay/channel";
 
 function lkr(n: number) {
   return `LKR ${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -174,9 +179,10 @@ export function ManageSupplier() {
             <div className="text-sm font-bold tracking-wide text-gray-800">SUPPLIER DIRECTORY</div>
           </div>
           <div className="relative w-full sm:w-[360px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={14} className="input-icon" />
             <input
-              className="input pl-9"
+              data-page-search
+              className="input has-icon"
               placeholder="Search suppliers by name, contact or company..."
               value={search}
               onChange={(e) => {
@@ -654,9 +660,10 @@ export function CreateSupplier() {
             <div className="text-sm font-bold tracking-wide text-gray-800">EXISTING SUPPLIERS</div>
           </div>
           <div className="relative w-full sm:w-[360px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={14} className="input-icon" />
             <input
-              className="input pl-9"
+              data-page-search
+              className="input has-icon"
               placeholder="Search suppliers by name, contact or company..."
               value={search}
               onChange={(e) => {
@@ -981,9 +988,10 @@ export function ManageCompany() {
             <div className="text-sm font-bold tracking-wide text-gray-800">COMPANY DIRECTORY</div>
           </div>
           <div className="relative w-full sm:w-[380px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={14} className="input-icon" />
             <input
-              className="input pl-9"
+              data-page-search
+              className="input has-icon"
               placeholder="Search companies by name, email or contact..."
               value={search}
               onChange={(e) => {
@@ -2183,10 +2191,11 @@ export function ManageCustomer() {
             <div className="text-sm font-bold tracking-wide text-gray-800">CUSTOMER LIST</div>
           </div>
           <div className="relative w-full sm:w-[320px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={14} className="input-icon" />
             <input
               ref={searchRef}
-              className="input pl-9"
+              data-page-search
+              className="input has-icon"
               placeholder="Search customer, phone..."
               value={search}
               onChange={(e) => {
@@ -2741,10 +2750,11 @@ export function ManageUsers() {
             <div className="text-sm font-bold tracking-wide text-gray-800">USER DIRECTORY</div>
           </div>
           <div className="relative w-full sm:w-[380px]">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={14} className="input-icon" />
             <input
               ref={searchRef}
-              className="input pl-9"
+              data-page-search
+              className="input has-icon"
               placeholder="Search users by name, email, contact, or role..."
               value={search}
               onChange={(e) => {
@@ -2914,27 +2924,140 @@ export function EmployeeHome() {
 
 export function ManageEmployee() {
   const [rows, setRows] = useState<any[]>([]);
-  const [form, setForm] = useState({ name: "", contact: "", roleTitle: "", salaryBase: 0 });
+  const [form, setForm] = useState({
+    name: "",
+    contact: "",
+    roleTitle: "",
+    salaryBase: 0,
+    fingerprintCode: "",
+  });
+  const [error, setError] = useState("");
+  const [fingerprintOn, setFingerprintOn] = useState(false);
   const load = () => api.get("/employees").then((r) => setRows(r.data.data || []));
-  useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    void load();
+    void api
+      .get("/settings")
+      .then((r) => {
+        const map = (r.data?.data || {}) as Record<string, string>;
+        if (map.fingerprint_attendance === "1") {
+          setFingerprintOn(true);
+          return;
+        }
+        try {
+          const f = map.features_json ? JSON.parse(map.features_json) : null;
+          setFingerprintOn(Boolean(f?.fingerprintAttendance));
+        } catch {
+          setFingerprintOn(false);
+        }
+      })
+      .catch(() => setFingerprintOn(false));
+  }, []);
+
   async function add(e: FormEvent) {
     e.preventDefault();
-    await api.post("/employees", form);
-    load();
+    setError("");
+    try {
+      const { data } = await api.post("/employees", {
+        ...form,
+        fingerprintCode: form.fingerprintCode.trim() || undefined,
+      });
+      if (data?.success === false) throw new Error(data.message || "Failed");
+      setForm({ name: "", contact: "", roleTitle: "", salaryBase: 0, fingerprintCode: "" });
+      load();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err.message || "Failed to add employee");
+    }
   }
+
+  async function saveFingerprint(id: number, fingerprintCode: string) {
+    setError("");
+    try {
+      const { data } = await api.put(`/employees/${id}`, { fingerprintCode: fingerprintCode.trim() });
+      if (data?.success === false) throw new Error(data.message || "Failed");
+      load();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err.message || "Failed to save fingerprint");
+    }
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader title="Manage Employee" />
-      <form onSubmit={add} className="card grid md:grid-cols-4 gap-2">
-        <input className="input" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-        <input className="input" placeholder="Contact" value={form.contact} onChange={(e) => setForm({ ...form, contact: e.target.value })} />
-        <input className="input" placeholder="Role" value={form.roleTitle} onChange={(e) => setForm({ ...form, roleTitle: e.target.value })} />
+      {error && <ErrorBox text={error} />}
+      {fingerprintOn && (
+        <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+          Fingerprint attendance is <strong>ON</strong> for this shop. Enroll a fingerprint code per employee (reader
+          usually types the ID like a keyboard).
+        </div>
+      )}
+      <form onSubmit={add} className="card grid md:grid-cols-5 gap-2">
+        <input
+          className="input"
+          placeholder="Name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          required
+        />
+        <input
+          className="input"
+          placeholder="Contact"
+          value={form.contact}
+          onChange={(e) => setForm({ ...form, contact: e.target.value })}
+        />
+        <input
+          className="input"
+          placeholder="Role"
+          value={form.roleTitle}
+          onChange={(e) => setForm({ ...form, roleTitle: e.target.value })}
+        />
+        <input
+          className="input"
+          placeholder={fingerprintOn ? "Fingerprint code" : "Fingerprint (Master OFF)"}
+          value={form.fingerprintCode}
+          onChange={(e) => setForm({ ...form, fingerprintCode: e.target.value })}
+          disabled={!fingerprintOn}
+        />
         <button className="btn btn-primary">Add</button>
       </form>
       <div className="card overflow-auto">
         <table className="table">
-          <thead><tr><th>Name</th><th>Contact</th><th>Role</th><th>Salary</th></tr></thead>
-          <tbody>{rows.map((r) => <tr key={r.id}><td>{r.name}</td><td>{r.contact}</td><td>{r.roleTitle}</td><td>Rs. {r.salaryBase}</td></tr>)}</tbody>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Contact</th>
+              <th>Role</th>
+              <th>Salary</th>
+              <th>Fingerprint</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td>{r.name}</td>
+                <td>{r.contact}</td>
+                <td>{r.roleTitle}</td>
+                <td>Rs. {r.salaryBase}</td>
+                <td>
+                  {fingerprintOn ? (
+                    <input
+                      className="input text-sm py-1"
+                      defaultValue={r.fingerprintCode || ""}
+                      placeholder="Scan / enter code"
+                      onBlur={(e) => {
+                        if (e.target.value.trim() !== String(r.fingerprintCode || "")) {
+                          void saveFingerprint(r.id, e.target.value);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span className="text-gray-400 text-sm">{r.fingerprintCode || "—"}</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
     </div>
@@ -2943,48 +3066,405 @@ export function ManageEmployee() {
 
 export function AttendanceMark() {
   const [employees, setEmployees] = useState<any[]>([]);
+  const [rows, setRows] = useState<any[]>([]);
+  const [mode, setMode] = useState<"manual" | "fingerprint">("manual");
+  const [fingerprintOn, setFingerprintOn] = useState(false);
+  const [fingerprintCode, setFingerprintCode] = useState("");
+  const scanRef = useRef<HTMLInputElement>(null);
   const [employeeId, setEmployeeId] = useState("");
-  const [checkIn, setCheckIn] = useState("09:00");
-  const [checkOut, setCheckOut] = useState("17:00");
-  useEffect(() => {
-    api.get("/employees").then((r) => setEmployees(r.data.data || []));
-  }, []);
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    await api.post("/employees/attendance", { employeeId: Number(employeeId), checkIn, checkOut });
-    alert("Attendance marked");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [checkIn, setCheckIn] = useState(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  });
+  const [checkOut, setCheckOut] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  const [okMsg, setOkMsg] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function loadFingerprintFlag() {
+    try {
+      const { data } = await api.get("/settings");
+      const map = (data?.data || {}) as Record<string, string>;
+      if (map.fingerprint_attendance === "1") {
+        setFingerprintOn(true);
+        return;
+      }
+      const f = map.features_json ? JSON.parse(map.features_json) : null;
+      setFingerprintOn(Boolean(f?.fingerprintAttendance));
+    } catch {
+      setFingerprintOn(false);
+    }
   }
+
+  async function load() {
+    const [emps, att] = await Promise.all([
+      api.get("/employees"),
+      api.get("/employees/attendance"),
+    ]);
+    setEmployees(emps.data.data || []);
+    setRows(att.data.data || []);
+  }
+
+  useEffect(() => {
+    void loadFingerprintFlag();
+    void load().catch((e) => setError(e.message || "Failed to load"));
+  }, []);
+
+  useEffect(() => {
+    if (mode === "fingerprint" && fingerprintOn) scanRef.current?.focus();
+  }, [mode, fingerprintOn]);
+
+  const todayRows = useMemo(() => {
+    return rows.filter((r) => {
+      try {
+        return new Date(r.date).toISOString().slice(0, 10) === date;
+      } catch {
+        return false;
+      }
+    });
+  }, [rows, date]);
+
+  useEffect(() => {
+    if (!employeeId) return;
+    const existing = todayRows.find(
+      (r) => String(r.employeeId) === String(employeeId) || String(r.employee?.id) === String(employeeId)
+    );
+    if (existing) {
+      setCheckIn(existing.checkIn || checkIn);
+      setCheckOut(existing.checkOut || "");
+      setNote(existing.note || "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeId, date, todayRows.length]);
+
+  async function submitManual(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setOkMsg("");
+    if (!employeeId) {
+      setError("Select an employee");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data } = await api.post("/employees/attendance", {
+        employeeId: Number(employeeId),
+        date,
+        checkIn: checkIn || undefined,
+        checkOut: checkOut || undefined,
+        note: note.trim() || undefined,
+        method: "manual",
+      });
+      if (data?.success === false) throw new Error(data.message || "Failed");
+      setOkMsg(data?.message || "Attendance marked");
+      await load();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err.message || "Failed to mark attendance");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitFingerprint(e?: FormEvent) {
+    e?.preventDefault();
+    setError("");
+    setOkMsg("");
+    const code = fingerprintCode.trim();
+    if (!code) {
+      setError("Scan fingerprint / enter code");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data } = await api.post("/employees/attendance/fingerprint", { fingerprintCode: code });
+      if (data?.success === false) throw new Error(data.message || "Failed");
+      setOkMsg(data?.message || "Fingerprint punch saved");
+      setFingerprintCode("");
+      await load();
+      scanRef.current?.focus();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err.message || "Fingerprint punch failed");
+      setFingerprintCode("");
+      scanRef.current?.focus();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function quickNow(field: "in" | "out") {
+    const d = new Date();
+    const t = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    if (field === "in") setCheckIn(t);
+    else setCheckOut(t);
+  }
+
   return (
-    <div>
-      <PageHeader title="Attendance Mark" />
-      <form onSubmit={submit} className="card grid md:grid-cols-4 gap-2 max-w-4xl">
-        <select className="input" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required>
-          <option value="">Employee</option>
-          {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-        </select>
-        <input className="input" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
-        <input className="input" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
-        <button className="btn btn-primary">Save</button>
-      </form>
+    <div className="space-y-4">
+      <div>
+        <div className="text-xs text-gray-500 mb-1">Employee &gt; Attendance Mark</div>
+        <h1 className="text-2xl font-bold text-gray-800">Attendance Mark</h1>
+        <p className="text-sm text-gray-500">
+          Manual entry always available
+          {fingerprintOn ? " · Fingerprint punch enabled by Master Admin" : " · Fingerprint disabled by Master Admin"}
+        </p>
+      </div>
+      {error && <ErrorBox text={error} />}
+      {okMsg && <div className="text-sm font-semibold text-green-700">{okMsg}</div>}
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className={`btn ${mode === "manual" ? "btn-primary" : "btn-muted"}`}
+          onClick={() => setMode("manual")}
+        >
+          Manual entry
+        </button>
+        <button
+          type="button"
+          className={`btn ${mode === "fingerprint" ? "btn-primary" : "btn-muted"}`}
+          disabled={!fingerprintOn}
+          title={fingerprintOn ? "Fingerprint punch" : "Turn on from Master Admin"}
+          onClick={() => fingerprintOn && setMode("fingerprint")}
+        >
+          Fingerprint {fingerprintOn ? "" : "(OFF)"}
+        </button>
+      </div>
+
+      {mode === "manual" && (
+        <form onSubmit={submitManual} className="card space-y-3 max-w-3xl">
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="block text-sm">
+              <span className="text-xs font-semibold text-gray-600">Employee</span>
+              <select
+                className="input mt-1"
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                required
+              >
+                <option value="">Select employee</option>
+                {employees.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                    {e.roleTitle ? ` (${e.roleTitle})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="text-xs font-semibold text-gray-600">Date</span>
+              <input className="input mt-1" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            </label>
+            <label className="block text-sm">
+              <span className="text-xs font-semibold text-gray-600">Check In</span>
+              <div className="flex gap-2 mt-1">
+                <input className="input" type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} required />
+                <button type="button" className="btn btn-muted whitespace-nowrap" onClick={() => quickNow("in")}>
+                  Now
+                </button>
+              </div>
+            </label>
+            <label className="block text-sm">
+              <span className="text-xs font-semibold text-gray-600">Check Out</span>
+              <div className="flex gap-2 mt-1">
+                <input className="input" type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
+                <button type="button" className="btn btn-muted whitespace-nowrap" onClick={() => quickNow("out")}>
+                  Now
+                </button>
+              </div>
+            </label>
+            <label className="block text-sm md:col-span-2">
+              <span className="text-xs font-semibold text-gray-600">Note (optional)</span>
+              <input
+                className="input mt-1"
+                placeholder="Late / half day / leave note…"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="btn btn-primary" disabled={saving || !employees.length}>
+              {saving ? "Saving…" : "Save Attendance"}
+            </button>
+            <Link className="btn btn-muted" to="/employee/attendance-report">
+              View Report
+            </Link>
+            {!employees.length && (
+              <Link className="btn btn-muted" to="/employee/manage-employee">
+                Add employees first
+              </Link>
+            )}
+          </div>
+        </form>
+      )}
+
+      {mode === "fingerprint" && fingerprintOn && (
+        <form onSubmit={submitFingerprint} className="card space-y-3 max-w-xl">
+          <div className="text-sm text-gray-600">
+            Place finger on the reader (or type/paste fingerprint code). First punch = check-in, second = check-out.
+          </div>
+          <input
+            ref={scanRef}
+            className="input text-lg tracking-wide"
+            placeholder="Waiting for fingerprint scan…"
+            value={fingerprintCode}
+            onChange={(e) => setFingerprintCode(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void submitFingerprint();
+              }
+            }}
+            autoFocus
+          />
+          <button type="submit" className="btn btn-primary" disabled={saving || !fingerprintCode.trim()}>
+            {saving ? "Saving…" : "Punch"}
+          </button>
+        </form>
+      )}
+
+      <div className="card overflow-auto">
+        <div className="font-semibold mb-3">Attendance for {date}</div>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Check In</th>
+              <th>Check Out</th>
+              <th>Method</th>
+              <th>Note</th>
+              <th>Marked by</th>
+            </tr>
+          </thead>
+          <tbody>
+            {todayRows.map((r) => (
+              <tr key={r.id}>
+                <td className="font-medium">{r.employee?.name || "-"}</td>
+                <td>{r.checkIn || "-"}</td>
+                <td>{r.checkOut || "-"}</td>
+                <td>
+                  <span
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      r.method === "fingerprint" ? "bg-sky-100 text-sky-800" : "bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    {r.method || "manual"}
+                  </span>
+                </td>
+                <td className="text-gray-500">{r.note || "-"}</td>
+                <td className="text-gray-500">{r.user?.name || "-"}</td>
+              </tr>
+            ))}
+            {!todayRows.length && (
+              <tr>
+                <td colSpan={6} className="text-center text-gray-400 py-6">
+                  No attendance marked for this date
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 export function AttendanceReport() {
   const [rows, setRows] = useState<any[]>([]);
+  const [query, setQuery] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+
   useEffect(() => {
     api.get("/employees/attendance").then((r) => setRows(r.data.data || []));
   }, []);
+
+  const filtered = useMemo(() => {
+    return rows.filter((r) => {
+      const name = String(r.employee?.name || "").toLowerCase();
+      if (query && !name.includes(query.trim().toLowerCase())) return false;
+      const d = new Date(r.date);
+      if (fromDate) {
+        const from = new Date(fromDate);
+        from.setHours(0, 0, 0, 0);
+        if (d < from) return false;
+      }
+      if (toDate) {
+        const to = new Date(toDate);
+        to.setHours(23, 59, 59, 999);
+        if (d > to) return false;
+      }
+      return true;
+    });
+  }, [rows, query, fromDate, toDate]);
+
   return (
-    <div>
-      <PageHeader title="Attendance Report" />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="text-xs text-gray-500 mb-1">Employee &gt; Attendance Report</div>
+          <h1 className="text-2xl font-bold text-gray-800">Attendance Report</h1>
+        </div>
+        <Link className="btn btn-primary" to="/employee/attendance-mark">
+          Mark Attendance
+        </Link>
+      </div>
+      <div className="card grid md:grid-cols-4 gap-3">
+        <input
+          className="input"
+          placeholder="Search employee…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          data-page-search
+        />
+        <input className="input" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+        <input className="input" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+        <button
+          type="button"
+          className="btn btn-muted"
+          onClick={() => {
+            setQuery("");
+            setFromDate("");
+            setToDate("");
+          }}
+        >
+          Reset
+        </button>
+      </div>
       <div className="card overflow-auto">
         <table className="table">
-          <thead><tr><th>Employee</th><th>Date</th><th>In</th><th>Out</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Date</th>
+              <th>Check In</th>
+              <th>Check Out</th>
+              <th>Method</th>
+              <th>Note</th>
+              <th>Marked by</th>
+            </tr>
+          </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}><td>{r.employee?.name}</td><td>{new Date(r.date).toLocaleDateString()}</td><td>{r.checkIn}</td><td>{r.checkOut}</td></tr>
+            {filtered.map((r) => (
+              <tr key={r.id}>
+                <td className="font-medium">{r.employee?.name}</td>
+                <td>{new Date(r.date).toLocaleDateString()}</td>
+                <td>{r.checkIn || "-"}</td>
+                <td>{r.checkOut || "-"}</td>
+                <td>{r.method || "manual"}</td>
+                <td>{r.note || "-"}</td>
+                <td className="text-gray-500">{r.user?.name || "-"}</td>
+              </tr>
             ))}
+            {!filtered.length && (
+              <tr>
+                <td colSpan={7} className="text-center text-gray-400 py-6">
+                  No attendance records
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -3610,15 +4090,125 @@ export function SalesQuotationReport() {
 }
 
 export function CustomerDisplay() {
+  const [state, setState] = useState(() => readCustomerDisplay());
+  const [shopFallback, setShopFallback] = useState("QUANTUMEXE POS");
+  const [welcomeFallback, setWelcomeFallback] = useState("Welcome");
+
+  useEffect(() => {
+    return subscribeCustomerDisplay(setState);
+  }, []);
+
+  useEffect(() => {
+    api
+      .get("/settings")
+      .then((r) => {
+        const map = (r.data?.data || {}) as Record<string, string>;
+        setShopFallback(map.shop_display_name || map.shop_name || "QUANTUMEXE POS");
+        setWelcomeFallback(map.welcome_note || "Welcome");
+        if (!state.shopName || state.shopName === "QUANTUMEXE POS") {
+          publishCustomerDisplay({
+            status: state.status || "idle",
+            shopName: map.shop_display_name || map.shop_name || "QUANTUMEXE POS",
+            welcomeNote: map.welcome_note || "Welcome",
+          });
+        }
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const shop = state.shopName || shopFallback;
+  const welcome = state.welcomeNote || welcomeFallback;
+  const idle = state.status === "idle" || (!state.items.length && state.status !== "paid" && state.status !== "thankyou");
+  const thankYou = state.status === "paid" || state.status === "thankyou";
+
   return (
-    <div className="min-h-screen grid place-items-center bg-slate-950 text-white p-8">
-      <div className="text-center">
-        <BrandLogo variant="dark" size="lg" showTagline className="inline-block text-left" />
-        <div className="mt-6 text-2xl">Customer Display</div>
-        <div className="mt-2 text-gray-300">Thank you for shopping with us</div>
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+      <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between gap-4">
+        <div>
+          <div className="text-2xl md:text-3xl font-black tracking-wide">{shop}</div>
+          <div className="text-sm text-slate-300 mt-1">{welcome}</div>
+        </div>
+        <BrandLogo variant="dark" size="md" className="opacity-90" />
+      </div>
+
+      <div className="flex-1 grid md:grid-cols-[1.4fr_1fr] gap-0">
+        <div className="p-6 md:p-8 overflow-auto">
+          {idle && !thankYou ? (
+            <div className="h-full grid place-items-center text-center">
+              <div>
+                <div className="text-4xl md:text-5xl font-black">{welcome}</div>
+                <div className="mt-3 text-slate-400 text-lg">Prices will appear here during checkout</div>
+              </div>
+            </div>
+          ) : thankYou && !state.items.length ? (
+            <div className="h-full grid place-items-center text-center">
+              <div>
+                <div className="text-4xl md:text-5xl font-black text-emerald-400">Thank you!</div>
+                <div className="mt-3 text-slate-300 text-xl">
+                  Total {money(state.total)}
+                  {state.change != null && state.change > 0 ? ` · Change ${money(state.change)}` : ""}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="grid grid-cols-[1fr_64px_110px_120px] gap-2 text-xs uppercase tracking-wider text-slate-400 pb-2 border-b border-white/10">
+                <div>Item</div>
+                <div className="text-right">Qty</div>
+                <div className="text-right">Price</div>
+                <div className="text-right">Amount</div>
+              </div>
+              {state.items.map((it, i) => (
+                <div key={`${it.name}-${i}`} className="grid grid-cols-[1fr_64px_110px_120px] gap-2 text-base md:text-lg py-2 border-b border-white/5">
+                  <div className="font-semibold leading-snug">{it.name}</div>
+                  <div className="text-right text-slate-300">{it.qty}</div>
+                  <div className="text-right text-slate-300">{money(it.price)}</div>
+                  <div className="text-right font-bold">{money(it.lineTotal)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-slate-900/80 border-l border-white/10 p-6 md:p-8 flex flex-col justify-end">
+          <div className="space-y-3 text-lg">
+            <div className="flex justify-between text-slate-300">
+              <span>Subtotal</span>
+              <span>{money(state.subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-slate-300">
+              <span>Discount</span>
+              <span>- {money(state.discount)}</span>
+            </div>
+            <div className="flex justify-between text-3xl md:text-4xl font-black pt-3 border-t border-white/10">
+              <span>TOTAL</span>
+              <span className="text-emerald-400">{money(state.total)}</span>
+            </div>
+            {state.paid != null && (
+              <div className="flex justify-between text-slate-300">
+                <span>Paid</span>
+                <span>{money(state.paid)}</span>
+              </div>
+            )}
+            {state.change != null && state.change > 0 && (
+              <div className="flex justify-between text-amber-300 font-semibold">
+                <span>Change</span>
+                <span>{money(state.change)}</span>
+              </div>
+            )}
+          </div>
+          {thankYou && (
+            <div className="mt-8 text-center text-emerald-400 text-2xl font-bold">Thank you for shopping!</div>
+          )}
+        </div>
       </div>
     </div>
   );
+}
+
+function money(n: number) {
+  return `Rs. ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function SetupPage() {

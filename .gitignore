@@ -27,3 +27,9 @@ ui-debug.log
 
 .vercel
 .env*
+!.env.example
+!apps/api/.env.example
+apps/desktop/resources
+apps/desktop/release
+apps/desktop/node_modules
+apps/api/prisma/demo.sqlite

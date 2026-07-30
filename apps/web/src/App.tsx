@@ -2,7 +2,7 @@ import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { auth } from "./api";
 import AppLayout from "./components/AppLayout";
 import SignIn from "./pages/SignIn";
-import Dashboard from "./pages/Dashboard";
+import DashboardRouter from "./pages/DashboardRouter";
 import POS from "./pages/POS";
 import PendingAccess from "./pages/PendingAccess";
 import MasterAdmin from "./pages/MasterAdmin";
@@ -29,6 +29,7 @@ import {
   StockHome,
   StockList,
 } from "./pages/Catalog";
+import { CreateStoreRelease, StoreReleaseHome, StoreReleaseList } from "./pages/StoreRelease";
 import SettingsPage from "./pages/Settings";
 import BackupPage from "./pages/Backup";
 import SalesFinancialReport from "./pages/SalesFinancialReport";
@@ -85,7 +86,7 @@ export default function App() {
         <Route element={<ShopGate />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard" element={<DashboardRouter />} />
             <Route path="/pos" element={<POS />} />
 
             <Route path="/sales" element={<SalesHome />} />
@@ -109,9 +110,14 @@ export default function App() {
             <Route path="/grn/create-grn" element={<CreateGrn />} />
             <Route path="/grn/grn-list" element={<GrnList />} />
 
+            <Route path="/store-release" element={<StoreReleaseHome />} />
+            <Route path="/store-release/create" element={<CreateStoreRelease />} />
+            <Route path="/store-release/list" element={<StoreReleaseList />} />
+
             <Route path="/products" element={<ProductsHome />} />
             <Route path="/products/product-list" element={<ProductList />} />
             <Route path="/products/create-product" element={<CreateProduct />} />
+            <Route path="/products/edit-product/:id" element={<CreateProduct />} />
             <Route path="/products/deactivated-products" element={<DeactivatedProducts />} />
             <Route path="/products/manage-category" element={<ManageCategory />} />
             <Route path="/products/manage-brand" element={<ManageBrand />} />

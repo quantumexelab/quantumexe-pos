@@ -30,6 +30,8 @@ export type ShopRecord = {
   firebaseProvisionedAt?: string | null;
   /** Business template applied on approve (clothing, restaurant, …). */
   shopType?: string;
+  /** Master toggle: allow fingerprint attendance at this shop. */
+  fingerprintAttendance?: boolean;
 };
 
 const SHOPS_COL = "pos_shops";

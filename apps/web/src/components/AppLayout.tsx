@@ -8,6 +8,7 @@ import {
   Boxes,
   Users,
   UserCog,
+  UserCheck,
   Settings,
   BarChart3,
   DatabaseBackup,
@@ -21,6 +22,7 @@ import {
   WifiOff,
   Cloud,
   RefreshCw,
+  ArrowRightLeft,
   ChevronDown,
   ChevronUp,
   type LucideIcon,
@@ -92,6 +94,16 @@ const nav: NavItem[] = [
     ],
   },
   {
+    id: "storeRelease",
+    label: "Store Release",
+    icon: ArrowRightLeft,
+    roles: ["Admin", "Storekeeper"],
+    children: [
+      { label: "Release to Shop", path: "/store-release/create" },
+      { label: "Release History", path: "/store-release/list" },
+    ],
+  },
+  {
     id: "grn",
     label: "GRN",
     icon: ClipboardList,
@@ -142,6 +154,18 @@ const nav: NavItem[] = [
     path: "/manage-users",
     icon: UserCog,
     roles: ["Admin"],
+  },
+  {
+    id: "employee",
+    label: "Employee",
+    icon: UserCheck,
+    roles: ["Admin"],
+    children: [
+      { label: "Manage Employee", path: "/employee/manage-employee" },
+      { label: "Attendance Mark", path: "/employee/attendance-mark" },
+      { label: "Attendance Report", path: "/employee/attendance-report" },
+      { label: "Employee Salary", path: "/employee/employee-salary" },
+    ],
   },
   {
     id: "accounts",
@@ -205,7 +229,12 @@ export default function AppLayout() {
 
   const items = useMemo(() => {
     return nav
-      .filter((n) => n.roles.includes(role) && allowed.has(n.id))
+      .filter((n) => {
+        if (!n.roles.includes(role)) return false;
+        // Admin always gets Employee (attendance) even if older shop features omit it
+        if (n.id === "employee" && role === "Admin") return true;
+        return allowed.has(n.id);
+      })
       .map((n) => {
         if (n.id !== "products" || !n.children) return n;
         if (features?.showBrand !== false) return n;

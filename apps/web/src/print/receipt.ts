@@ -2,9 +2,11 @@ import JsBarcode from "jsbarcode";
 import {
   esc,
   itemDisplayName,
+  isThermalReceiptPrinter,
   loadPrintSettings,
   money,
   openPrintWindow,
+  receiptPrinterLabel,
   type PrintSettings,
 } from "./settings";
 
@@ -14,6 +16,7 @@ export type ReceiptLine = {
   price: number;
   discount?: number;
   size?: string | null;
+  color?: string | null;
   barcode?: string | null;
 };
 
@@ -64,7 +67,8 @@ function buildBarcodeSvg(text: string): string {
 function thermalCss(isThermal: boolean) {
   const width = isThermal ? "80mm" : "720px";
   return `
-    @page { size: ${isThermal ? "80mm auto" : "A4"}; margin: 4mm; }
+    /* Xprinter XP-Q80T Thermal Receipt Printer — 80mm roll */
+    @page { size: ${isThermal ? "80mm auto" : "A4"}; margin: ${isThermal ? "2mm" : "10mm"}; }
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -72,12 +76,14 @@ function thermalCss(isThermal: boolean) {
       font-size: 12px;
       color: #111;
       background: #fff;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     .sheet {
       width: ${width};
       max-width: 100%;
       margin: 0 auto;
-      padding: 6px 8px 12px;
+      padding: ${isThermal ? "4px 6px 10px" : "12px 16px"};
     }
     .center { text-align: center; }
     .bold { font-weight: 700; }
@@ -104,13 +110,14 @@ function thermalCss(isThermal: boolean) {
 }
 
 export function buildReceiptHtml(data: ReceiptData, settings: PrintSettings): string {
-  const isThermal = (settings.bill_printer || "thermal").toLowerCase().includes("thermal");
+  const isThermal = isThermalReceiptPrinter(settings.bill_printer);
   const cur = settings.currency || "Rs.";
   const shopTitle = settings.shop_display_name || settings.shop_name || "QUANTUMEXE POS";
   const paid = Number(data.paidAmount ?? data.total);
   const balance = Math.max(0, paid - Number(data.total));
   const when = formatWhen(data.createdAt, settings);
   const barcodeSvg = on(settings.show_barcode) ? buildBarcodeSvg(data.invoiceNo) : "";
+  const printerName = receiptPrinterLabel(settings.bill_printer);
 
   const lines = data.items
     .map((it) => {
@@ -137,7 +144,7 @@ export function buildReceiptHtml(data: ReceiptData, settings: PrintSettings): st
       : "";
 
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"/><title>${esc(data.invoiceNo)}</title>
+<html><head><meta charset="utf-8"/><title>${esc(data.invoiceNo)} — ${esc(printerName)}</title>
 <style>${thermalCss(isThermal)}</style></head>
 <body><div class="sheet">
   ${logo}
@@ -178,6 +185,7 @@ export function receiptFromInvoice(inv: any): ReceiptData {
     price: Number(it.price || 0),
     discount: Number(it.discount || 0),
     size: it.variant?.size,
+    color: it.variant?.color,
     barcode: it.variant?.barcode,
   }));
   return {
@@ -201,7 +209,8 @@ export async function printReceipt(invoiceOrData: any) {
       ? receiptFromInvoice(invoiceOrData)
       : (invoiceOrData as ReceiptData);
   const html = buildReceiptHtml(data, settings);
-  openPrintWindow(data.invoiceNo, html, settings.bill_printer?.includes("thermal") ? 380 : 720);
+  const thermal = isThermalReceiptPrinter(settings.bill_printer);
+  openPrintWindow(`${data.invoiceNo} — ${receiptPrinterLabel(settings.bill_printer)}`, html, thermal ? 380 : 720);
   return data;
 }
 

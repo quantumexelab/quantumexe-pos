@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "apps/*"
+    "apps/api",
+    "apps/web"
   ],
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"npm run dev -w apps/api\" \"npm run dev -w apps/web\"",
@@ -15,7 +16,10 @@
     "db:reset": "npm run db:reset -w apps/api",
     "postinstall": "npm run prisma:generate -w apps/api",
     "test:e2e": "npm run test:e2e -w apps/web",
-    "test:smoke": "tsx apps/api/scripts/smoke.ts"
+    "test:smoke": "tsx apps/api/scripts/smoke.ts",
+    "desktop:prepare": "node scripts/prepare-desktop.mjs",
+    "desktop:dist": "npm run desktop:prepare && npm install --prefix apps/desktop && npm run dist --prefix apps/desktop",
+    "desktop:publish": "npm run desktop:prepare && npm install --prefix apps/desktop && npm run dist:publish --prefix apps/desktop"
   },
   "devDependencies": {
     "concurrently": "^9.2.4"

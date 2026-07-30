@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Eye,
   FileText,
@@ -12,6 +12,7 @@ import {
 import api from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
 import { printReceipt } from "../print/receipt";
+import { itemDisplayName } from "../print/settings";
 
 function lkr(n: number) {
   return `LKR ${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -314,7 +315,10 @@ export function ManageInvoice() {
               className="input mt-1"
               placeholder="Search invoice #"
               value={invoiceNo}
-              onChange={(e) => setInvoiceNo(e.target.value)}
+              onChange={(e) => {
+                setInvoiceNo(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
           <div>
@@ -703,10 +707,14 @@ export function UserSales() {
           <div>
             <label className="text-xs font-semibold text-gray-600">INVOICE ID</label>
             <input
+              data-page-search
               className="input mt-1"
               placeholder="Invoice ID"
               value={invoiceId}
-              onChange={(e) => setInvoiceId(e.target.value)}
+              onChange={(e) => {
+                setInvoiceId(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
           <div>
@@ -898,11 +906,13 @@ export function UserSales() {
 }
 
 export function ReturnHistory() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState<any[]>([]);
   const [invoiceNo, setInvoiceNo] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [invoice, setInvoice] = useState<any>(null);
+  const [returnQty, setReturnQty] = useState<Record<number, number>>({});
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
@@ -964,16 +974,34 @@ export function ReturnHistory() {
   const showingFrom = filtered.length ? (currentPage - 1) * pageSize + 1 : 0;
   const showingTo = Math.min(currentPage * pageSize, filtered.length);
 
+  const selectedReturnTotal = useMemo(() => {
+    if (!invoice) return 0;
+    return (invoice.items || []).reduce((s: number, it: any) => {
+      const qty = Number(returnQty[it.id] || 0);
+      if (qty <= 0) return s;
+      const unitDisc = it.qty > 0 ? Number(it.discount || 0) / it.qty : 0;
+      return s + qty * Number(it.price || 0) - unitDisc * qty;
+    }, 0);
+  }, [invoice, returnQty]);
+
   async function onSearch(e: FormEvent) {
     e.preventDefault();
     setPage(1);
     if (!invoiceNo.trim()) return;
     try {
       const { data } = await api.get(`/pos/invoice/${invoiceNo.trim()}`);
-      setInvoice(data.data);
+      const inv = data.data;
+      setInvoice(inv);
+      const qtyMap: Record<number, number> = {};
+      for (const it of inv.items || []) {
+        qtyMap[it.id] = Number(it.remainingQty ?? it.qty ?? 0) > 0 ? 0 : 0;
+      }
+      setReturnQty(qtyMap);
       setMsg("");
+      setError("");
     } catch {
       setInvoice(null);
+      setError("Invoice not found");
     }
   }
 
@@ -982,27 +1010,47 @@ export function ReturnHistory() {
     setFromDate("");
     setToDate("");
     setInvoice(null);
+    setReturnQty({});
     setPage(1);
     load();
   }
 
-  async function processReturn() {
+  function setAllRemaining() {
     if (!invoice) return;
+    const next: Record<number, number> = {};
+    for (const it of invoice.items || []) {
+      next[it.id] = Number(it.remainingQty ?? it.qty ?? 0);
+    }
+    setReturnQty(next);
+  }
+
+  async function processReturn(mode: "return" | "exchange") {
+    if (!invoice) return;
+    const items = (invoice.items || [])
+      .map((i: any) => ({
+        id: i.id,
+        variantId: i.variantId,
+        returnQuantity: Number(returnQty[i.id] || 0),
+        price: i.price,
+        discount: i.qty > 0 ? (Number(i.discount || 0) / i.qty) * Number(returnQty[i.id] || 0) : 0,
+      }))
+      .filter((i: any) => i.returnQuantity > 0);
+    if (!items.length) {
+      setError("Select at least one item quantity to return");
+      return;
+    }
     try {
       const { data } = await api.post("/pos/return", {
         invoiceNo: invoice.invoiceNo,
-        items: invoice.items.map((i: any) => ({
-          id: i.id,
-          variantId: i.variantId,
-          returnQuantity: i.qty,
-          price: i.price,
-          discount: i.discount,
-        })),
+        items,
+        note: mode === "exchange" ? "Exchange" : undefined,
       });
       if (!data.success) throw new Error(data.message);
-      setMsg("Return processed");
+      setMsg(mode === "exchange" ? "Return processed — open POS to sell replacement" : "Return processed");
       setInvoice(null);
+      setReturnQty({});
       load();
+      if (mode === "exchange") navigate("/pos");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Return failed");
     }
@@ -1056,12 +1104,16 @@ export function ReturnHistory() {
           <div>
             <label className="text-xs font-semibold text-gray-600">Invoice Number</label>
             <div className="relative mt-1">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={14} className="input-icon" />
               <input
-                className="input pl-9"
+                data-page-search
+                className="input has-icon"
                 placeholder="Search Invoice... (F)"
                 value={invoiceNo}
-                onChange={(e) => setInvoiceNo(e.target.value)}
+                onChange={(e) => {
+                  setInvoiceNo(e.target.value);
+                  setPage(1);
+                }}
               />
             </div>
           </div>
@@ -1088,18 +1140,77 @@ export function ReturnHistory() {
       </form>
 
       {invoice && (
-        <div className="bg-white border border-red-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm">
-            Process return for <strong>{invoice.invoiceNo}</strong> ({invoice.customer?.name || "Guest"}) —{" "}
-            <strong className="text-red-600">{lkr(invoice.total)}</strong>
+        <div className="bg-white border border-red-200 rounded-xl p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm">
+              Return / exchange for <strong>{invoice.invoiceNo}</strong> ({invoice.customer?.name || "Guest"}) — invoice{" "}
+              <strong className="text-red-600">{lkr(invoice.total)}</strong>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn btn-muted" onClick={setAllRemaining}>
+                Select all remaining
+              </button>
+              <button className="btn btn-muted" onClick={() => { setInvoice(null); setReturnQty({}); }}>
+                Cancel
+              </button>
+              <button
+                className="h-10 px-4 rounded-lg border border-amber-500 text-amber-700 hover:bg-amber-50 font-semibold"
+                onClick={() => processReturn("exchange")}
+              >
+                Exchange → POS
+              </button>
+              <button className="h-10 px-4 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold" onClick={() => processReturn("return")}>
+                Process Return ({lkr(selectedReturnTotal)})
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button className="btn btn-muted" onClick={() => setInvoice(null)}>
-              Cancel
-            </button>
-            <button className="h-10 px-4 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold" onClick={processReturn}>
-              Process Return
-            </button>
+          <div className="overflow-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-red-50 text-left">
+                  <th className="px-3 py-2">Item</th>
+                  <th className="px-3 py-2">Sold</th>
+                  <th className="px-3 py-2">Already returned</th>
+                  <th className="px-3 py-2">Remaining</th>
+                  <th className="px-3 py-2">Return qty</th>
+                  <th className="px-3 py-2 text-right">Line refund</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(invoice.items || []).map((it: any) => {
+                  const remaining = Number(it.remainingQty ?? it.qty ?? 0);
+                  const qty = Math.min(remaining, Math.max(0, Number(returnQty[it.id] || 0)));
+                  const unitDisc = it.qty > 0 ? Number(it.discount || 0) / it.qty : 0;
+                  const line = qty * Number(it.price || 0) - unitDisc * qty;
+                  return (
+                    <tr key={it.id} className="border-t border-gray-100">
+                      <td className="px-3 py-2 font-medium">{itemDisplayName(it)}</td>
+                      <td className="px-3 py-2">{it.qty}</td>
+                      <td className="px-3 py-2">{it.returnedQty ?? 0}</td>
+                      <td className="px-3 py-2">{remaining}</td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          min={0}
+                          max={remaining}
+                          className="input w-24"
+                          disabled={remaining <= 0}
+                          value={returnQty[it.id] ?? 0}
+                          onChange={(e) => {
+                            const v = Math.min(remaining, Math.max(0, Number(e.target.value) || 0));
+                            setReturnQty((prev) => ({ ...prev, [it.id]: v }));
+                          }}
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold text-red-600">{lkr(line)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="text-xs text-gray-500">
+            Tip: set return qty per line for partial returns. Exchange processes the return then opens POS for the replacement sale.
           </div>
         </div>
       )}

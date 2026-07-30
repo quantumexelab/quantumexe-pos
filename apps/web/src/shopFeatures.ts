@@ -5,11 +5,13 @@ export type NavModuleId =
   | "sales"
   | "quotation"
   | "stock"
+  | "storeRelease"
   | "grn"
   | "products"
   | "supplier"
   | "customer"
   | "users"
+  | "employee"
   | "accounts"
   | "reports"
   | "settings"
@@ -20,6 +22,8 @@ export type ShopFeatures = {
   quickSaleMode?: boolean;
   expireStockEmphasis?: boolean;
   showBrand?: boolean;
+  /** Master-controlled fingerprint punch; manual entry always available. */
+  fingerprintAttendance?: boolean;
 };
 
 export const SHOP_TYPE_OPTIONS = [
@@ -40,11 +44,13 @@ const DEFAULT_MODULES: NavModuleId[] = [
   "sales",
   "quotation",
   "stock",
+  "storeRelease",
   "grn",
   "products",
   "supplier",
   "customer",
   "users",
+  "employee",
   "accounts",
   "reports",
   "settings",

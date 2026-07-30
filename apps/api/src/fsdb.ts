@@ -36,6 +36,8 @@ type ModelName =
   | "CashMovement"
   | "PosSession"
   | "Setting"
+  | "StockRelease"
+  | "StockReleaseItem"
   | "License";
 
 type RelationDef =
@@ -50,7 +52,8 @@ const MODEL_DEFAULTS: Partial<Record<ModelName, Record<string, unknown>>> = {
   ProductType: { createdAt: () => new Date() },
   Product: { active: true, createdAt: () => new Date() },
   ProductVariant: { price: 0, cost: 0 },
-  Stock: { quantity: 0, lowThreshold: 5 },
+  Stock: { quantity: 0, lowThreshold: 5, location: "store" },
+  StockRelease: { createdAt: () => new Date() },
   Company: { createdAt: () => new Date() },
   Supplier: { createdAt: () => new Date() },
   Customer: { createdAt: () => new Date() },
@@ -76,6 +79,7 @@ const MODEL_DEFAULTS: Partial<Record<ModelName, Record<string, unknown>>> = {
   },
   QuotationItem: { discount: 0 },
   Employee: { salaryBase: 0, active: true, createdAt: () => new Date() },
+  Attendance: { method: "manual" },
   Salary: { createdAt: () => new Date() },
   CashMovement: { createdAt: () => new Date() },
   PosSession: { counterName: "Counter 1", openingBalance: 0, openedAt: () => new Date() },
@@ -86,16 +90,14 @@ const UNIQUE_FIELDS: Partial<Record<ModelName, string[]>> = {
   Role: ["name"],
   Status: ["name"],
   User: ["contact"],
-  Category: ["name"],
-  Brand: ["name"],
-  Unit: ["name"],
-  ProductType: ["name"],
+  // Category / Brand / Unit / ProductType uniqueness is enforced in routes (case-insensitive, per-shop)
   Product: ["code"],
   ProductVariant: ["barcode"],
   DamageReason: ["name"],
   ReturnStatus: ["name"],
   Company: ["name"],
   Invoice: ["invoiceNo"],
+  StockRelease: ["releaseNo"],
   Quotation: ["quoteNo"],
   Setting: ["key"],
   License: ["licenseKey"],
@@ -112,6 +114,7 @@ const RELATIONS: Partial<Record<ModelName, Record<string, RelationDef>>> = {
     salaries: { kind: "one-to-many", model: "Salary", fk: "userId" },
     cashMoves: { kind: "one-to-many", model: "CashMovement", fk: "userId" },
     sessions: { kind: "one-to-many", model: "PosSession", fk: "userId" },
+    stockReleases: { kind: "one-to-many", model: "StockRelease", fk: "userId" },
   },
   Customer: {
     status: { kind: "many-to-one", model: "Status", fk: "statusId" },
@@ -136,6 +139,7 @@ const RELATIONS: Partial<Record<ModelName, Record<string, RelationDef>>> = {
   ProductVariant: {
     product: { kind: "many-to-one", model: "Product", fk: "productId" },
     stocks: { kind: "one-to-many", model: "Stock", fk: "variantId" },
+    stockReleaseItems: { kind: "one-to-many", model: "StockReleaseItem", fk: "variantId" },
   },
   Stock: {
     variant: { kind: "many-to-one", model: "ProductVariant", fk: "variantId" },
@@ -201,6 +205,14 @@ const RELATIONS: Partial<Record<ModelName, Record<string, RelationDef>>> = {
   PosSession: {
     user: { kind: "many-to-one", model: "User", fk: "userId" },
   },
+  StockRelease: {
+    user: { kind: "many-to-one", model: "User", fk: "userId" },
+    items: { kind: "one-to-many", model: "StockReleaseItem", fk: "releaseId" },
+  },
+  StockReleaseItem: {
+    release: { kind: "many-to-one", model: "StockRelease", fk: "releaseId" },
+    variant: { kind: "many-to-one", model: "ProductVariant", fk: "variantId" },
+  },
 };
 
 const CASCADE_DELETE: Partial<Record<ModelName, ModelName[]>> = {
@@ -210,6 +222,7 @@ const CASCADE_DELETE: Partial<Record<ModelName, ModelName[]>> = {
   Quotation: ["QuotationItem"],
   Grn: ["GrnItem"],
   Return: ["ReturnItem"],
+  StockRelease: ["StockReleaseItem"],
   Stock: ["DamagedStock"],
 };
 
@@ -839,6 +852,8 @@ class FirestoreClient {
   posSession = new ModelDelegate("PosSession", this);
   setting = new ModelDelegate("Setting", this);
   license = new ModelDelegate("License", this);
+  stockRelease = new ModelDelegate("StockRelease", this);
+  stockReleaseItem = new ModelDelegate("StockReleaseItem", this);
 
   getContext() {
     return this.context;
@@ -879,6 +894,8 @@ class FirestoreClient {
       PosSession: this.posSession,
       Setting: this.setting,
       License: this.license,
+      StockRelease: this.stockRelease,
+      StockReleaseItem: this.stockReleaseItem,
     };
     return map[model];
   }
@@ -924,6 +941,8 @@ const ALL_MODELS: ModelName[] = [
   "Employee",
   "CashMovement",
   "PosSession",
+  "StockReleaseItem",
+  "StockRelease",
   "Customer",
   "Supplier",
   "Bank",

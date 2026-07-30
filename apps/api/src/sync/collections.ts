@@ -32,6 +32,8 @@ export const SYNC_COLLECTIONS = [
   "Salary",
   "CashMovement",
   "PosSession",
+  "StockRelease",
+  "StockReleaseItem",
   "DamagedStock",
 ] as const;
 
@@ -71,6 +73,8 @@ export const PRISMA_DELEGATE: Record<SyncCollection, string> = {
   Salary: "salary",
   CashMovement: "cashMovement",
   PosSession: "posSession",
+  StockRelease: "stockRelease",
+  StockReleaseItem: "stockReleaseItem",
   DamagedStock: "damagedStock",
 };
 

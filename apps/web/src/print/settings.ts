@@ -14,6 +14,7 @@ export type PrintSettings = {
   show_qr: string;
   store_logo: string;
   bill_printer: string;
+  label_printer: string;
   print_date: string;
   print_time: string;
   merchant_qr: string;
@@ -32,7 +33,8 @@ const PRINT_DEFAULTS: PrintSettings = {
   show_barcode: "1",
   show_qr: "0",
   store_logo: "",
-  bill_printer: "thermal",
+  bill_printer: "xp-q80t",
+  label_printer: "xp-361",
   print_date: "1",
   print_time: "1",
   merchant_qr: "",
@@ -94,17 +96,41 @@ export function itemDisplayName(it: {
   variant?: {
     name?: string;
     size?: string | null;
+    color?: string | null;
     barcode?: string | null;
     product?: { name?: string; code?: string };
   };
   displayName?: string;
   productName?: string;
+  size?: string | null;
+  color?: string | null;
 }): string {
   const product = it.variant?.product?.name || it.productName || it.displayName || "Item";
-  const size = it.variant?.size?.trim();
+  const size = (it.variant?.size || it.size)?.trim();
+  const color = (it.variant?.color || it.color)?.trim();
   const vname = it.variant?.name?.trim();
   const parts = [product];
   if (size) parts.push(`Size ${size}`);
-  else if (vname && vname.toLowerCase() !== "default" && vname !== product) parts.push(vname);
+  if (color) parts.push(color);
+  if (!size && !color && vname && vname.toLowerCase() !== "default" && vname !== product) parts.push(vname);
   return parts.join(" · ");
+}
+
+export function isThermalReceiptPrinter(billPrinter: string | undefined) {
+  const v = (billPrinter || "xp-q80t").toLowerCase();
+  return v.includes("thermal") || v.includes("xp-q80") || v === "xp-q80t" || v === "";
+}
+
+export function receiptPrinterLabel(billPrinter: string | undefined) {
+  const v = (billPrinter || "xp-q80t").toLowerCase();
+  if (v.includes("a4")) return "A4 Printer";
+  if (v.includes("xp-q80") || v === "xp-q80t") return "Xprinter XP-Q80T (80mm)";
+  if (v.includes("thermal")) return "Thermal Receipt Printer (80mm)";
+  return "Xprinter XP-Q80T (80mm)";
+}
+
+export function labelPrinterLabel(labelPrinter: string | undefined) {
+  const v = (labelPrinter || "xp-361").toLowerCase();
+  if (v.includes("361") || v === "xp-361") return "Xprinter XP-361 (80mm)";
+  return "Xprinter XP-361 (80mm)";
 }

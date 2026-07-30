@@ -2,6 +2,16 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { ErrorBox, PageHeader } from "../components/ui";
 import { printReceipt } from "../print/receipt";
+import { publishCustomerDisplay } from "../customerDisplay/channel";
+import {
+  connectPoleDisplay,
+  disconnectPoleDisplay,
+  poleDisplayConnected,
+  poleDisplaySupported,
+  showPoleCart,
+  showPoleIdle,
+  showPoleThankYou,
+} from "../customerDisplay/pole";
 
 type Product = {
   id: number;
@@ -11,6 +21,7 @@ type Product = {
   barcode?: string;
   stockId?: number;
   size?: string | null;
+  color?: string | null;
 };
 
 type CartItem = Product & { qty: number; discount: number };
@@ -27,20 +38,64 @@ export default function POS() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [autoPrint, setAutoPrint] = useState(true);
+  const [shopName, setShopName] = useState("QUANTUMEXE POS");
+  const [currency, setCurrency] = useState("Rs.");
+  const [poleOn, setPoleOn] = useState(false);
+  const [displayEnabled, setDisplayEnabled] = useState(true);
 
   useEffect(() => {
-    api.get("/stock/all-variations", { params: { hasStock: true, limit: 200 } }).then((r) => {
+    api.get("/stock/all-variations", { params: { hasStock: true, limit: 200, location: "shop" } }).then((r) => {
       setProducts(r.data.data || []);
     });
     api.get("/customers/all", { params: { limit: 100 } }).then((r) => {
       setCustomers((r.data.data?.rows || []).map((c: { id: number; name: string }) => ({ id: c.id, name: c.name })));
     });
+    api.get("/settings").then((r) => {
+      const map = (r.data?.data || {}) as Record<string, string>;
+      setShopName(map.shop_display_name || map.shop_name || "QUANTUMEXE POS");
+      setCurrency(map.currency || "Rs.");
+      if (map.auto_print_receipt === "0") setAutoPrint(false);
+      setDisplayEnabled(!(map.customer_display_enabled === "0" || map.customer_display_enabled === "false"));
+    }).catch(() => undefined);
+    return () => {
+      void showPoleIdle(shopName).catch(() => undefined);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const subtotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.qty, 0), [cart]);
   const discount = useMemo(() => cart.reduce((s, i) => s + i.discount, 0), [cart]);
   const total = Math.max(0, subtotal - discount);
   const pay = paidAmount === "" ? total : Number(paidAmount);
+
+  useEffect(() => {
+    if (!displayEnabled) return;
+    const items = cart.map((i) => ({
+      name: i.displayName,
+      qty: i.qty,
+      price: i.price,
+      lineTotal: Math.max(0, i.price * i.qty - i.discount),
+    }));
+    publishCustomerDisplay({
+      status: cart.length ? "cart" : "idle",
+      shopName,
+      items,
+      subtotal,
+      discount,
+      total,
+      paid: undefined,
+      change: undefined,
+    });
+    const last = cart[cart.length - 1];
+    if (poleOn) {
+      void showPoleCart({
+        itemName: last?.displayName,
+        itemPrice: last?.price,
+        total,
+        currency,
+      }).catch(() => undefined);
+    }
+  }, [cart, subtotal, discount, total, shopName, poleOn, currency, displayEnabled]);
 
   function addToCart(p: Product) {
     setCart((prev) => {
@@ -65,6 +120,23 @@ export default function POS() {
     }
   }
 
+  async function togglePole() {
+    try {
+      if (poleOn) {
+        await disconnectPoleDisplay();
+        setPoleOn(false);
+        setMessage("Pole display disconnected");
+        return;
+      }
+      await connectPoleDisplay();
+      setPoleOn(true);
+      setMessage("Pole display (CD-7220) connected");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Pole display connection failed");
+      setPoleOn(false);
+    }
+  }
+
   async function checkout() {
     if (!cart.length) return setError("Cart is empty");
     setLoading(true);
@@ -85,6 +157,22 @@ export default function POS() {
       });
       if (!data.success) throw new Error(data.message);
       const inv = data.data;
+      const change = Math.max(0, pay - Number(inv.total || total));
+      if (displayEnabled) {
+        publishCustomerDisplay({
+          status: "thankyou",
+          shopName,
+          items: [],
+          subtotal: 0,
+          discount: 0,
+          total: Number(inv.total || total),
+          paid: pay,
+          change,
+        });
+      }
+      if (poleOn || poleDisplayConnected()) {
+        await showPoleThankYou(Number(inv.total || total), currency).catch(() => undefined);
+      }
       setMessage(`Invoice ${inv.invoiceNo} created — Rs. ${inv.total}`);
       setCart([]);
       setPaidAmount("");
@@ -95,8 +183,14 @@ export default function POS() {
           console.warn("Print failed", pe);
         }
       }
-      const refreshed = await api.get("/stock/all-variations", { params: { hasStock: true, limit: 200 } });
+      const refreshed = await api.get("/stock/all-variations", { params: { hasStock: true, limit: 200, location: "shop" } });
       setProducts(refreshed.data.data || []);
+      setTimeout(() => {
+        if (displayEnabled) {
+          publishCustomerDisplay({ status: "idle", shopName, items: [], subtotal: 0, discount: 0, total: 0 });
+        }
+        if (poleOn) void showPoleIdle(shopName).catch(() => undefined);
+      }, 8000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Checkout failed");
     } finally {
@@ -106,7 +200,7 @@ export default function POS() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Point of Sale" subtitle="Scan barcode or pick products to sell" />
+      <PageHeader title="Point of Sale" subtitle="Sell from shop floor stock (release from store first)" />
       {error && <ErrorBox text={error} />}
       {message && (
         <div className="mb-3 text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
@@ -118,8 +212,8 @@ export default function POS() {
         <div className="xl:col-span-2 space-y-4">
           <form onSubmit={scanBarcode} className="card flex gap-2">
             <input
-              className="input"
-              placeholder="Scan / enter barcode"
+              className="input flex-1"
+              placeholder="Scan barcode…"
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
               autoFocus
@@ -128,130 +222,98 @@ export default function POS() {
               Add
             </button>
           </form>
-          <div className="card">
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[520px] overflow-auto">
-              {products.map((p) => (
-                <button
-                  key={p.id}
-                  className="text-left border border-gray-200 rounded-xl p-3 hover:border-green-500 hover:bg-green-50 transition"
-                  onClick={() => addToCart(p)}
-                >
-                  <div className="font-semibold text-sm">{p.displayName}</div>
-                  <div className="text-xs text-gray-500">Qty: {p.quantity}</div>
-                  <div className="mt-2 font-bold text-green-700">Rs. {p.price}</div>
-                </button>
-              ))}
-            </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {products.map((p) => (
+              <button key={p.id} type="button" className="card text-left hover:border-emerald-400 transition" onClick={() => addToCart(p)}>
+                <div className="font-semibold text-sm">{p.displayName}</div>
+                <div className="text-xs text-gray-500 mt-1">{p.barcode || "-"}</div>
+                <div className="mt-2 flex items-center justify-between text-sm">
+                  <span className="font-bold">Rs. {p.price}</span>
+                  <span className="text-gray-500">Qty {p.quantity}</span>
+                </div>
+              </button>
+            ))}
+            {!products.length && <div className="text-sm text-gray-500 col-span-full">No stocked products</div>}
           </div>
         </div>
 
-        <div className="card space-y-3">
-          <div className="font-semibold">Cart</div>
+        <div className="card space-y-3 h-fit">
+          <div className="font-bold">Cart</div>
           <div className="space-y-2 max-h-72 overflow-auto">
             {cart.map((item) => (
               <div key={item.id} className="border border-gray-100 rounded-lg p-2">
-                <div className="flex justify-between gap-2">
-                  <div className="text-sm font-medium">{item.displayName}</div>
+                <div className="text-sm font-medium">{item.displayName}</div>
+                <div className="mt-2 flex items-center gap-2 text-sm">
                   <button
-                    className="text-xs text-red-500"
-                    onClick={() => setCart((c) => c.filter((x) => x.id !== item.id))}
+                    type="button"
+                    className="btn btn-muted px-2 py-1"
+                    onClick={() => setCart((prev) => prev.map((x) => (x.id === item.id ? { ...x, qty: Math.max(1, x.qty - 1) } : x)))}
                   >
+                    -
+                  </button>
+                  <span>{item.qty}</span>
+                  <button
+                    type="button"
+                    className="btn btn-muted px-2 py-1"
+                    onClick={() =>
+                      setCart((prev) =>
+                        prev.map((x) => (x.id === item.id ? { ...x, qty: Math.min(item.quantity, x.qty + 1) } : x))
+                      )
+                    }
+                  >
+                    +
+                  </button>
+                  <span className="ml-auto font-semibold">Rs. {(item.price * item.qty - item.discount).toFixed(2)}</span>
+                  <button type="button" className="text-red-600 text-xs" onClick={() => setCart((prev) => prev.filter((x) => x.id !== item.id))}>
                     Remove
                   </button>
                 </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="number"
-                    min={1}
-                    max={item.quantity}
-                    className="input w-20"
-                    value={item.qty}
-                    onChange={(e) =>
-                      setCart((c) => c.map((x) => (x.id === item.id ? { ...x, qty: Number(e.target.value) } : x)))
-                    }
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    className="input"
-                    placeholder="Discount"
-                    value={item.discount}
-                    onChange={(e) =>
-                      setCart((c) =>
-                        c.map((x) => (x.id === item.id ? { ...x, discount: Number(e.target.value) } : x))
-                      )
-                    }
-                  />
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Line: Rs. {(item.price * item.qty - item.discount).toFixed(2)}
-                </div>
               </div>
             ))}
-            {!cart.length && <div className="text-sm text-gray-400">No items</div>}
+            {!cart.length && <div className="text-sm text-gray-500">Cart empty</div>}
           </div>
 
-          <select
-            className="input"
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">Walking Customer</option>
+          <div className="text-sm space-y-1 border-t border-gray-100 pt-2">
+            <div className="flex justify-between"><span>Subtotal</span><span>Rs. {subtotal.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span>Discount</span><span>Rs. {discount.toFixed(2)}</span></div>
+            <div className="flex justify-between font-bold text-base"><span>Total</span><span>Rs. {total.toFixed(2)}</span></div>
+          </div>
+
+          <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value ? Number(e.target.value) : "")}>
+            <option value="">Walk-in customer</option>
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
           </select>
-
-          <div className="grid grid-cols-3 gap-2">
-            {["Cash", "Card", "Digital/QR"].map((t) => (
-              <button
-                key={t}
-                className={`btn text-sm ${paymentType === t ? "btn-primary" : "btn-muted"}`}
-                onClick={() => setPaymentType(t)}
-                type="button"
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-
+          <select className="input" value={paymentType} onChange={(e) => setPaymentType(e.target.value)}>
+            <option>Cash</option>
+            <option>Card</option>
+            <option>Bank</option>
+          </select>
           <input
             className="input"
             type="number"
-            min={0}
-            placeholder={`Paid (default ${total.toFixed(2)})`}
+            placeholder="Paid amount"
             value={paidAmount}
             onChange={(e) => setPaidAmount(e.target.value === "" ? "" : Number(e.target.value))}
           />
 
-          <div className="text-sm space-y-1 border-t pt-3">
-            <div className="flex justify-between">
-              <span>Subtotal</span>
-              <span>Rs. {subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Discount</span>
-              <span>Rs. {discount.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between font-bold text-lg">
-              <span>Total</span>
-              <span>Rs. {total.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-xs text-gray-500">
-              <span>Balance</span>
-              <span>Rs. {Math.max(0, pay - total).toFixed(2)}</span>
-            </div>
-          </div>
-
-          <label className="inline-flex items-center gap-2 text-sm text-gray-700 select-none">
+          <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={autoPrint} onChange={(e) => setAutoPrint(e.target.checked)} />
-            Auto-print receipt
+            Auto print receipt
           </label>
 
-          <button className="btn btn-primary w-full" disabled={loading} onClick={() => void checkout()}>
-            {loading ? "Processing..." : "Complete Sale"}
+          {poleDisplaySupported() && (
+            <button type="button" className={`btn ${poleOn ? "btn-primary" : "btn-muted"} w-full`} onClick={togglePole}>
+              {poleOn ? "Disconnect pole display" : "Connect CD-7220 pole display"}
+            </button>
+          )}
+
+          <button className="btn btn-primary w-full" disabled={loading} onClick={checkout}>
+            {loading ? "Processing…" : "Checkout"}
           </button>
         </div>
       </div>
