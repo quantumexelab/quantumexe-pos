@@ -424,7 +424,7 @@ export default function SettingsPage() {
                 <label className="border-2 border-dashed border-gray-200 rounded-xl p-6 grid place-items-center text-center cursor-pointer hover:bg-gray-50">
                   <Upload size={22} className="text-gray-400 mb-2" />
                   <div className="text-sm font-semibold text-gray-700">Click to upload logo</div>
-                  <div className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</div>
+                  <div className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB — auto-resized so cloud save keeps it</div>
                   <input
                     type="file"
                     accept="image/png,image/jpeg"
