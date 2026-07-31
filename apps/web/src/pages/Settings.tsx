@@ -11,6 +11,7 @@ import api from "../api";
 import { ErrorBox } from "../components/ui";
 import ConnectionCenter from "../components/ConnectionCenter";
 import { APP_VERSION } from "../version";
+import { useI18n } from "../i18n";
 import { openCustomerDisplayWindow } from "../customerDisplay/channel";
 import {
   connectPoleDisplay,
@@ -36,6 +37,7 @@ const DEFAULTS: Record<string, string> = {
   quick_sale_mode: "0",
   customer_display_enabled: "1",
   print_language: "English",
+  ui_language: "en",
   bill_printer: "xp-q80t",
   label_printer: "xp-361",
   receipt_header: "WELCOME TO OUR STORE",
@@ -85,6 +87,7 @@ function Toggle({
 }
 
 export default function SettingsPage() {
+  const { t, lang, setLang, options } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const initialTab: Tab =
@@ -129,6 +132,10 @@ export default function SettingsPage() {
       const merged = { ...DEFAULTS, ...(s.data.data || {}), version: APP_VERSION };
       setSettings(merged);
       setLicense(l.data.data || null);
+      const savedLang = String(merged.ui_language || "").trim();
+      if (savedLang === "en" || savedLang === "si" || savedLang === "ta") {
+        setLang(savedLang);
+      }
     } catch (e: any) {
       setError(e.message || "Failed to load settings");
     } finally {
@@ -150,16 +157,26 @@ export default function SettingsPage() {
     setError("");
     setMsg("");
     try {
-      await api.put("/settings", { ...settings, version: APP_VERSION });
-      setMsg("Settings saved");
+      const payload = { ...settings, ui_language: lang, version: APP_VERSION };
+      await api.put("/settings", payload);
+      setSettings((s) => ({ ...s, ui_language: lang }));
+      setMsg(t("settings.saved"));
     } catch (e: any) {
       setError(e.message || "Failed to save");
+    }
+  }
+
+  function onUiLanguageChange(next: string) {
+    if (next === "en" || next === "si" || next === "ta") {
+      setLang(next);
+      setField("ui_language", next);
     }
   }
 
   function resetDefaults() {
     if (!confirm("Reset all settings to defaults?")) return;
     setSettings({ ...DEFAULTS });
+    setLang("en");
   }
 
   async function refreshLicense() {
@@ -184,20 +201,20 @@ export default function SettingsPage() {
   }
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "connection", label: "Connection" },
-    { id: "license", label: "License Status" },
-    { id: "print", label: "Print Settings" },
-    { id: "pos", label: "POS Settings" },
-    { id: "display", label: "Customer Display" },
-    { id: "about", label: "About Software" },
+    { id: "connection", label: t("settings.tab.connection") },
+    { id: "license", label: t("settings.tab.license") },
+    { id: "print", label: t("settings.tab.print") },
+    { id: "pos", label: t("settings.tab.pos") },
+    { id: "display", label: t("settings.tab.display") },
+    { id: "about", label: t("settings.tab.about") },
   ];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">System Settings</h1>
-          <p className="text-sm text-gray-500 mt-1">Configure your POS system, print settings, and preferences.</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("settings.title")}</h1>
+          <p className="text-sm text-gray-500 mt-1">{t("lang.appLanguageHint")}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -208,27 +225,46 @@ export default function SettingsPage() {
             <RotateCcw size={16} /> Reset Defaults
           </button>
           <button type="button" onClick={save} className="btn btn-primary h-10 px-4">
-            Save Changes
+            {t("common.save")}
           </button>
         </div>
+      </div>
+
+      <div className="bg-white border border-emerald-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-bold text-gray-900">{t("lang.appLanguage")}</div>
+          <p className="text-xs text-gray-500 mt-0.5">{t("lang.appLanguageHint")}</p>
+        </div>
+        <select
+          className="input w-auto min-w-[10rem] h-10"
+          value={lang}
+          onChange={(e) => onUiLanguageChange(e.target.value)}
+          aria-label={t("lang.label")}
+        >
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.native}
+            </option>
+          ))}
+        </select>
       </div>
 
       {error && <ErrorBox text={error} />}
       {msg && <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">{msg}</div>}
 
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-2">
-        {tabs.map((t) => (
+        {tabs.map((tabItem) => (
           <button
-            key={t.id}
+            key={tabItem.id}
             type="button"
-            onClick={() => selectTab(t.id)}
+            onClick={() => selectTab(tabItem.id)}
             className={`px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 -mb-[9px] ${
-              tab === t.id
+              tab === tabItem.id
                 ? "text-emerald-700 border-emerald-600"
                 : "text-gray-600 border-transparent hover:text-gray-800"
             }`}
           >
-            {t.label}
+            {tabItem.label}
           </button>
         ))}
       </div>
@@ -369,12 +405,13 @@ export default function SettingsPage() {
               <div className="text-sm font-bold text-gray-800">Print Configuration</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-gray-600">Language</label>
+                  <label className="text-xs font-semibold text-gray-600">{t("settings.printLanguage")}</label>
                   <select className="input mt-1" value={settings.print_language} onChange={(e) => setField("print_language", e.target.value)}>
                     <option>English</option>
                     <option>Sinhala</option>
                     <option>Tamil</option>
                   </select>
+                  <div className="text-[11px] text-gray-500 mt-1">{t("settings.printLanguageHint")}</div>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-600">Bill / Receipt Printer</label>

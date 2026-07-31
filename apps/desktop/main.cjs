@@ -110,6 +110,7 @@ function startApi() {
     NODE_PATH: nodeModules,
     // Don't inherit a broken sync config from the build machine unless desktop.env says so
     SYNC_TO_FIRESTORE: process.env.SYNC_TO_FIRESTORE || "0",
+    BACKUP_DIR: path.join(app.getPath("userData"), "backups"),
   };
 
   const envFile = path.join(root, "desktop.env");

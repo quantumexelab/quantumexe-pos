@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import api, { auth } from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
+import { IncludeArchivesSearch } from "../components/IncludeArchivesSearch";
 import { BrandLogo } from "../components/BrandLogo";
 import {
   publishCustomerDisplay,
@@ -2204,6 +2205,9 @@ export function ManageCustomer() {
               }}
             />
           </div>
+        </div>
+        <div className="px-4 pb-3">
+          <IncludeArchivesSearch kinds={["customer"]} query={search} />
         </div>
         <div className="overflow-auto">
           <table className="w-full border-collapse text-sm">

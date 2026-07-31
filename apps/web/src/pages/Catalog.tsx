@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag } from "lucide-react";
 import api from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
+import { IncludeArchivesSearch } from "../components/IncludeArchivesSearch";
 import { printProductLabels } from "../print/label";
 import { exportTable } from "../export/tableExport";
 
@@ -225,6 +226,7 @@ export function ProductList() {
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
+        <IncludeArchivesSearch className="mt-3" kinds={["product"]} query={query} />
       </form>
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">

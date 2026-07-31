@@ -245,6 +245,21 @@ router.post("/master/shops/:shopId/fingerprint", requireAuth, requireRoles("Mast
   }
 });
 
+router.post("/master/shops/:shopId/retention", requireAuth, requireRoles("MasterAdmin"), async (req, res) => {
+  try {
+    const months = Number(req.body?.months);
+    const { setShopCloudRetention } = await import("./master/shopTemplates.js");
+    const shop = await setShopCloudRetention(String(req.params.shopId), months);
+    const label =
+      months === 0
+        ? "Cloud retention OFF — keep cloud data forever"
+        : `Cloud retention set to ${months} months`;
+    res.json(ok(toPublicShop(shop), label));
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Retention update failed"));
+  }
+});
+
 router.get("/master/shop-types", requireAuth, requireRoles("MasterAdmin"), async (_req, res) => {
   const { SHOP_TEMPLATES } = await import("./master/shopTemplates.js");
   res.json(

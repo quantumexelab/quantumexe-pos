@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import api from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
+import { IncludeArchivesSearch } from "../components/IncludeArchivesSearch";
 import { printReceipt } from "../print/receipt";
 import { itemDisplayName } from "../print/settings";
 
@@ -341,6 +342,13 @@ export function ManageInvoice() {
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
+        <IncludeArchivesSearch
+          className="mt-3"
+          kinds={["invoice"]}
+          query={invoiceNo}
+          from={fromDate}
+          to={toDate}
+        />
       </form>
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">

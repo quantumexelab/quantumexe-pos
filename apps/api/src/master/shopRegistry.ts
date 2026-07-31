@@ -32,6 +32,11 @@ export type ShopRecord = {
   shopType?: string;
   /** Master toggle: allow fingerprint attendance at this shop. */
   fingerprintAttendance?: boolean;
+  /**
+   * Months of transactional/catalog data to keep in cloud (Firestore).
+   * 0 = retention off (keep forever). Allowed: 0 | 3 | 6 | 12 | 24. Default 12.
+   */
+  cloudRetentionMonths?: number;
 };
 
 const SHOPS_COL = "pos_shops";

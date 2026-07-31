@@ -1778,6 +1778,16 @@ router.put("/settings", requireAuth, async (req, res) => {
 const BACKUP_RETENTION_DAYS = 7;
 
 function backupDirPath() {
+  if (process.env.BACKUP_DIR?.trim()) {
+    const backupDir = path.resolve(process.env.BACKUP_DIR.trim());
+    fs.mkdirSync(backupDir, { recursive: true });
+    return backupDir;
+  }
+  if (process.env.ARCHIVES_DIR?.trim()) {
+    const backupDir = path.resolve(process.env.ARCHIVES_DIR.trim());
+    fs.mkdirSync(backupDir, { recursive: true });
+    return backupDir;
+  }
   const backupDir = process.env.VERCEL
     ? path.join("/tmp", "quantumexe-backups")
     : path.resolve(__dirname, "../../backups");
@@ -1859,21 +1869,86 @@ router.get("/backup/list", requireAuth, async (_req, res) => {
   const files = listBackupFiles();
   const totalSize = files.reduce((s, f) => s + f.size, 0);
   const last = files[0];
+  const {
+    listSqliteArchives,
+    getRetentionStatus,
+    archivesSupported,
+  } = await import("./retention/index.js");
+  const sqliteArchives = listSqliteArchives();
+  const retention = await getRetentionStatus();
   res.json(
     ok({
       files,
+      sqliteArchives,
+      retention,
       summary: {
         total_files: files.length,
         total_size: totalSize,
         total_size_mb: Number((totalSize / (1024 * 1024)).toFixed(2)),
         last_backup_at: last?.created_at || null,
-        status: files.length > 0 ? "Protected" : "No backups",
+        status: files.length > 0 || sqliteArchives.length > 0 ? "Protected" : "No backups",
         retention_days: BACKUP_RETENTION_DAYS,
-        schedule: "Daily at 5:00 PM",
+        schedule: "Daily JSON + monthly SQLite archive",
         auto_backup: true,
+        cloud_retention_months: retention.cloudRetentionMonths,
+        last_cloud_purge_at: retention.lastCloudPurgeAt,
+        archives_supported: archivesSupported(),
+        sqlite_archive_count: sqliteArchives.length,
       },
     })
   );
+});
+
+router.post("/backup/archive", requireAuth, async (req, res) => {
+  try {
+    const kind = String(req.body?.kind || "monthly");
+    const { createMonthlyArchive, createAnnualArchive } = await import("./retention/index.js");
+    const info = kind === "annual" ? await createAnnualArchive() : await createMonthlyArchive();
+    res.json(ok(info, "SQLite archive created"));
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Archive failed"));
+  }
+});
+
+router.post("/backup/purge-cloud", requireAuth, async (_req, res) => {
+  try {
+    const { purgeCloudOlderThanRetention } = await import("./retention/index.js");
+    const result = await purgeCloudOlderThanRetention({ forceArchive: true });
+    res.json(ok(result, result.skipped ? `Purge skipped (${result.reason})` : "Cloud purge completed"));
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Purge failed"));
+  }
+});
+
+router.get("/backup/archives/:kind/:file", requireAuth, async (req, res) => {
+  const kind = String(req.params.kind || "");
+  const file = path.basename(String(req.params.file || ""));
+  if (!["monthly", "annual"].includes(kind) || !/\.sqlite$/i.test(file)) {
+    return res.status(400).json(fail("Invalid archive path"));
+  }
+  const { resolveArchiveDownloadPath } = await import("./retention/index.js");
+  const full = resolveArchiveDownloadPath(`${kind}/${file}`);
+  if (!full) return res.status(404).json(fail("Archive not found", 404));
+  res.download(full, file);
+});
+
+router.get("/archive/search", requireAuth, async (req, res) => {
+  try {
+    const q = String(req.query.q || "");
+    const from = req.query.from ? String(req.query.from) : null;
+    const to = req.query.to ? String(req.query.to) : null;
+    const includeArchives = String(req.query.includeArchives ?? "1") !== "0";
+    const { searchLiveAndArchives } = await import("./retention/index.js");
+    const result = await searchLiveAndArchives({ q, from, to, includeArchives });
+    res.json(ok(result));
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Archive search failed"));
+  }
+});
+
+router.get("/retention/status", requireAuth, async (_req, res) => {
+  const { getRetentionStatus, listSqliteArchives } = await import("./retention/index.js");
+  res.json(ok({ ...(await getRetentionStatus()), archives: listSqliteArchives() }));
 });
 
 router.delete("/backup/:file", requireAuth, async (req, res) => {

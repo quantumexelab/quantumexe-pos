@@ -220,6 +220,9 @@ export async function applyShopTemplate(shop: ShopRecord, shopType: ShopTypeId):
     );
     await upsertSetting("show_brand", features.showBrand ? "1" : "0");
     await upsertSetting("fingerprint_attendance", fingerprintOn ? "1" : "0");
+    const retention =
+      typeof shop.cloudRetentionMonths === "number" ? shop.cloudRetentionMonths : 12;
+    await upsertSetting("cloud_retention_months", String(retention));
     await upsertSetting("shop_name", shop.shopName);
     await upsertSetting("business_name", shop.shopName);
 
@@ -254,6 +257,25 @@ export async function setShopFingerprintAttendance(shopId: string, enabled: bool
     }
     await upsertSetting("features_json", JSON.stringify(features));
     await upsertSetting("fingerprint_attendance", enabled ? "1" : "0");
+  });
+
+  return (await getShop(shopId)) || shop;
+}
+
+export const CLOUD_RETENTION_OPTIONS = [0, 3, 6, 12, 24] as const;
+
+/** Master Admin: set how many months of data to keep in cloud before purge. */
+export async function setShopCloudRetention(shopId: string, months: number): Promise<ShopRecord> {
+  const { updateShop, getShop } = await import("./shopRegistry.js");
+  const n = Number(months);
+  if (!CLOUD_RETENTION_OPTIONS.includes(n as (typeof CLOUD_RETENTION_OPTIONS)[number])) {
+    throw new Error("Retention must be 0 (off), 3, 6, 12, or 24 months");
+  }
+  const shop = await updateShop(shopId, { cloudRetentionMonths: n });
+  await warmShopFirestore(shop.shopId);
+
+  await runWithShop(shop.shopId, async () => {
+    await upsertSetting("cloud_retention_months", String(n));
   });
 
   return (await getShop(shopId)) || shop;

@@ -31,6 +31,8 @@ import api, { auth, syncApi, type SyncStatus } from "../api";
 import { useEffect, useMemo, useState } from "react";
 import { BrandLogo } from "./BrandLogo";
 import { APP_VERSION } from "../version";
+import { useI18n } from "../i18n";
+import { LanguageSelect } from "../i18n/LanguageSelect";
 import {
   modulesForShop,
   parseFeatures,
@@ -41,10 +43,10 @@ import {
   type ShopFeatures,
 } from "../shopFeatures";
 
-type SubItem = { label: string; path: string };
+type SubItem = { labelKey: string; path: string };
 type NavItem = {
   id: string;
-  label: string;
+  labelKey: string;
   path?: string;
   icon: LucideIcon;
   roles: string[];
@@ -54,146 +56,146 @@ type NavItem = {
 const nav: NavItem[] = [
   {
     id: "dashboard",
-    label: "Dashboard",
+    labelKey: "nav.dashboard",
     path: "/dashboard",
     icon: LayoutDashboard,
     roles: ["Admin", "Cashier", "Storekeeper"],
   },
   {
     id: "sales",
-    label: "Sales",
+    labelKey: "nav.sales",
     icon: ShoppingCart,
     roles: ["Admin", "Cashier"],
     children: [
-      { label: "Manage Invoice", path: "/sales/manage-invoice" },
-      { label: "User Sales", path: "/sales/manage-user-sales" },
-      { label: "Return History", path: "/sales/return-history" },
+      { labelKey: "nav.manageInvoice", path: "/sales/manage-invoice" },
+      { labelKey: "nav.userSales", path: "/sales/manage-user-sales" },
+      { labelKey: "nav.returnHistory", path: "/sales/return-history" },
     ],
   },
   {
     id: "quotation",
-    label: "Quotation",
+    labelKey: "nav.quotation",
     icon: FileText,
     roles: ["Admin", "Cashier"],
     children: [
-      { label: "Create Quotation", path: "/quotation/create-quotation" },
-      { label: "Quotation List", path: "/quotation/quotation-list" },
+      { labelKey: "nav.createQuotation", path: "/quotation/create-quotation" },
+      { labelKey: "nav.quotationList", path: "/quotation/quotation-list" },
     ],
   },
   {
     id: "stock",
-    label: "Stock",
+    labelKey: "nav.stock",
     icon: Package,
     roles: ["Admin", "Storekeeper"],
     children: [
-      { label: "Stock List", path: "/stock/stock-list" },
-      { label: "Out of Stock", path: "/stock/out-of-stock" },
-      { label: "Damaged Stock", path: "/stock/damaged-stock" },
-      { label: "Low Stock", path: "/stock/low-stock" },
-      { label: "Expire Stock", path: "/stock/expire-stock" },
+      { labelKey: "nav.stockList", path: "/stock/stock-list" },
+      { labelKey: "nav.outOfStock", path: "/stock/out-of-stock" },
+      { labelKey: "nav.damagedStock", path: "/stock/damaged-stock" },
+      { labelKey: "nav.lowStock", path: "/stock/low-stock" },
+      { labelKey: "nav.expireStock", path: "/stock/expire-stock" },
     ],
   },
   {
     id: "storeRelease",
-    label: "Store Release",
+    labelKey: "nav.storeRelease",
     icon: ArrowRightLeft,
     roles: ["Admin", "Storekeeper"],
     children: [
-      { label: "Release to Shop", path: "/store-release/create" },
-      { label: "Release History", path: "/store-release/list" },
+      { labelKey: "nav.releaseToShop", path: "/store-release/create" },
+      { labelKey: "nav.releaseHistory", path: "/store-release/list" },
     ],
   },
   {
     id: "grn",
-    label: "GRN",
+    labelKey: "nav.grn",
     icon: ClipboardList,
     roles: ["Admin", "Storekeeper"],
     children: [
-      { label: "Create GRN", path: "/grn/create-grn" },
-      { label: "GRN List", path: "/grn/grn-list" },
+      { labelKey: "nav.createGrn", path: "/grn/create-grn" },
+      { labelKey: "nav.grnList", path: "/grn/grn-list" },
     ],
   },
   {
     id: "products",
-    label: "Products",
+    labelKey: "nav.products",
     icon: Boxes,
     roles: ["Admin", "Storekeeper"],
     children: [
-      { label: "Create Product", path: "/products/create-product" },
-      { label: "Product List", path: "/products/product-list" },
-      { label: "Manage Product Type", path: "/products/manage-product-type" },
-      { label: "Manage Unit", path: "/products/manage-unit" },
-      { label: "Manage Category", path: "/products/manage-category" },
-      { label: "Manage Brand", path: "/products/manage-brand" },
-      { label: "Deactivated Products", path: "/products/deactivated-products" },
+      { labelKey: "nav.createProduct", path: "/products/create-product" },
+      { labelKey: "nav.productList", path: "/products/product-list" },
+      { labelKey: "nav.manageProductType", path: "/products/manage-product-type" },
+      { labelKey: "nav.manageUnit", path: "/products/manage-unit" },
+      { labelKey: "nav.manageCategory", path: "/products/manage-category" },
+      { labelKey: "nav.manageBrand", path: "/products/manage-brand" },
+      { labelKey: "nav.deactivatedProducts", path: "/products/deactivated-products" },
     ],
   },
   {
     id: "supplier",
-    label: "Supplier",
+    labelKey: "nav.supplier",
     icon: Truck,
     roles: ["Admin", "Storekeeper"],
     children: [
-      { label: "Create Supplier", path: "/supplier/create-supplier" },
-      { label: "Manage Supplier", path: "/supplier/manage-supplier" },
-      { label: "Manage Company", path: "/supplier/manage-company" },
-      { label: "Supplier GRN History", path: "/supplier/supplier-grn" },
-      { label: "Supplier Payments", path: "/supplier/supplier-payments" },
+      { labelKey: "nav.createSupplier", path: "/supplier/create-supplier" },
+      { labelKey: "nav.manageSupplier", path: "/supplier/manage-supplier" },
+      { labelKey: "nav.manageCompany", path: "/supplier/manage-company" },
+      { labelKey: "nav.supplierGrnHistory", path: "/supplier/supplier-grn" },
+      { labelKey: "nav.supplierPayments", path: "/supplier/supplier-payments" },
     ],
   },
   {
     id: "customer",
-    label: "Manage Customer",
+    labelKey: "nav.customer",
     path: "/customer/manage-customer",
     icon: Users,
     roles: ["Admin", "Cashier"],
   },
   {
     id: "users",
-    label: "Manage User",
+    labelKey: "nav.users",
     path: "/manage-users",
     icon: UserCog,
     roles: ["Admin"],
   },
   {
     id: "employee",
-    label: "Employee",
+    labelKey: "nav.employee",
     icon: UserCheck,
     roles: ["Admin"],
     children: [
-      { label: "Manage Employee", path: "/employee/manage-employee" },
-      { label: "Attendance Mark", path: "/employee/attendance-mark" },
-      { label: "Attendance Report", path: "/employee/attendance-report" },
-      { label: "Employee Salary", path: "/employee/employee-salary" },
+      { labelKey: "nav.manageEmployee", path: "/employee/manage-employee" },
+      { labelKey: "nav.attendanceMark", path: "/employee/attendance-mark" },
+      { labelKey: "nav.attendanceReport", path: "/employee/attendance-report" },
+      { labelKey: "nav.employeeSalary", path: "/employee/employee-salary" },
     ],
   },
   {
     id: "accounts",
-    label: "Accounts",
+    labelKey: "nav.accounts",
     path: "/accounts",
     icon: Wallet,
     roles: ["Admin"],
   },
   {
     id: "reports",
-    label: "Reports",
+    labelKey: "nav.reports",
     icon: BarChart3,
     roles: ["Admin"],
     children: [
-      { label: "Sales & Financial Report", path: "/reports/sales-financial" },
-      { label: "Inventory & Product", path: "/reports/inventory-report" },
+      { labelKey: "nav.salesFinancialReport", path: "/reports/sales-financial" },
+      { labelKey: "nav.inventoryReport", path: "/reports/inventory-report" },
     ],
   },
   {
     id: "settings",
-    label: "Settings",
+    labelKey: "nav.settings",
     path: "/setting",
     icon: Settings,
     roles: ["Admin"],
   },
   {
     id: "backup",
-    label: "Back-Up",
+    labelKey: "nav.backup",
     path: "/back-up",
     icon: DatabaseBackup,
     roles: ["Admin"],
@@ -213,6 +215,7 @@ export default function AppLayout() {
   const user = auth.getUser();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useI18n();
   const [online, setOnline] = useState(navigator.onLine);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -334,7 +337,7 @@ export default function AppLayout() {
             <span className="text-sky-500">EXE</span>
           </div>
           <div className="hidden lg:block text-[10px] text-gray-400 mt-1">
-            Version {APP_VERSION}
+            {t("common.version")} {APP_VERSION}
             {shopType ? ` · ${SHOP_TYPE_LABELS[shopType] || shopType}` : ""}
           </div>
         </div>
@@ -347,11 +350,12 @@ export default function AppLayout() {
             const parentActive = sectionActive(location.pathname, item);
 
             if (!hasChildren && item.path) {
+              const label = t(item.labelKey);
               return (
                 <NavLink
                   key={item.id}
                   to={item.path}
-                  title={item.label}
+                  title={label}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
                       isActive ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-100"
@@ -359,16 +363,17 @@ export default function AppLayout() {
                   }
                 >
                   <Icon size={18} />
-                  <span className="hidden lg:inline">{item.label}</span>
+                  <span className="hidden lg:inline">{label}</span>
                 </NavLink>
               );
             }
 
+            const label = t(item.labelKey);
             return (
               <div key={item.id} className="space-y-1">
                 <button
                   type="button"
-                  title={item.label}
+                  title={label}
                   onClick={() => {
                     toggle(item.id);
                     const first = item.children?.[0];
@@ -379,7 +384,7 @@ export default function AppLayout() {
                   }`}
                 >
                   <Icon size={18} />
-                  <span className="hidden lg:inline flex-1 text-left">{item.label}</span>
+                  <span className="hidden lg:inline flex-1 text-left">{label}</span>
                   <span className="hidden lg:inline opacity-80">
                     {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </span>
@@ -399,7 +404,7 @@ export default function AppLayout() {
                           }`
                         }
                       >
-                        {child.label}
+                        {t(child.labelKey)}
                       </NavLink>
                     ))}
                   </div>
@@ -409,37 +414,50 @@ export default function AppLayout() {
           })}
         </nav>
 
-        <div className="p-3 border-t flex items-center gap-2 shrink-0">
-          <div className="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold">
-            {(user?.name || "A")[0]}
+        <div className="p-3 border-t space-y-2 shrink-0">
+          <div className="hidden lg:flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-gray-500">{t("lang.label")}</span>
+            <LanguageSelect />
           </div>
-          <div className="hidden lg:block flex-1 min-w-0">
-            <div className="text-sm font-semibold truncate">{user?.name}</div>
-            <div className="text-xs text-gray-500">{user?.role}</div>
+          <div className="lg:hidden flex justify-center">
+            <LanguageSelect />
           </div>
-          <button
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-            title="Logout"
-            onClick={() => {
-              auth.logout();
-              navigate("/signin", { replace: true });
-            }}
-          >
-            <LogOut size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold">
+              {(user?.name || "A")[0]}
+            </div>
+            <div className="hidden lg:block flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate">{user?.name}</div>
+              <div className="text-xs text-gray-500">{user?.role}</div>
+            </div>
+            <button
+              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+              title={t("common.logout")}
+              onClick={() => {
+                auth.logout();
+                navigate("/signin", { replace: true });
+              }}
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </aside>
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 shrink-0">
           <div className="flex-1" />
+          <div className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1">
+            <span className="hidden sm:inline text-[11px] font-bold text-emerald-800">{t("lang.label")}</span>
+            <LanguageSelect />
+          </div>
           <button className="btn btn-primary" onClick={() => navigate("/pos")}>
-            POS
+            {t("common.pos")}
           </button>
           <div className={`flex items-center gap-1 text-xs font-semibold ${online ? "text-green-600" : "text-red-500"}`}>
-            {online ? "Online" : (
+            {online ? t("common.online") : (
               <>
-                <WifiOff size={14} /> Offline
+                <WifiOff size={14} /> {t("common.offline")}
               </>
             )}
           </div>
@@ -459,12 +477,12 @@ export default function AppLayout() {
             >
               {syncing ? <RefreshCw size={12} className="animate-spin" /> : <Cloud size={12} />}
               {syncing
-                ? "Syncing…"
+                ? t("common.syncing")
                 : sync.status === "error"
-                  ? "Sync failed"
+                  ? t("common.syncFailed")
                   : sync.lastPushAt
-                    ? `Synced ${new Date(sync.lastPushAt).toLocaleTimeString()}`
-                    : "Cloud sync"}
+                    ? `${t("common.synced")} ${new Date(sync.lastPushAt).toLocaleTimeString()}`
+                    : t("common.cloudSync")}
             </button>
           )}
           {sync && !sync.enabled && sync.mode === "local-sqlite" && (
@@ -478,14 +496,14 @@ export default function AppLayout() {
                   : "Cloud credentials not configured"
               }
             >
-              <Cloud size={12} /> Local only
+              <Cloud size={12} /> {t("common.localOnly")}
             </button>
           )}
           <div className="relative">
             <button
               type="button"
               className={`p-2 rounded-lg hover:bg-gray-100 text-gray-500 ${showSearch ? "bg-gray-100 text-emerald-700" : ""}`}
-              title="Search (F)"
+              title={`${t("common.search")} (F)`}
               onClick={() => {
                 setShowBell(false);
                 setShowSearch((v) => !v);

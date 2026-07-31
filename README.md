@@ -21,6 +21,8 @@ Hybrid retail POS: **shop PC SQLite (primary)** + **Firestore cloud backup** whe
 
 Data is stored on that PC under the app user data folder. Optional cloud backup: put a `desktop.env` next to the bundle (see `desktop.env.example` inside resources) with `SYNC_TO_FIRESTORE=1` and Firebase keys.
 
+**Cloud retention:** Master Admin sets “keep cloud data for N months” per shop. The shop PC auto-creates monthly/annual SQLite copies under `backups/archives/`, then may purge Firestore docs older than that window. Local SQLite is never wiped by retention. Archive search runs on the shop PC (not on the Vercel demo).
+
 ### Remote updates (from home — no shop visit)
 
 After shops install **v1.0.0+** with auto-update:

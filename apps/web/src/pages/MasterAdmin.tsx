@@ -39,6 +39,7 @@ type Shop = {
   firebaseProvisionedAt?: string | null;
   shopType?: string;
   fingerprintAttendance?: boolean;
+  cloudRetentionMonths?: number;
 };
 
 type PanelTab = "firebase" | "access" | "security";
@@ -653,6 +654,46 @@ export default function MasterAdmin() {
                             >
                               {selected.fingerprintAttendance ? "Turn OFF" : "Turn ON"}
                             </button>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                          <div>
+                            <div className="text-sm font-bold text-slate-900">Cloud data retention</div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Keep cloud (Firestore) data for N months. After a successful local SQLite archive, month
+                              N+1 auto-wipes cloud docs older than N months. Local shop DB stays complete. Choose 0 to
+                              keep cloud forever.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select
+                              className="input w-auto min-w-[10rem]"
+                              value={selected.cloudRetentionMonths ?? 12}
+                              disabled={busy}
+                              onChange={(e) => {
+                                const months = Number(e.target.value);
+                                void act(
+                                  `/master/shops/${selected.shopId}/retention`,
+                                  { months },
+                                  months === 0
+                                    ? "Cloud retention OFF"
+                                    : `Cloud retention ${months} months`
+                                );
+                              }}
+                            >
+                              <option value={0}>Off (keep forever)</option>
+                              <option value={3}>3 months</option>
+                              <option value={6}>6 months</option>
+                              <option value={12}>12 months</option>
+                              <option value={24}>24 months</option>
+                            </select>
+                            <span className="text-xs font-semibold text-slate-600">
+                              Current:{" "}
+                              {(selected.cloudRetentionMonths ?? 12) === 0
+                                ? "Off"
+                                : `${selected.cloudRetentionMonths ?? 12} months`}
+                            </span>
                           </div>
                         </div>
                       </div>

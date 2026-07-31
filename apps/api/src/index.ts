@@ -1,6 +1,7 @@
 import app, { attachWebStatic } from "./app.js";
 import { startSyncInterval, syncEnabled, loadUserSyncPreference } from "./sync/index.js";
 import { ensureMasterAdmin, ensureDemoShopApproved } from "./routes-master.js";
+import { startRetentionInterval } from "./retention/index.js";
 
 const PORT = Number(process.env.PORT || 4000);
 
@@ -18,6 +19,7 @@ app.listen(PORT, () => {
       if (syncEnabled()) startSyncInterval();
     })
     .catch((e) => console.error("[sync] Failed to load preference:", e));
+  startRetentionInterval();
 });
 
 process.on("unhandledRejection", (err) => {
