@@ -505,9 +505,7 @@ export default function AppLayout() {
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 shrink-0">
           <div className="flex-1" />
-          <div className="flex items-center gap-1.5 rounded-lg border-2 border-emerald-400 bg-emerald-50 px-2.5 py-1 shadow-sm">
-            <LanguageSelect />
-          </div>
+          <LanguageSelect />
           <button className="btn btn-primary" onClick={() => navigate("/pos")}>
             {t("common.pos")}
           </button>

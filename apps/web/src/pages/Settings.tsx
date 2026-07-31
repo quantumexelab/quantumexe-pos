@@ -12,6 +12,7 @@ import { ErrorBox } from "../components/ui";
 import ConnectionCenter from "../components/ConnectionCenter";
 import { APP_VERSION } from "../version";
 import { useI18n } from "../i18n";
+import { LanguageSelect } from "../i18n/LanguageSelect";
 import { openCustomerDisplayWindow } from "../customerDisplay/channel";
 import {
   connectPoleDisplay,
@@ -87,7 +88,7 @@ function Toggle({
 }
 
 export default function SettingsPage() {
-  const { t, lang, setLang, options } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const initialTab: Tab =
@@ -166,13 +167,6 @@ export default function SettingsPage() {
     }
   }
 
-  function onUiLanguageChange(next: string) {
-    if (next === "en" || next === "si" || next === "ta") {
-      setLang(next);
-      setField("ui_language", next);
-    }
-  }
-
   function resetDefaults() {
     if (!confirm("Reset all settings to defaults?")) return;
     setSettings({ ...DEFAULTS });
@@ -230,23 +224,12 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-emerald-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-sm font-bold text-gray-900">{t("lang.appLanguage")}</div>
           <p className="text-xs text-gray-500 mt-0.5">{t("lang.appLanguageHint")}</p>
         </div>
-        <select
-          className="input w-auto min-w-[10rem] h-10"
-          value={lang}
-          onChange={(e) => onUiLanguageChange(e.target.value)}
-          aria-label={t("lang.label")}
-        >
-          {options.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.native}
-            </option>
-          ))}
-        </select>
+        <LanguageSelect size="md" />
       </div>
 
       {error && <ErrorBox text={error} />}
