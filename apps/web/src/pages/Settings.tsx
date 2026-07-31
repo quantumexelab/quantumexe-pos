@@ -13,6 +13,7 @@ import ConnectionCenter from "../components/ConnectionCenter";
 import { APP_VERSION } from "../version";
 import { useI18n } from "../i18n";
 import { LanguageSelect } from "../i18n/LanguageSelect";
+import { printProductLabels } from "../print/label";
 import { openCustomerDisplayWindow } from "../customerDisplay/channel";
 import {
   connectPoleDisplay,
@@ -415,6 +416,46 @@ export default function SettingsPage() {
                   <div className="text-[11px] text-gray-500 mt-1">
                     Store Release stickers (barcode + price). Choose <strong>XP-361</strong> in the print dialog.
                   </div>
+                  <button
+                    type="button"
+                    className="mt-2 h-9 px-3 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900 text-sm font-semibold hover:bg-emerald-100"
+                    onClick={() => {
+                      void printProductLabels([
+                        {
+                          productName: "Sample Shirt — Test Label",
+                          size: "M",
+                          color: "Navy",
+                          barcode: "8901234567890",
+                          price: 2490,
+                          code: "SHIRT-M-NAVY",
+                          copies: 1,
+                        },
+                      ]);
+                    }}
+                  >
+                    Print test label (1 sample)
+                  </button>
+                </div>
+
+                <div className="md:col-span-2 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4">
+                  <div className="text-xs font-bold text-gray-600 mb-2">Label layout preview (80mm XP-361)</div>
+                  <div className="mx-auto w-[220px] bg-white border border-gray-300 rounded-md px-3 py-3 text-center shadow-sm">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-gray-700">
+                      {settings.shop_display_name || settings.shop_name || "QUANTUMEXE"}
+                    </div>
+                    <div className="text-[13px] font-extrabold text-gray-900 mt-1 leading-tight">
+                      Sample Shirt — Test Label
+                    </div>
+                    <div className="text-[11px] font-semibold text-gray-700 mt-0.5">Size M · Navy</div>
+                    <div className="text-[18px] font-black text-gray-900 my-1.5">
+                      {(settings.currency || "Rs.")} 2,490.00
+                    </div>
+                    <div className="h-10 mx-auto w-full max-w-[180px] bg-[repeating-linear-gradient(90deg,#111_0,#111_2px,transparent_2px,transparent_4px)] opacity-80 rounded-sm" />
+                    <div className="text-[10px] font-mono mt-1 text-gray-800">8901234567890</div>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-3 text-center">
+                    Real print: shop name → product → size/color → price → scannable barcode
+                  </p>
                 </div>
                 <div className="md:col-span-2">
                   <label className="text-xs font-semibold text-gray-600">Header Text</label>
