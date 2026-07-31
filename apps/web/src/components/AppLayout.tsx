@@ -220,6 +220,7 @@ export default function AppLayout() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [headerQuery, setHeaderQuery] = useState("");
+  const [searchCursor, setSearchCursor] = useState(0);
   const [showBell, setShowBell] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [sync, setSync] = useState<SyncStatus | null>(null);
@@ -247,6 +248,63 @@ export default function AppLayout() {
         };
       });
   }, [role, allowed, features]);
+
+  type SearchHit = { label: string; path: string; group?: string; keywords: string };
+
+  const searchCatalog = useMemo(() => {
+    const hits: SearchHit[] = [
+      { label: t("common.pos"), path: "/pos", group: "POS", keywords: "pos sale checkout counter" },
+    ];
+    for (const item of items) {
+      const parentLabel = t(item.labelKey);
+      if (item.path) {
+        hits.push({
+          label: parentLabel,
+          path: item.path,
+          group: parentLabel,
+          keywords: `${parentLabel} ${item.id}`.toLowerCase(),
+        });
+      }
+      for (const child of item.children || []) {
+        const childLabel = t(child.labelKey);
+        hits.push({
+          label: childLabel,
+          path: child.path,
+          group: parentLabel,
+          keywords: `${childLabel} ${parentLabel} ${item.id}`.toLowerCase(),
+        });
+      }
+    }
+    const seen = new Set<string>();
+    return hits.filter((h) => {
+      if (seen.has(h.path)) return false;
+      seen.add(h.path);
+      return true;
+    });
+  }, [items, t]);
+
+  const searchSuggestions = useMemo(() => {
+    const q = headerQuery.trim().toLowerCase();
+    if (!q) return searchCatalog.slice(0, 8);
+    return searchCatalog
+      .filter(
+        (h) =>
+          h.label.toLowerCase().includes(q) ||
+          h.keywords.includes(q) ||
+          h.path.toLowerCase().includes(q)
+      )
+      .slice(0, 10);
+  }, [headerQuery, searchCatalog]);
+
+  useEffect(() => {
+    setSearchCursor(0);
+  }, [headerQuery, showSearch]);
+
+  function goSearchHit(hit: SearchHit) {
+    setShowSearch(false);
+    setHeaderQuery("");
+    navigate(hit.path);
+  }
 
   useEffect(() => {
     const u = auth.getUser() as { shopType?: string; features?: unknown } | null;
@@ -507,47 +565,69 @@ export default function AppLayout() {
               onClick={() => {
                 setShowBell(false);
                 setShowSearch((v) => !v);
-                // Prefer page search box when present
-                const pageSearch = document.querySelector<HTMLInputElement>("[data-page-search]");
-                if (pageSearch) {
-                  pageSearch.focus();
-                  pageSearch.select();
-                  setShowSearch(false);
-                }
+                if (!showSearch) setHeaderQuery("");
               }}
             >
               <Search size={18} />
             </button>
             {showSearch && (
-              <div className="absolute right-0 top-11 z-40 w-80 rounded-xl border border-gray-200 bg-white shadow-lg p-3">
+              <div className="absolute right-0 top-11 z-40 w-80 rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
                 <form
+                  className="p-3 pb-2"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    const q = headerQuery.trim().toLowerCase();
-                    setShowSearch(false);
-                    if (!q) return;
-                    if (q.includes("invoice") || q.includes("sale")) navigate("/sales/manage-invoice");
-                    else if (q.includes("product") || q.includes("stock")) navigate("/products/product-list");
-                    else if (q.includes("customer")) navigate("/customer/manage-customer");
-                    else if (q.includes("user")) navigate("/manage-users");
-                    else if (q.includes("setting")) navigate("/setting");
-                    else if (q.includes("report")) navigate("/reports");
-                    else if (q.includes("pos")) navigate("/pos");
-                    else navigate(`/sales/manage-invoice`);
+                    const hit = searchSuggestions[searchCursor] || searchSuggestions[0];
+                    if (hit) goSearchHit(hit);
                   }}
                 >
                   <input
                     autoFocus
                     className="input"
-                    placeholder="Go to: invoices, products, customers…"
+                    placeholder={`${t("common.search")}…`}
                     value={headerQuery}
                     onChange={(e) => setHeaderQuery(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Escape") setShowSearch(false);
+                      if (e.key === "Escape") {
+                        setShowSearch(false);
+                        return;
+                      }
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSearchCursor((c) => Math.min(c + 1, Math.max(0, searchSuggestions.length - 1)));
+                        return;
+                      }
+                      if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSearchCursor((c) => Math.max(0, c - 1));
+                      }
                     }}
                   />
-                  <div className="mt-2 text-[11px] text-gray-500">Press Enter to open · Esc to close</div>
                 </form>
+                <div className="max-h-64 overflow-y-auto border-t border-gray-100">
+                  {searchSuggestions.length === 0 ? (
+                    <div className="px-3 py-4 text-sm text-gray-500 text-center">No matches</div>
+                  ) : (
+                    searchSuggestions.map((hit, idx) => (
+                      <button
+                        key={hit.path}
+                        type="button"
+                        onMouseEnter={() => setSearchCursor(idx)}
+                        onClick={() => goSearchHit(hit)}
+                        className={`w-full text-left px-3 py-2.5 text-sm border-b border-gray-50 last:border-0 ${
+                          idx === searchCursor ? "bg-emerald-50 text-emerald-900" : "hover:bg-gray-50 text-gray-800"
+                        }`}
+                      >
+                        <div className="font-semibold truncate">{hit.label}</div>
+                        {hit.group && hit.group !== hit.label ? (
+                          <div className="text-[11px] text-gray-500 truncate">{hit.group}</div>
+                        ) : null}
+                      </button>
+                    ))
+                  )}
+                </div>
+                <div className="px-3 py-2 text-[11px] text-gray-500 bg-gray-50 border-t border-gray-100">
+                  ↑↓ select · Enter open · Esc close
+                </div>
               </div>
             )}
           </div>
