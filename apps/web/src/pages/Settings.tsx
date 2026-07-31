@@ -160,11 +160,26 @@ export default function SettingsPage() {
     setMsg("");
     try {
       const payload = { ...settings, ui_language: lang, version: APP_VERSION };
-      await api.put("/settings", payload);
+      // Avoid sending multi‑MB data URLs that break Firestore (1MB/doc) / Vercel body limits
+      for (const k of ["store_logo", "customer_logo"] as const) {
+        const v = String(payload[k] || "");
+        if (v.startsWith("data:") && v.length > 900_000) {
+          throw new Error("Logo is still too large after compress. Use a smaller PNG/JPG (under ~500KB).");
+        }
+      }
+      const { data } = await api.put("/settings", payload);
+      if (!data?.success) throw new Error(data?.message || "Failed to save");
       setSettings((s) => ({ ...s, ui_language: lang }));
       setMsg(t("settings.saved"));
+      // Reload from server so we confirm logo persisted
+      const again = await api.get("/settings");
+      const map = (again.data?.data || {}) as Record<string, string>;
+      if (map && typeof map === "object") {
+        setSettings((s) => ({ ...s, ...map, version: APP_VERSION, ui_language: lang }));
+      }
     } catch (e: any) {
-      setError(e.message || "Failed to save");
+      const ax = e as { response?: { data?: { message?: string } }; message?: string };
+      setError(ax.response?.data?.message || ax.message || "Failed to save");
     }
   }
 
@@ -184,15 +199,60 @@ export default function SettingsPage() {
     }
   }
 
-  function onLogoUpload(key: "store_logo" | "customer_logo", file?: File | null) {
+  /** Resize + JPEG compress so logos survive Firestore (max ~1MB per setting doc). */
+  function compressLogoFile(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Could not read image"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Invalid image file"));
+        img.onload = () => {
+          const maxSide = 512;
+          let { width, height } = img;
+          const scale = Math.min(1, maxSide / Math.max(width, height));
+          width = Math.max(1, Math.round(width * scale));
+          height = Math.max(1, Math.round(height * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            reject(new Error("Canvas not supported"));
+            return;
+          }
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          let quality = 0.82;
+          let dataUrl = canvas.toDataURL("image/jpeg", quality);
+          while (dataUrl.length > 180_000 && quality > 0.45) {
+            quality -= 0.1;
+            dataUrl = canvas.toDataURL("image/jpeg", quality);
+          }
+          resolve(dataUrl);
+        };
+        img.src = String(reader.result || "");
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function onLogoUpload(key: "store_logo" | "customer_logo", file?: File | null) {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       setError("Logo must be under 5MB");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => setField(key, String(reader.result || ""));
-    reader.readAsDataURL(file);
+    setError("");
+    setMsg("");
+    try {
+      const dataUrl = await compressLogoFile(file);
+      setField(key, dataUrl);
+      setMsg("Logo ready — click Save to keep it");
+    } catch (e: any) {
+      setError(e.message || "Logo upload failed");
+    }
   }
 
   const tabs: { id: Tab; label: string }[] = [

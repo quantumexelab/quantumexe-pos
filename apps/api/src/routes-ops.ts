@@ -1838,15 +1838,38 @@ router.get("/settings", requireAuth, async (_req, res) => {
 });
 
 router.put("/settings", requireAuth, async (req, res) => {
-  const entries = Object.entries(req.body || {});
-  for (const [key, value] of entries) {
-    await prisma.setting.upsert({
-      where: { key },
-      create: { key, value: String(value) },
-      update: { value: String(value) },
-    });
+  try {
+    const entries = Object.entries(req.body || {});
+    const failed: string[] = [];
+    for (const [key, value] of entries) {
+      const str = value == null ? "" : String(value);
+      // Firestore doc limit ~1MB — oversized logos must be compressed on client
+      if ((key === "store_logo" || key === "customer_logo") && str.length > 900_000) {
+        failed.push(key);
+        continue;
+      }
+      try {
+        await prisma.setting.upsert({
+          where: { key },
+          create: { key, value: str },
+          update: { value: str },
+        });
+      } catch (e) {
+        console.error("[settings] upsert failed", key, e instanceof Error ? e.message : e);
+        failed.push(key);
+      }
+    }
+    if (failed.length) {
+      return res.status(400).json(
+        fail(
+          `Could not save: ${failed.join(", ")}. Logo files are auto-compressed — try Save again or use a smaller image.`
+        )
+      );
+    }
+    res.json(ok(null, "Settings saved"));
+  } catch (e) {
+    res.status(500).json(fail(e instanceof Error ? e.message : "Settings save failed", 500));
   }
-  res.json(ok(null, "Settings saved"));
 });
 
 const BACKUP_RETENTION_DAYS = 7;
