@@ -804,21 +804,32 @@ router.get("/analytics/store-dashboard", requireAuth, async (_req, res) => {
     });
     await Promise.all(variants.map((v) => ensureStockPair(prisma, v.id)));
 
-    const [storeStocks, shopStocks, grnCount, releaseCount, todayGrns, todayReleases, recentReleases] =
+    const [storeStocks, shopStocks, grnCount, releaseCount, todayGrns, todayReleases, recentReleases, recentGrns] =
       await Promise.all([
-        prisma.stock.findMany({ where: { location: LOC_STORE } }),
-        prisma.stock.findMany({ where: { location: LOC_SHOP } }),
+        prisma.stock.findMany({
+          where: { location: LOC_STORE },
+          include: { variant: { include: { product: true } } },
+        }),
+        prisma.stock.findMany({
+          where: { location: LOC_SHOP },
+          include: { variant: { include: { product: true } } },
+        }),
         prisma.grn.count(),
         prisma.stockRelease.count(),
         prisma.grn.count({ where: { createdAt: { gte: startOfDay } } }),
         prisma.stockRelease.count({ where: { createdAt: { gte: startOfDay } } }),
         prisma.stockRelease.findMany({
           orderBy: { id: "desc" },
-          take: 5,
+          take: 8,
           include: {
             user: true,
             items: { include: { variant: { include: { product: true } } } },
           },
+        }),
+        prisma.grn.findMany({
+          orderBy: { id: "desc" },
+          take: 8,
+          include: { supplier: true, items: true },
         }),
       ]);
 
@@ -828,6 +839,57 @@ router.get("/analytics/store-dashboard", requireAuth, async (_req, res) => {
     const storeOut = storeStocks.filter((s) => s.quantity <= 0).length;
     const shopLow = shopStocks.filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold).length;
     const shopOut = shopStocks.filter((s) => s.quantity <= 0).length;
+
+    const nameOf = (s: (typeof storeStocks)[0]) =>
+      variantDisplayName(s.variant) || s.variant?.product?.name || `Variant #${s.variantId}`;
+
+    const storeLowItems = storeStocks
+      .filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold)
+      .sort((a, b) => a.quantity - b.quantity)
+      .slice(0, 8)
+      .map((s) => ({
+        variantId: s.variantId,
+        name: nameOf(s),
+        qty: s.quantity,
+        threshold: s.lowThreshold,
+        location: "store" as const,
+      }));
+
+    const shopLowItems = shopStocks
+      .filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold)
+      .sort((a, b) => a.quantity - b.quantity)
+      .slice(0, 8)
+      .map((s) => ({
+        variantId: s.variantId,
+        name: nameOf(s),
+        qty: s.quantity,
+        threshold: s.lowThreshold,
+        location: "shop" as const,
+      }));
+
+    const shopOutItems = shopStocks
+      .filter((s) => s.quantity <= 0)
+      .slice(0, 8)
+      .map((s) => ({
+        variantId: s.variantId,
+        name: nameOf(s),
+        qty: s.quantity,
+        location: "shop" as const,
+      }));
+
+    const readyToRelease = storeStocks
+      .filter((s) => s.quantity > 0)
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 10)
+      .map((s) => {
+        const shop = shopStocks.find((x) => x.variantId === s.variantId);
+        return {
+          variantId: s.variantId,
+          name: nameOf(s),
+          storeQty: s.quantity,
+          shopQty: shop?.quantity ?? 0,
+        };
+      });
 
     res.json(
       ok({
@@ -845,6 +907,18 @@ router.get("/analytics/store-dashboard", requireAuth, async (_req, res) => {
           todayGrns,
           todayReleases,
         },
+        storeLowItems,
+        shopLowItems,
+        shopOutItems,
+        readyToRelease,
+        recentGrns: recentGrns.map((g) => ({
+          id: g.id,
+          billNo: g.billNo || `GRN #${g.id}`,
+          supplierName: g.supplier?.name || "-",
+          totalAmount: g.totalAmount,
+          itemCount: g.items.length,
+          createdAt: g.createdAt,
+        })),
         recentReleases: recentReleases.map((r) => ({
           id: r.id,
           releaseNo: r.releaseNo,
