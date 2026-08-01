@@ -196,31 +196,37 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="card flex flex-col">
+        <div className="card flex flex-col min-h-[16rem]">
           <div className="font-semibold text-gray-800 mb-1">Popular products</div>
-          <div className="text-xs text-gray-500 mb-3">By quantity sold (recent)</div>
+          <div className="text-xs text-gray-500 mb-3">Top sellers by quantity</div>
           {popular.length ? (
-            <div className="space-y-2.5 flex-1">
-              {popular.map((p, i) => (
-                <div key={`${p.name}-${i}`}>
-                  <div className="flex justify-between text-sm gap-2 mb-1">
-                    <span className="font-medium text-gray-800 truncate">{p.name}</span>
-                    <span className="text-xs text-gray-500 shrink-0">{p.sales} sold</span>
+            <div className="space-y-3 flex-1">
+              {popular.map((p, i) => {
+                const pct = Math.max(6, Math.round((Number(p.sales) / maxPopular) * 100));
+                return (
+                  <div key={`${p.name}-${i}`} className="space-y-1">
+                    <div className="flex justify-between items-baseline gap-2 text-sm">
+                      <span className="font-semibold text-gray-900 truncate" title={p.name}>
+                        {i + 1}. {p.name || `Item ${i + 1}`}
+                      </span>
+                      <span className="text-xs font-semibold text-emerald-700 shrink-0 tabular-nums">
+                        {p.sales} sold
+                        {p.amount != null ? ` · ${money(p.amount)}` : ""}
+                      </span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+                    </div>
                   </div>
-                  <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-emerald-500"
-                      style={{ width: `${Math.max(8, (Number(p.sales) / maxPopular) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <div className="flex-1 grid place-items-center text-center text-sm text-gray-400 py-8">
+            <div className="flex-1 grid place-items-center text-center text-sm text-gray-400 py-8 border border-dashed border-gray-200 rounded-xl">
               <div>
                 <Package className="mx-auto mb-2 text-gray-300" size={28} />
-                No sales yet — popular items appear after POS invoices.
+                No line-item sales found yet.
+                <div className="text-xs mt-1">Popular products fill after POS invoices with items.</div>
               </div>
             </div>
           )}

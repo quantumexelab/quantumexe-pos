@@ -1095,9 +1095,9 @@ router.get("/analytics/dashboard", requireAuth, async (_req, res) => {
           },
         }),
         prisma.invoiceItem.findMany({
-          take: 400,
+          take: 500,
           orderBy: { id: "desc" },
-          select: { variantId: true, qty: true, price: true, discount: true },
+          select: { variantId: true, qty: true, price: true, discount: true, invoiceId: true },
         }),
       ]);
 
@@ -1128,13 +1128,36 @@ router.get("/analytics/dashboard", requireAuth, async (_req, res) => {
     }
 
     const salesByVariant = new Map<number, { qty: number; amount: number }>();
-    for (const it of invoiceItems) {
-      const cur = salesByVariant.get(it.variantId) || { qty: 0, amount: 0 };
-      const line = Math.max(0, Number(it.qty || 0) * Number(it.price || 0) - Number(it.discount || 0));
-      cur.qty += Number(it.qty || 0);
+    const bumpSale = (rawVariantId: unknown, qty: unknown, price: unknown, discount: unknown) => {
+      const vid = Number(rawVariantId);
+      if (!Number.isFinite(vid) || vid <= 0) return;
+      const q = Number(qty || 0);
+      if (!Number.isFinite(q) || q === 0) return;
+      const cur = salesByVariant.get(vid) || { qty: 0, amount: 0 };
+      const line = Math.max(0, q * Number(price || 0) - Number(discount || 0));
+      cur.qty += q;
       cur.amount += line;
-      salesByVariant.set(it.variantId, cur);
+      salesByVariant.set(vid, cur);
+    };
+
+    for (const it of invoiceItems as Array<{ variantId?: unknown; qty?: unknown; price?: unknown; discount?: unknown }>) {
+      bumpSale(it.variantId, it.qty, it.price, it.discount);
     }
+
+    // Fallback: if flat InvoiceItem scan was empty/filtered, pull line items via recent invoices.
+    if (salesByVariant.size === 0 && weekInvoices.length > 0) {
+      const recentInv = await prisma.invoice.findMany({
+        orderBy: { id: "desc" },
+        take: 80,
+        include: { items: true },
+      });
+      for (const inv of recentInv as Array<{ items?: Array<{ variantId?: unknown; qty?: unknown; price?: unknown; discount?: unknown }> }>) {
+        for (const it of inv.items || []) {
+          bumpSale(it.variantId, it.qty, it.price, it.discount);
+        }
+      }
+    }
+
     const topVariantIds = [...salesByVariant.entries()]
       .sort((a, b) => b[1].qty - a[1].qty)
       .slice(0, 6)
@@ -1147,13 +1170,30 @@ router.get("/analytics/dashboard", requireAuth, async (_req, res) => {
             include: { product: { select: { name: true } } },
           })
         : [];
-    const variantName = new Map(
-      topVariants.map((v) => [v.id, variantDisplayName(v) || v.product?.name || `Item #${v.id}`])
-    );
+    const variantName = new Map<number, string>();
+    for (const v of topVariants as Array<{
+      id: number | string;
+      name?: string;
+      size?: string | null;
+      color?: string | null;
+      product?: { name?: string };
+    }>) {
+      const id = Number(v.id);
+      const label =
+        variantDisplayName({
+          name: String(v.name || ""),
+          size: v.size,
+          color: v.color,
+          product: { name: String(v.product?.name || "") },
+        }) ||
+        v.product?.name ||
+        `Item #${id}`;
+      variantName.set(id, String(label));
+    }
     const popular = topVariantIds.map((id) => {
       const s = salesByVariant.get(id)!;
       return {
-        name: String(variantName.get(id) || `Item #${id}`).slice(0, 28),
+        name: String(variantName.get(id) || `Item #${id}`).slice(0, 40),
         sales: Math.round(s.qty * 100) / 100,
         amount: Math.round(s.amount),
       };

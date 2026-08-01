@@ -335,7 +335,11 @@ function matchField(fieldValue: unknown, filter: unknown): boolean {
         .toLowerCase()
         .includes(String(f.contains).toLowerCase());
     }
-    if (op === "in") return (f.in as unknown[]).includes(fieldValue);
+    if (op === "in") {
+      const arr = (f.in as unknown[]) || [];
+      // Firestore ids / FKs may be number or string — loose match
+      return arr.some((x) => x === fieldValue || String(x) === String(fieldValue) || Number(x) === Number(fieldValue));
+    }
     if (op === "not") return !matchField(fieldValue, f.not);
     // Prisma: null never matches range comparisons
     if (fieldValue == null) return false;
