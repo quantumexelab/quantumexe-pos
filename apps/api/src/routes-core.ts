@@ -934,10 +934,11 @@ function mapVariationRow(
   return {
     id: variant.id,
     stockId: location === LOC_SHOP ? shop.id : store.id,
-    productId: Number((variant.product as { id?: number })?.id || 0) || undefined,
     displayName: variantDisplayName(variant),
     productName: variant.product.name,
     productID: variant.product.code,
+    productId: variant.productId,
+    variantId: variant.id,
     variant_name: variant.name,
     size: variant.size || null,
     color: variant.color || null,
