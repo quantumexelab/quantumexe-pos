@@ -18,6 +18,11 @@ export type PrintSettings = {
   print_date: string;
   print_time: string;
   merchant_qr: string;
+  cash_drawer_enabled: string;
+  cash_drawer_on_cash: string;
+  cash_drawer_on_any: string;
+  cash_drawer_printer: string;
+  cash_drawer_pin: string;
 };
 
 const PRINT_DEFAULTS: PrintSettings = {
@@ -38,6 +43,11 @@ const PRINT_DEFAULTS: PrintSettings = {
   print_date: "1",
   print_time: "1",
   merchant_qr: "",
+  cash_drawer_enabled: "1",
+  cash_drawer_on_cash: "1",
+  cash_drawer_on_any: "0",
+  cash_drawer_printer: "XP-Q80T",
+  cash_drawer_pin: "0",
 };
 
 let cachedSettings: PrintSettings | null = null;

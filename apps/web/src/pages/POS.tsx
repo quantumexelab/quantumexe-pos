@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import api from "../api";
 import { ErrorBox, PageHeader } from "../components/ui";
 import { printReceipt } from "../print/receipt";
+import { loadPrintSettings } from "../print/settings";
+import { openCashDrawer, shouldOpenCashDrawerOnSale } from "../print/cashDrawer";
 import { publishCustomerDisplay } from "../customerDisplay/channel";
 import {
   connectPoleDisplay,
@@ -183,6 +185,15 @@ export default function POS() {
           console.warn("Print failed", pe);
         }
       }
+      try {
+        const printSettings = await loadPrintSettings(true);
+        if (shouldOpenCashDrawerOnSale(printSettings, paymentType)) {
+          const drawer = await openCashDrawer();
+          if (!drawer.ok) console.warn(drawer.message);
+        }
+      } catch (de) {
+        console.warn("Cash drawer", de);
+      }
       const refreshed = await api.get("/stock/all-variations", { params: { hasStock: true, limit: 200, location: "shop" } });
       setProducts(refreshed.data.data || []);
       setTimeout(() => {
@@ -311,6 +322,19 @@ export default function POS() {
               {poleOn ? "Disconnect pole display" : "Connect CD-7220 pole display"}
             </button>
           )}
+
+          <button
+            type="button"
+            className="btn btn-muted w-full"
+            onClick={() => {
+              void openCashDrawer({ force: true }).then((r) => {
+                if (r.ok) setMessage(r.message);
+                else setError(r.message);
+              });
+            }}
+          >
+            Open cash drawer
+          </button>
 
           <button className="btn btn-primary w-full" disabled={loading} onClick={checkout}>
             {loading ? "Processing…" : "Checkout"}

@@ -1,9 +1,10 @@
-const { app, BrowserWindow, shell, dialog } = require("electron");
+const { app, BrowserWindow, shell, dialog, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const { spawn } = require("child_process");
+const { spawn, execFile } = require("child_process");
 const http = require("http");
 const { autoUpdater } = require("electron-updater");
+const os = require("os");
 
 const PORT = Number(process.env.POS_PORT || 4173);
 let serverProc = null;
@@ -164,6 +165,134 @@ function stopApi() {
   serverProc = null;
 }
 
+/** ESC/POS cash drawer pulse: ESC p m t1 t2 */
+function cashDrawerEscPos(pin = 0) {
+  return Buffer.from([0x1b, 0x70, pin === 1 ? 1 : 0, 0x19, 0xfa]);
+}
+
+function runPowerShell(script) {
+  return new Promise((resolve, reject) => {
+    const tmp = path.join(os.tmpdir(), `qx-cash-drawer-${Date.now()}.ps1`);
+    fs.writeFileSync(tmp, script, "utf8");
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", tmp],
+      { windowsHide: true, timeout: 15000 },
+      (err, stdout, stderr) => {
+        try {
+          fs.unlinkSync(tmp);
+        } catch {
+          /* ignore */
+        }
+        if (err) {
+          reject(new Error(stderr || err.message || "PowerShell failed"));
+          return;
+        }
+        resolve(String(stdout || "").trim());
+      }
+    );
+  });
+}
+
+async function sendRawToPrinter(printerName, bytes) {
+  if (process.platform !== "win32") {
+    throw new Error("Cash drawer raw print is supported on Windows desktop only");
+  }
+  const name = String(printerName || "").trim();
+  if (!name) throw new Error("Printer name is required");
+  const b64 = Buffer.from(bytes).toString("base64");
+  const safeName = name.replace(/'/g, "''");
+  const script = `
+$ErrorActionPreference = 'Stop'
+$printer = '${safeName}'
+$bytes = [Convert]::FromBase64String('${b64}')
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class QxRawPrint {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
+  public class DOCINFOA {
+    [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+    [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+    [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
+  }
+  [DllImport("winspool.Drv", EntryPoint="OpenPrinterA", SetLastError=true, CharSet=CharSet.Ansi, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+  public static extern bool OpenPrinter([MarshalAs(UnmanagedType.LPStr)] string szPrinter, out IntPtr hPrinter, IntPtr pd);
+  [DllImport("winspool.Drv", EntryPoint="ClosePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+  public static extern bool ClosePrinter(IntPtr hPrinter);
+  [DllImport("winspool.Drv", EntryPoint="StartDocPrinterA", SetLastError=true, CharSet=CharSet.Ansi, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+  public static extern bool StartDocPrinter(IntPtr hPrinter, Int32 level, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFOA di);
+  [DllImport("winspool.Drv", EntryPoint="EndDocPrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+  public static extern bool EndDocPrinter(IntPtr hPrinter);
+  [DllImport("winspool.Drv", EntryPoint="StartPagePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+  public static extern bool StartPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.Drv", EntryPoint="EndPagePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+  public static extern bool EndPagePrinter(IntPtr hPrinter);
+  [DllImport("winspool.Drv", EntryPoint="WritePrinter", SetLastError=true, ExactSpelling=true, CallingConvention=CallingConvention.StdCall)]
+  public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, Int32 dwCount, out Int32 dwWritten);
+  public static bool Send(string printerName, byte[] data) {
+    IntPtr h;
+    if (!OpenPrinter(printerName, out h, IntPtr.Zero)) return false;
+    DOCINFOA di = new DOCINFOA();
+    di.pDocName = "QUANTUMEXE Cash Drawer";
+    di.pDataType = "RAW";
+    if (!StartDocPrinter(h, 1, di)) { ClosePrinter(h); return false; }
+    if (!StartPagePrinter(h)) { EndDocPrinter(h); ClosePrinter(h); return false; }
+    IntPtr p = Marshal.AllocCoTaskMem(data.Length);
+    Marshal.Copy(data, 0, p, data.Length);
+    int written = 0;
+    bool ok = WritePrinter(h, p, data.Length, out written);
+    Marshal.FreeCoTaskMem(p);
+    EndPagePrinter(h);
+    EndDocPrinter(h);
+    ClosePrinter(h);
+    return ok && written == data.Length;
+  }
+}
+"@
+$ok = [QxRawPrint]::Send($printer, $bytes)
+if (-not $ok) { throw "Raw print to '$printer' failed. Check Windows printer name." }
+Write-Output 'OK'
+`;
+  await runPowerShell(script);
+}
+
+async function listWindowsPrinters() {
+  if (process.platform !== "win32") return [];
+  try {
+    const out = await runPowerShell(
+      `Get-Printer | Select-Object -ExpandProperty Name | ForEach-Object { $_ }`
+    );
+    return out
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function setupCashDrawerIpc() {
+  ipcMain.handle("cash-drawer-open", async (_evt, opts = {}) => {
+    try {
+      const printerName = String(opts.printerName || "XP-Q80T").trim();
+      const pin = Number(opts.pin) === 1 ? 1 : 0;
+      await sendRawToPrinter(printerName, cashDrawerEscPos(pin));
+      return { ok: true, message: `Cash drawer pulse sent to ${printerName}` };
+    } catch (e) {
+      return { ok: false, message: String(e?.message || e) };
+    }
+  });
+
+  ipcMain.handle("printers-list", async () => {
+    try {
+      return await listWindowsPrinters();
+    } catch {
+      return [];
+    }
+  });
+}
+
 async function ensureDatabase() {
   const root = bundleRoot();
   const dbFile = userDbPath();
@@ -279,6 +408,7 @@ function setupAutoUpdater() {
 
 app.whenReady().then(async () => {
   try {
+    setupCashDrawerIpc();
     await ensureDatabase();
     await startApi();
     await createWindow();

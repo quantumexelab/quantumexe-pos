@@ -14,6 +14,7 @@ import { APP_VERSION } from "../version";
 import { useI18n } from "../i18n";
 import { LanguageSelect } from "../i18n/LanguageSelect";
 import { printProductLabels } from "../print/label";
+import { openCashDrawer } from "../print/cashDrawer";
 import { openCustomerDisplayWindow } from "../customerDisplay/channel";
 import {
   connectPoleDisplay,
@@ -50,6 +51,11 @@ const DEFAULTS: Record<string, string> = {
   auto_cut: "1",
   print_date: "1",
   print_time: "1",
+  cash_drawer_enabled: "1",
+  cash_drawer_on_cash: "1",
+  cash_drawer_on_any: "0",
+  cash_drawer_printer: "XP-Q80T",
+  cash_drawer_pin: "0",
   store_logo: "",
   welcome_note: "Please proceed to the counter",
   customer_logo: "",
@@ -108,6 +114,7 @@ export default function SettingsPage() {
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
   const [poleConnected, setPoleConnected] = useState(false);
+  const [printerNames, setPrinterNames] = useState<string[]>(["XP-Q80T", "Xprinter XP-Q80T", "XP-Q80"]);
 
   function selectTab(id: Tab) {
     setTab(id);
@@ -147,6 +154,15 @@ export default function SettingsPage() {
 
   useEffect(() => {
     load();
+    setPoleConnected(poleDisplayConnected());
+    void (async () => {
+      try {
+        const list = await window.quantumexeDesktop?.listPrinters?.();
+        if (list?.length) setPrinterNames(list);
+      } catch {
+        /* ignore */
+      }
+    })();
   }, []);
 
   const daysRemaining = useMemo(() => {
@@ -533,6 +549,71 @@ export default function SettingsPage() {
                 <Toggle label="Auto Cut" checked={bool("auto_cut")} onChange={(v) => setBool("auto_cut", v)} />
                 <Toggle label="Print Date" checked={bool("print_date")} onChange={(v) => setBool("print_date", v)} />
                 <Toggle label="Print Time" checked={bool("print_time")} onChange={(v) => setBool("print_time", v)} />
+              </div>
+
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-3">
+                <div className="text-sm font-bold text-gray-800">Cash Drawer (XP-Q80T DK port)</div>
+                <p className="text-[11px] text-gray-600">
+                  Plug drawer RJ11 cable into the receipt printer cash-drawer port. Use the{" "}
+                  <strong>QUANTUMEXE desktop app</strong> so POS can send the open pulse. Set the Windows printer name
+                  exactly as shown in Windows Printers (often <code>XP-Q80T</code>).
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <Toggle
+                    label="Enable cash drawer"
+                    checked={bool("cash_drawer_enabled")}
+                    onChange={(v) => setBool("cash_drawer_enabled", v)}
+                  />
+                  <Toggle
+                    label="Open on Cash sales"
+                    checked={bool("cash_drawer_on_cash")}
+                    onChange={(v) => setBool("cash_drawer_on_cash", v)}
+                  />
+                  <Toggle
+                    label="Open on every sale"
+                    checked={bool("cash_drawer_on_any")}
+                    onChange={(v) => setBool("cash_drawer_on_any", v)}
+                  />
+                </div>
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600">Windows printer name</label>
+                    <input
+                      className="input mt-1"
+                      list="cash-drawer-printers"
+                      placeholder="XP-Q80T"
+                      value={settings.cash_drawer_printer || ""}
+                      onChange={(e) => setField("cash_drawer_printer", e.target.value)}
+                    />
+                    <datalist id="cash-drawer-printers">
+                      {printerNames.map((n) => (
+                        <option key={n} value={n} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600">Drawer pin</label>
+                    <select
+                      className="input mt-1"
+                      value={settings.cash_drawer_pin || "0"}
+                      onChange={(e) => setField("cash_drawer_pin", e.target.value)}
+                    >
+                      <option value="0">Pin 2 (default)</option>
+                      <option value="1">Pin 5</option>
+                    </select>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="h-9 px-3 rounded-lg border border-amber-400 bg-white text-amber-900 text-sm font-semibold hover:bg-amber-100"
+                  onClick={() => {
+                    void openCashDrawer({ force: true }).then((r) => {
+                      alert(r.message);
+                    });
+                  }}
+                >
+                  Test open cash drawer
+                </button>
               </div>
             </div>
           </div>
