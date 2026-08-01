@@ -4043,13 +4043,13 @@ export function CreateGrn() {
   const [batchNo, setBatchNo] = useState("");
   const [mfd, setMfd] = useState("");
   const [exp, setExp] = useState("");
-  const [cost, setCost] = useState(0);
-  const [mrp, setMrp] = useState(0);
-  const [rsp, setRsp] = useState(0);
-  const [wsp, setWsp] = useState(0);
-  const [qty, setQty] = useState(1);
-  const [freeQty, setFreeQty] = useState(0);
-  const [paidAmount, setPaidAmount] = useState(0);
+  const [cost, setCost] = useState<number | "">("");
+  const [mrp, setMrp] = useState<number | "">("");
+  const [rsp, setRsp] = useState<number | "">("");
+  const [wsp, setWsp] = useState<number | "">("");
+  const [qty, setQty] = useState<number | "">(1);
+  const [freeQty, setFreeQty] = useState<number | "">("");
+  const [paidAmount, setPaidAmount] = useState<number | "">("");
   const [note, setNote] = useState("");
   const [lines, setLines] = useState<any[]>([]);
   const [error, setError] = useState("");
@@ -4071,22 +4071,35 @@ export function CreateGrn() {
     const v = variants.find((x: any) => String(x.id) === String(variantId));
     if (!v) return;
     setBarcode(v.barcode || "");
-    setCost(Number(v.cost || 0));
-    setMrp(Number(v.price || 0));
-    setRsp(Number(v.price || 0));
-    setWsp(Number(v.cost || 0));
+    setCost(v.cost != null && v.cost !== "" ? Number(v.cost) : "");
+    setMrp(v.price != null && v.price !== "" ? Number(v.price) : "");
+    setRsp(v.price != null && v.price !== "" ? Number(v.price) : "");
+    setWsp(v.cost != null && v.cost !== "" ? Number(v.cost) : "");
   }, [variantId, variants]);
 
+  const paidNum = paidAmount === "" ? 0 : Number(paidAmount);
   const summary = useMemo(() => {
     const totalQty = lines.reduce((s, l) => s + Number(l.qty || 0) + Number(l.freeQty || 0), 0);
     const totalCost = lines.reduce((s, l) => s + Number(l.qty || 0) * Number(l.cost || 0), 0);
-    return { items: lines.length, totalQty, totalCost, balance: Math.max(0, totalCost - paidAmount) };
-  }, [lines, paidAmount]);
+    return { items: lines.length, totalQty, totalCost, balance: Math.max(0, totalCost - paidNum) };
+  }, [lines, paidNum]);
+
+  function parseNonNeg(raw: string): number | "" {
+    if (raw.trim() === "") return "";
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return "";
+    return Math.max(0, n);
+  }
 
   function addToGrn() {
     setError("");
     if (!productId || !variantId) {
       setError("Select product and variant");
+      return;
+    }
+    const qtyNum = qty === "" ? 0 : Number(qty);
+    if (qtyNum < 1) {
+      setError("Quantity must be at least 1");
       return;
     }
     const v = variants.find((x: any) => String(x.id) === String(variantId));
@@ -4101,12 +4114,12 @@ export function CreateGrn() {
         batchNo: batchNo || "-",
         mfd,
         exp,
-        cost,
-        mrp,
-        rsp,
-        wsp,
-        qty,
-        freeQty,
+        cost: Number(cost || 0),
+        mrp: Number(mrp || 0),
+        rsp: Number(rsp || 0),
+        wsp: Number(wsp || 0),
+        qty: qtyNum,
+        freeQty: Number(freeQty || 0),
       },
     ]);
     setVariantId("");
@@ -4114,8 +4127,12 @@ export function CreateGrn() {
     setBatchNo("");
     setMfd("");
     setExp("");
+    setCost("");
+    setMrp("");
+    setRsp("");
+    setWsp("");
     setQty(1);
-    setFreeQty(0);
+    setFreeQty("");
   }
 
   async function createGrn() {
@@ -4133,7 +4150,7 @@ export function CreateGrn() {
       const { data } = await api.post("/grn/add", {
         supplierId: Number(supplierId),
         billNo,
-        paidAmount: Number(paidAmount || 0),
+        paidAmount: paidNum,
         note,
         items: lines.map((l) => ({
           variantId: l.variantId,
@@ -4197,6 +4214,11 @@ export function CreateGrn() {
               onChange={(e) => {
                 setProductId(e.target.value);
                 setVariantId("");
+                setCost("");
+                setMrp("");
+                setRsp("");
+                setWsp("");
+                setBarcode("");
               }}
             >
               <option value="">Select product...</option>
@@ -4241,27 +4263,73 @@ export function CreateGrn() {
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">Cost Price</label>
-            <input type="number" className="input mt-1" value={cost} onChange={(e) => setCost(Number(e.target.value) || 0)} />
+            <input
+              type="number"
+              min={0}
+              className="input mt-1"
+              placeholder="0"
+              value={cost}
+              onChange={(e) => setCost(parseNonNeg(e.target.value))}
+            />
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">MRP</label>
-            <input type="number" className="input mt-1" value={mrp} onChange={(e) => setMrp(Number(e.target.value) || 0)} />
+            <input
+              type="number"
+              min={0}
+              className="input mt-1"
+              placeholder="0"
+              value={mrp}
+              onChange={(e) => setMrp(parseNonNeg(e.target.value))}
+            />
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">Retail Selling Price</label>
-            <input type="number" className="input mt-1" value={rsp} onChange={(e) => setRsp(Number(e.target.value) || 0)} />
+            <input
+              type="number"
+              min={0}
+              className="input mt-1"
+              placeholder="0"
+              value={rsp}
+              onChange={(e) => setRsp(parseNonNeg(e.target.value))}
+            />
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">Wholesale Price</label>
-            <input type="number" className="input mt-1" value={wsp} onChange={(e) => setWsp(Number(e.target.value) || 0)} />
+            <input
+              type="number"
+              min={0}
+              className="input mt-1"
+              placeholder="0"
+              value={wsp}
+              onChange={(e) => setWsp(parseNonNeg(e.target.value))}
+            />
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">Quantity</label>
-            <input type="number" min={1} className="input mt-1" value={qty} onChange={(e) => setQty(Math.max(1, Number(e.target.value) || 1))} />
+            <input
+              type="number"
+              min={1}
+              className="input mt-1"
+              placeholder="1"
+              value={qty}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v.trim() === "") setQty("");
+                else setQty(Math.max(1, Number(v) || 1));
+              }}
+            />
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">Free Quantity</label>
-            <input type="number" min={0} className="input mt-1" value={freeQty} onChange={(e) => setFreeQty(Math.max(0, Number(e.target.value) || 0))} />
+            <input
+              type="number"
+              min={0}
+              className="input mt-1"
+              placeholder="0"
+              value={freeQty}
+              onChange={(e) => setFreeQty(parseNonNeg(e.target.value))}
+            />
           </div>
         </div>
         <button type="button" onClick={addToGrn} className="w-full h-11 rounded-lg bg-gray-700 hover:bg-gray-800 text-white font-semibold">
@@ -4331,8 +4399,9 @@ export function CreateGrn() {
               type="number"
               min={0}
               className="input mt-1"
+              placeholder="0"
               value={paidAmount}
-              onChange={(e) => setPaidAmount(Number(e.target.value) || 0)}
+              onChange={(e) => setPaidAmount(parseNonNeg(e.target.value))}
             />
           </div>
           <div>
@@ -4345,7 +4414,7 @@ export function CreateGrn() {
           <div className="flex justify-between text-sm"><span>Items</span><span>{summary.items}</span></div>
           <div className="flex justify-between text-sm"><span>Total Qty</span><span>{summary.totalQty}</span></div>
           <div className="flex justify-between text-sm"><span>Total Cost</span><span>{lkr(summary.totalCost)}</span></div>
-          <div className="flex justify-between text-sm"><span>Paid</span><span>{lkr(paidAmount)}</span></div>
+          <div className="flex justify-between text-sm"><span>Paid</span><span>{lkr(paidNum)}</span></div>
           <div className="border-t border-white/20 pt-3 flex justify-between font-bold text-lg">
             <span>Balance</span>
             <span>{lkr(summary.balance)}</span>
