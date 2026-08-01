@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag, ArrowRightLeft } from "lucide-react";
+import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag, ArrowRightLeft, Banknote } from "lucide-react";
 import api from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
 import { IncludeArchivesSearch } from "../components/IncludeArchivesSearch";
@@ -3695,6 +3695,11 @@ export function GrnList() {
   const [billNo, setBillNo] = useState("");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<any | null>(null);
+  const [payFor, setPayFor] = useState<any | null>(null);
+  const [payAmount, setPayAmount] = useState<number | "">("");
+  const [payType, setPayType] = useState("Cash");
+  const [payNote, setPayNote] = useState("");
+  const [paying, setPaying] = useState(false);
   const pageSize = 10;
 
   async function load() {
@@ -3778,6 +3783,57 @@ export function GrnList() {
     setBillNo("");
     setPage(1);
     load();
+  }
+
+  function openPay(row: any) {
+    setSelected(null);
+    setPayFor(row);
+    setPayAmount("");
+    setPayType("Cash");
+    setPayNote("");
+    setError("");
+  }
+
+  function closePay() {
+    setPayFor(null);
+    setPayAmount("");
+    setPayNote("");
+    setPaying(false);
+  }
+
+  async function submitPay(e: FormEvent) {
+    e.preventDefault();
+    if (!payFor) return;
+    const amount = payAmount === "" ? 0 : Number(payAmount);
+    if (!(amount > 0)) {
+      setError("Enter payment amount");
+      return;
+    }
+    if (amount > Number(payFor.balance) + 0.0001) {
+      setError(`Amount cannot exceed balance ${lkr(payFor.balance)}`);
+      return;
+    }
+    if (!payFor.supplierId) {
+      setError("Supplier missing on this GRN");
+      return;
+    }
+    setPaying(true);
+    setError("");
+    try {
+      await api.post("/suppliers/payments", {
+        supplierId: Number(payFor.supplierId),
+        grnId: Number(payFor.id),
+        amount,
+        paymentType: payType || "Cash",
+        note: payNote.trim() || undefined,
+      });
+      closePay();
+      await load();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err.message || "Payment failed");
+    } finally {
+      setPaying(false);
+    }
   }
 
   function printGrn(row: any) {
@@ -3940,6 +3996,16 @@ export function GrnList() {
                       >
                         <Eye size={14} />
                       </button>
+                      {r.balance > 0 && (
+                        <button
+                          type="button"
+                          title="Record payment"
+                          onClick={() => openPay(r)}
+                          className="w-8 h-8 rounded-full bg-amber-500 text-white grid place-items-center hover:bg-amber-600"
+                        >
+                          <Banknote size={14} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         title="Print"
@@ -4020,10 +4086,99 @@ export function GrnList() {
               <div>Balance: <strong className={selected.balance > 0 ? "text-red-600" : ""}>{lkr(selected.balance)}</strong></div>
               <div>Status: <strong>{selected.status}</strong></div>
             </div>
-            <button className="btn btn-primary" onClick={() => printGrn(selected)}>
-              <Printer size={16} /> Print
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {selected.balance > 0 && (
+                <button type="button" className="btn btn-primary" onClick={() => openPay(selected)}>
+                  <Banknote size={16} /> Record payment
+                </button>
+              )}
+              <button type="button" className="btn btn-muted" onClick={() => printGrn(selected)}>
+                <Printer size={16} /> Print
+              </button>
+            </div>
           </div>
+        </div>
+      )}
+
+      {payFor && (
+        <div className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4" onClick={closePay}>
+          <form
+            className="bg-white rounded-xl w-full max-w-md p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={submitPay}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-lg font-bold text-gray-900">Record payment</div>
+                <div className="text-sm text-gray-500 mt-0.5">
+                  {payFor.billNo} · {payFor.supplier?.name || "-"}
+                </div>
+              </div>
+              <button type="button" className="btn btn-muted" onClick={closePay}>
+                Close
+              </button>
+            </div>
+            <div className="rounded-lg bg-amber-50 border border-amber-100 p-3 text-sm space-y-1">
+              <div className="flex justify-between">
+                <span>Total</span>
+                <strong>{lkr(payFor.total)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Already paid</span>
+                <strong>{lkr(payFor.paid)}</strong>
+              </div>
+              <div className="flex justify-between text-red-700">
+                <span>Balance due</span>
+                <strong>{lkr(payFor.balance)}</strong>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Amount to pay now</label>
+              <input
+                type="number"
+                min={0.01}
+                step="0.01"
+                max={payFor.balance}
+                className="input mt-1"
+                placeholder="0.00"
+                value={payAmount}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setPayAmount(v.trim() === "" ? "" : Math.max(0, Number(v) || 0));
+                }}
+                autoFocus
+                required
+              />
+              <button
+                type="button"
+                className="mt-1 text-xs font-semibold text-emerald-700 hover:underline"
+                onClick={() => setPayAmount(Number(payFor.balance))}
+              >
+                Pay full balance ({lkr(payFor.balance)})
+              </button>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Payment type</label>
+              <select className="input mt-1" value={payType} onChange={(e) => setPayType(e.target.value)}>
+                <option value="Cash">Cash</option>
+                <option value="Bank">Bank</option>
+                <option value="Cheque">Cheque</option>
+                <option value="Card">Card</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Note (optional)</label>
+              <input
+                className="input mt-1"
+                value={payNote}
+                onChange={(e) => setPayNote(e.target.value)}
+                placeholder="e.g. Paid after 1 month"
+              />
+            </div>
+            <button type="submit" className="btn btn-primary w-full" disabled={paying}>
+              {paying ? "Saving…" : "Save payment"}
+            </button>
+          </form>
         </div>
       )}
     </div>
