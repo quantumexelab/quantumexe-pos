@@ -1065,23 +1065,45 @@ router.get("/analytics/dashboard", requireAuth, async (_req, res) => {
     weekAgo.setDate(weekAgo.getDate() - 6);
     weekAgo.setHours(0, 0, 0, 0);
 
-    // Keep this Firestore-friendly: avoid nested includes (N+1 / cold-start timeouts on Vercel).
-    const [invoiceCount, productCount, customerCount, supplierCount, sessions, stocks, weekInvoices, expenses] =
+    // Keep Firestore-friendly: flat queries, no deep nested includes on huge sets.
+    const [invoiceCount, productCount, customerCount, supplierCount, sessions, stocks, weekInvoices, expenses, recentInvoices, invoiceItems] =
       await Promise.all([
         prisma.invoice.count(),
         prisma.product.count({ where: { active: true } }),
         prisma.customer.count(),
         prisma.supplier.count(),
         prisma.posSession.count(),
-        prisma.stock.findMany(),
+        prisma.stock.findMany({
+          take: 800,
+          include: { variant: { include: { product: { select: { name: true, code: true } } } } },
+        }),
         prisma.invoice.findMany({
           where: { createdAt: { gte: weekAgo } },
           orderBy: { createdAt: "desc" },
         }),
         prisma.cashMovement.aggregate({ where: { type: "OUT" }, _sum: { amount: true } }),
+        prisma.invoice.findMany({
+          orderBy: { id: "desc" },
+          take: 8,
+          select: {
+            id: true,
+            invoiceNo: true,
+            total: true,
+            paymentType: true,
+            createdAt: true,
+            customer: { select: { name: true } },
+          },
+        }),
+        prisma.invoiceItem.findMany({
+          take: 400,
+          orderBy: { id: "desc" },
+          select: { variantId: true, qty: true, price: true, discount: true },
+        }),
       ]);
 
-    const low = stocks.filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold).length;
+    const shopOrStore = stocks;
+    const low = shopOrStore.filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold).length;
+    const outOfStock = shopOrStore.filter((s) => s.quantity <= 0).length;
     const todayInvoices = weekInvoices.filter((i) => new Date(i.createdAt).getTime() >= startOfDay.getTime());
     const todaysSales = todayInvoices.reduce((s, i) => s + Number(i.total || 0), 0);
     const revenue = weekInvoices.reduce((s, i) => s + Number(i.total || 0), 0);
@@ -1098,11 +1120,65 @@ router.get("/analytics/dashboard", requireAuth, async (_req, res) => {
       const dayTotal = weekInvoices
         .filter((inv) => new Date(inv.createdAt).toISOString().slice(0, 10) === key)
         .reduce((s, inv) => s + Number(inv.total || 0), 0);
-      revenueSeries.push({ date: key, total: dayTotal });
+      revenueSeries.push({
+        date: key,
+        label: d.toLocaleDateString(undefined, { weekday: "short" }),
+        total: dayTotal,
+      });
     }
 
-    // Skip nested popular-product scan on cloud (was causing 30s+ timeouts).
-    const popular: { name: string; sales: number }[] = [];
+    const salesByVariant = new Map<number, { qty: number; amount: number }>();
+    for (const it of invoiceItems) {
+      const cur = salesByVariant.get(it.variantId) || { qty: 0, amount: 0 };
+      const line = Math.max(0, Number(it.qty || 0) * Number(it.price || 0) - Number(it.discount || 0));
+      cur.qty += Number(it.qty || 0);
+      cur.amount += line;
+      salesByVariant.set(it.variantId, cur);
+    }
+    const topVariantIds = [...salesByVariant.entries()]
+      .sort((a, b) => b[1].qty - a[1].qty)
+      .slice(0, 6)
+      .map(([id]) => id);
+
+    const topVariants =
+      topVariantIds.length > 0
+        ? await prisma.productVariant.findMany({
+            where: { id: { in: topVariantIds } },
+            include: { product: { select: { name: true } } },
+          })
+        : [];
+    const variantName = new Map(
+      topVariants.map((v) => [v.id, variantDisplayName(v) || v.product?.name || `Item #${v.id}`])
+    );
+    const popular = topVariantIds.map((id) => {
+      const s = salesByVariant.get(id)!;
+      return {
+        name: String(variantName.get(id) || `Item #${id}`).slice(0, 28),
+        sales: Math.round(s.qty * 100) / 100,
+        amount: Math.round(s.amount),
+      };
+    });
+
+    const lowStockItems = shopOrStore
+      .filter((s) => s.quantity > 0 && s.quantity <= s.lowThreshold)
+      .sort((a, b) => a.quantity - b.quantity)
+      .slice(0, 8)
+      .map((s) => ({
+        name: variantDisplayName(s.variant) || s.variant?.product?.name || `Variant #${s.variantId}`,
+        qty: s.quantity,
+        threshold: s.lowThreshold,
+        location: s.location || "store",
+      }));
+
+    const paymentMix = { Cash: 0, Card: 0, Bank: 0, Other: 0 };
+    for (const inv of weekInvoices) {
+      const t = String(inv.paymentType || "Cash");
+      if (t === "Cash" || t === "Card" || t === "Bank") paymentMix[t] += Number(inv.total || 0);
+      else paymentMix.Other += Number(inv.total || 0);
+    }
+    const paymentSeries = Object.entries(paymentMix)
+      .filter(([, v]) => v > 0)
+      .map(([name, total]) => ({ name, total: Math.round(total) }));
 
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
@@ -1128,9 +1204,20 @@ router.get("/analytics/dashboard", requireAuth, async (_req, res) => {
           customers: customerCount,
           suppliers: supplierCount,
           lowStock: low,
+          outOfStock,
         },
         revenue: { total: revenue, growth: 100, series: revenueSeries },
         popular,
+        lowStockItems,
+        recentInvoices: recentInvoices.map((inv) => ({
+          id: inv.id,
+          invoiceNo: inv.invoiceNo,
+          total: Number(inv.total || 0),
+          paymentType: inv.paymentType || "Cash",
+          customer: inv.customer?.name || "Walk-in",
+          createdAt: inv.createdAt,
+        })),
+        paymentSeries,
         financial: {
           grossSales: gross,
           discounts,
