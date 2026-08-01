@@ -4,6 +4,7 @@ import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer
 import api from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
 import { IncludeArchivesSearch } from "../components/IncludeArchivesSearch";
+import { SearchableSelect } from "../components/SearchableSelect";
 import { printProductLabels } from "../print/label";
 import { exportTable } from "../export/tableExport";
 
@@ -849,39 +850,43 @@ export function CreateProduct() {
               </div>
               <div>
                 <FieldLabel text="Category" required quick="categories" />
-                <select className="input" value={basic.categoryId} onChange={(e) => setBasic({ ...basic, categoryId: e.target.value })}>
-                  <option value="">Select category...</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={categories}
+                  value={basic.categoryId}
+                  onChange={(id) => setBasic({ ...basic, categoryId: id })}
+                  placeholder="Search category..."
+                  emptyText="No categories found"
+                />
               </div>
               <div>
                 <FieldLabel text="Brand" required quick="brands" />
-                <select className="input" value={basic.brandId} onChange={(e) => setBasic({ ...basic, brandId: e.target.value })}>
-                  <option value="">Select brand...</option>
-                  {brands.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={brands}
+                  value={basic.brandId}
+                  onChange={(id) => setBasic({ ...basic, brandId: id })}
+                  placeholder="Search brand..."
+                  emptyText="No brands found"
+                />
               </div>
               <div>
                 <FieldLabel text="Unit" required quick="units" />
-                <select className="input" value={basic.unitId} onChange={(e) => setBasic({ ...basic, unitId: e.target.value })}>
-                  <option value="">Select unit...</option>
-                  {units.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={units}
+                  value={basic.unitId}
+                  onChange={(id) => setBasic({ ...basic, unitId: id })}
+                  placeholder="Search unit..."
+                  emptyText="No units found"
+                />
               </div>
               <div>
                 <FieldLabel text="Product Type" required quick="product-types" />
-                <select className="input" value={basic.productTypeId} onChange={(e) => setBasic({ ...basic, productTypeId: e.target.value })}>
-                  <option value="">Select type...</option>
-                  {types.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={types}
+                  value={basic.productTypeId}
+                  onChange={(id) => setBasic({ ...basic, productTypeId: id })}
+                  placeholder="Search product type..."
+                  emptyText="No product types found"
+                />
               </div>
             </div>
           </>
