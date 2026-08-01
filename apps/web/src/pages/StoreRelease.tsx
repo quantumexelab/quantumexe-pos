@@ -196,26 +196,40 @@ export function CreateStoreRelease() {
           {!lines.length && <div className="text-sm text-gray-500">Select products from the left</div>}
           <div className="space-y-2">
             {lines.map((l) => (
-              <div key={l.variantId} className="flex items-center gap-2 border border-gray-100 rounded-lg p-2">
+              <div
+                key={l.variantId}
+                className="flex items-center gap-3 border border-gray-200 rounded-xl p-3 bg-gray-50/60"
+              >
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{l.displayName}</div>
-                  <div className="text-xs text-gray-500">
-                    Available: {l.storeQty}
-                    {l.barcode ? ` · ${l.barcode}` : ""}
-                    {l.price != null ? ` · Rs. ${Number(l.price).toFixed(2)}` : ""}
-                  </div>
+                  <div className="text-sm font-semibold text-gray-900 truncate">{l.displayName}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">Available: {l.storeQty}</div>
+                  {l.barcode ? <div className="text-[11px] text-gray-400 font-mono truncate mt-0.5">{l.barcode}</div> : null}
+                  {l.price != null ? (
+                    <div className="text-xs font-medium text-emerald-700 mt-0.5">Rs. {Number(l.price).toFixed(2)}</div>
+                  ) : null}
                 </div>
-                <input
-                  className="input w-20"
-                  type="number"
-                  min={1}
-                  max={l.storeQty}
-                  value={l.qty}
-                  onChange={(e) => updateQty(l.variantId, e.target.value)}
-                />
-                <button type="button" className="btn btn-muted px-2" onClick={() => removeLine(l.variantId)}>
-                  ×
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-col items-stretch gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 text-center">Qty</span>
+                    <input
+                      className="input w-20 shrink-0 text-center px-2"
+                      type="number"
+                      min={1}
+                      max={l.storeQty}
+                      value={l.qty}
+                      onChange={(e) => updateQty(l.variantId, e.target.value)}
+                      aria-label={`Quantity for ${l.displayName}`}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-muted px-2 h-[42px] mt-4"
+                    onClick={() => removeLine(l.variantId)}
+                    aria-label="Remove item"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
             ))}
           </div>
