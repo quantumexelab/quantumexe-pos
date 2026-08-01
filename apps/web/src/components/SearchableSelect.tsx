@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type Ref } from "react";
 import { Search, X } from "lucide-react";
 
 export type SearchableOption = {
@@ -10,10 +10,15 @@ type Props = {
   options: SearchableOption[];
   value: string;
   onChange: (id: string) => void;
+  /** Fires on every keystroke with the current input text (for live list filtering). */
+  onQueryChange?: (query: string) => void;
   placeholder?: string;
   emptyText?: string;
   disabled?: boolean;
   className?: string;
+  /** Marks the input for page-level search / ALT+S focus. */
+  dataPageSearch?: boolean;
+  inputRef?: Ref<HTMLInputElement>;
 };
 
 /** Type-to-filter dropdown with auto-suggest list. */
@@ -21,10 +26,13 @@ export function SearchableSelect({
   options,
   value,
   onChange,
+  onQueryChange,
   placeholder = "Search…",
   emptyText = "No matches",
   disabled = false,
   className = "",
+  dataPageSearch = false,
+  inputRef,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -66,12 +74,14 @@ export function SearchableSelect({
   function pick(opt: SearchableOption) {
     onChange(String(opt.id));
     setQuery(opt.name);
+    onQueryChange?.(opt.id === "" || opt.id === null ? "" : opt.name);
     setOpen(false);
   }
 
   function clear() {
     onChange("");
     setQuery("");
+    onQueryChange?.("");
     setOpen(true);
   }
 
@@ -80,15 +90,18 @@ export function SearchableSelect({
       <div className="relative">
         <Search size={14} className="input-icon" />
         <input
+          ref={inputRef}
           className="input has-icon pr-9"
           disabled={disabled}
           placeholder={placeholder}
           value={query}
           autoComplete="off"
+          data-page-search={dataPageSearch ? true : undefined}
           onChange={(e) => {
             const next = e.target.value;
             setQuery(next);
             setOpen(true);
+            onQueryChange?.(next);
             if (selected && next !== selected.name) onChange("");
           }}
           onFocus={() => setOpen(true)}
@@ -110,7 +123,7 @@ export function SearchableSelect({
             const active = String(o.id) === String(value);
             return (
               <button
-                key={o.id}
+                key={`${o.id}-${o.name}`}
                 type="button"
                 className={`w-full text-left px-3 py-2 text-sm hover:bg-green-50 ${
                   active ? "bg-green-50 font-semibold text-green-800" : "text-gray-800"

@@ -1535,6 +1535,7 @@ function NamedCatalogManage({
 }) {
   const [rows, setRows] = useState<any[]>([]);
   const [search, setSearch] = useState("");
+  const [searchId, setSearchId] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1571,6 +1572,14 @@ function NamedCatalogManage({
     if (!q) return rows;
     return rows.filter((r) => String(r.name || "").toLowerCase().includes(q));
   }, [rows, search]);
+
+  const searchOptions = useMemo(
+    () => [
+      { id: "", name: `All ${countLabel}` },
+      ...rows.map((r) => ({ id: String(r.id), name: String(r.name || "") })),
+    ],
+    [rows, countLabel]
+  );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
