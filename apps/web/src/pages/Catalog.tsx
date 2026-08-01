@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag, ArrowRightLeft, Banknote } from "lucide-react";
 import api from "../api";
@@ -18,6 +18,23 @@ function matchesQuery(q: string, ...parts: unknown[]) {
   if (!needle) return true;
   const hay = parts.map((p) => String(p ?? "")).join(" ").toLowerCase();
   return hay.includes(needle);
+}
+
+/** Block scientific-notation keys that browsers allow in type=number (e / E / + / -). */
+function blockInvalidNumberKeys(e: KeyboardEvent<HTMLInputElement>) {
+  if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+}
+
+/** Keep digits + optional single decimal point only (no e/E). */
+function sanitizeDecimalInput(raw: string) {
+  let s = String(raw || "").replace(/[^\d.]/g, "");
+  const dot = s.indexOf(".");
+  if (dot !== -1) s = s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, "");
+  return s;
+}
+
+function sanitizeIntInput(raw: string) {
+  return String(raw || "").replace(/\D/g, "");
 }
 
 export function ProductsHome() {
@@ -899,45 +916,53 @@ export function CreateProduct() {
               <div>
                 <FieldLabel text="Cost Price" />
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   className="input"
                   placeholder="Enter cost price"
                   autoComplete="off"
                   value={inventory.cost}
-                  onChange={(e) => setInventory({ ...inventory, cost: e.target.value })}
+                  onKeyDown={blockInvalidNumberKeys}
+                  onChange={(e) => setInventory({ ...inventory, cost: sanitizeDecimalInput(e.target.value) })}
                 />
               </div>
               <div>
                 <FieldLabel text="Selling Price" />
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   className="input"
                   placeholder="Enter selling price"
                   autoComplete="off"
                   value={inventory.price}
-                  onChange={(e) => setInventory({ ...inventory, price: e.target.value })}
+                  onKeyDown={blockInvalidNumberKeys}
+                  onChange={(e) => setInventory({ ...inventory, price: sanitizeDecimalInput(e.target.value) })}
                 />
               </div>
               <div>
                 <FieldLabel text="Opening Quantity" />
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   className="input"
                   placeholder="Enter opening qty"
                   autoComplete="off"
                   value={inventory.quantity}
-                  onChange={(e) => setInventory({ ...inventory, quantity: e.target.value })}
+                  onKeyDown={blockInvalidNumberKeys}
+                  onChange={(e) => setInventory({ ...inventory, quantity: sanitizeIntInput(e.target.value) })}
                 />
               </div>
               <div>
                 <FieldLabel text="Low Stock Threshold" />
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   className="input"
                   placeholder="e.g. 5"
                   autoComplete="off"
                   value={inventory.lowThreshold}
-                  onChange={(e) => setInventory({ ...inventory, lowThreshold: e.target.value })}
+                  onKeyDown={blockInvalidNumberKeys}
+                  onChange={(e) => setInventory({ ...inventory, lowThreshold: sanitizeIntInput(e.target.value) })}
                 />
               </div>
               <div>
@@ -983,8 +1008,8 @@ export function CreateProduct() {
                 <div key={idx} className="grid md:grid-cols-3 lg:grid-cols-6 gap-3 border border-gray-200 rounded-xl p-3">
                   <input className="input" placeholder="Name" value={v.name} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} />
                   <input className="input" placeholder="Barcode" autoComplete="off" value={v.barcode} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, barcode: e.target.value } : x)))} />
-                  <input className="input" type="number" placeholder="Cost" autoComplete="off" value={v.cost} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, cost: e.target.value } : x)))} />
-                  <input className="input" type="number" placeholder="Price" autoComplete="off" value={v.price} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, price: e.target.value } : x)))} />
+                  <input className="input" type="text" inputMode="decimal" placeholder="Cost" autoComplete="off" value={v.cost} onKeyDown={blockInvalidNumberKeys} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, cost: sanitizeDecimalInput(e.target.value) } : x)))} />
+                  <input className="input" type="text" inputMode="decimal" placeholder="Price" autoComplete="off" value={v.price} onKeyDown={blockInvalidNumberKeys} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, price: sanitizeDecimalInput(e.target.value) } : x)))} />
                   <input className="input" placeholder="Size" value={v.size} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, size: e.target.value } : x)))} />
                   <div className="flex gap-2">
                     <input className="input" placeholder="Color" value={v.color} onChange={(e) => setVariations((prev) => prev.map((x, i) => (i === idx ? { ...x, color: e.target.value } : x)))} />
