@@ -89,7 +89,7 @@ const MODEL_DEFAULTS: Partial<Record<ModelName, Record<string, unknown>>> = {
 const UNIQUE_FIELDS: Partial<Record<ModelName, string[]>> = {
   Role: ["name"],
   Status: ["name"],
-  User: ["contact"],
+  User: ["contact", "username"],
   // Category / Brand / Unit / ProductType uniqueness is enforced in routes (case-insensitive, per-shop)
   Product: ["code"],
   ProductVariant: ["barcode"],
@@ -324,27 +324,59 @@ function matchField(fieldValue: unknown, filter: unknown): boolean {
   if (!isFieldFilter(filter)) return fieldValue === filter;
 
   const f = filter as Record<string, unknown>;
-  if ("equals" in f) return fieldValue === f.equals;
-  if ("contains" in f) {
-    return String(fieldValue ?? "")
-      .toLowerCase()
-      .includes(String(f.contains).toLowerCase());
+  const ops = ["equals", "contains", "gte", "lte", "gt", "lt", "in", "not"] as const;
+  const present = ops.filter((k) => k in f);
+  if (!present.length) return fieldValue === filter;
+
+  return present.every((op) => {
+    if (op === "equals") return fieldValue === f.equals;
+    if (op === "contains") {
+      return String(fieldValue ?? "")
+        .toLowerCase()
+        .includes(String(f.contains).toLowerCase());
+    }
+    if (op === "in") return (f.in as unknown[]).includes(fieldValue);
+    if (op === "not") return !matchField(fieldValue, f.not);
+    // Prisma: null never matches range comparisons
+    if (fieldValue == null) return false;
+    if (op === "gte") return compareValues(fieldValue, f.gte) >= 0;
+    if (op === "lte") return compareValues(fieldValue, f.lte) <= 0;
+    if (op === "gt") return compareValues(fieldValue, f.gt) > 0;
+    if (op === "lt") return compareValues(fieldValue, f.lt) < 0;
+    return true;
+  });
+}
+
+function toComparable(v: unknown): unknown {
+  if (v == null) return null;
+  if (v instanceof Date) return v.getTime();
+  if (isTimestamp(v)) return (v as Timestamp).toDate().getTime();
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim()) {
+    const t = Date.parse(v);
+    if (!Number.isNaN(t)) return t;
   }
-  if ("gte" in f) return compareValues(fieldValue, f.gte) >= 0;
-  if ("lte" in f) return compareValues(fieldValue, f.lte) <= 0;
-  if ("gt" in f) return compareValues(fieldValue, f.gt) > 0;
-  if ("lt" in f) return compareValues(fieldValue, f.lt) < 0;
-  if ("in" in f) return (f.in as unknown[]).includes(fieldValue);
-  if ("not" in f) return !matchField(fieldValue, f.not);
-  return fieldValue === filter;
+  if (typeof v === "object" && v !== null && "toDate" in v && typeof (v as { toDate: unknown }).toDate === "function") {
+    try {
+      return (v as { toDate: () => Date }).toDate().getTime();
+    } catch {
+      /* ignore */
+    }
+  }
+  return v;
 }
 
 function compareValues(a: unknown, b: unknown): number {
-  const av = a instanceof Date ? a.getTime() : a;
-  const bv = b instanceof Date ? b.getTime() : b;
+  const av = toComparable(a);
+  const bv = toComparable(b);
   if (av == null || bv == null) return av == bv ? 0 : av == null ? -1 : 1;
-  if (av < bv) return -1;
-  if (av > bv) return 1;
+  if (typeof av === "number" && typeof bv === "number") {
+    if (av < bv) return -1;
+    if (av > bv) return 1;
+    return 0;
+  }
+  if (av < (bv as any)) return -1;
+  if (av > (bv as any)) return 1;
   return 0;
 }
 

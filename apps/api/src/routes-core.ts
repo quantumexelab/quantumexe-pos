@@ -1067,11 +1067,11 @@ router.get("/stock/out-of-stock/search", requireAuth, async (req, res) => {
 });
 
 router.get("/stock/expire-stock", requireAuth, async (req, res) => {
-  const days = Number(req.query.days || 60);
+  const days = Math.max(0, Number(req.query.days ?? 60) || 0);
   const location = String(req.query.location || LOC_STORE);
   const soon = new Date(Date.now() + days * 86400000);
   const stocks = await prisma.stock.findMany({
-    where: { expireDate: { lte: soon }, location },
+    where: { location, expireDate: { not: null, lte: soon } },
     include: {
       variant: {
         include: {
@@ -1079,8 +1079,16 @@ router.get("/stock/expire-stock", requireAuth, async (req, res) => {
         },
       },
     },
+    orderBy: { expireDate: "asc" },
   });
-  res.json(ok(stocks));
+  // Defense-in-depth: some stores keep expireDate as string / null edge cases
+  const soonMs = soon.getTime();
+  const filtered = stocks.filter((s) => {
+    if (!s.expireDate) return false;
+    const expMs = new Date(s.expireDate).getTime();
+    return Number.isFinite(expMs) && expMs <= soonMs;
+  });
+  res.json(ok(filtered));
 });
 
 router.get("/stock/search", requireAuth, async (req, res) => {
