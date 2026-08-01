@@ -53,6 +53,7 @@ async function main() {
   const admin = await prisma.user.create({
     data: {
       name: "Super Admin",
+      username: "admin",
       contact: "0771234567",
       email: "admin@reox.com",
       passwordHash,
@@ -64,6 +65,7 @@ async function main() {
   await prisma.user.create({
     data: {
       name: "Cashier One",
+      username: "cashier",
       contact: "0771111111",
       email: "cashier@reox.com",
       passwordHash,
@@ -75,6 +77,7 @@ async function main() {
   await prisma.user.create({
     data: {
       name: "Store Keeper",
+      username: "storekeeper",
       contact: "0772222222",
       email: "store@reox.com",
       passwordHash,
@@ -203,7 +206,7 @@ async function main() {
   });
 
   await prisma.damageReason.createMany({
-    data: [{ name: "Broken" }, { name: "Expired" }, { name: "Wet Damage" }],
+    data: [{ name: "Broken" }, { name: "Expired" }, { name: "Wet Damage" }, { name: "Other" }],
   });
   await prisma.returnStatus.createMany({
     data: [{ name: "Pending" }, { name: "Resolved" }, { name: "Written Off" }],

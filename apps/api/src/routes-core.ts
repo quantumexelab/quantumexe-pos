@@ -1110,8 +1110,26 @@ router.get("/stock/get-stock-by-variant/:id", requireAuth, async (req, res) => {
   res.json(ok({ ...active, variant, storeQty: store.quantity, shopQty: shop.quantity }));
 });
 
+const DEFAULT_DAMAGE_REASONS = ["Broken", "Expired", "Wet Damage", "Other"] as const;
+
 router.get("/reasons/all", requireAuth, async (_req, res) => {
-  res.json(ok(await prisma.damageReason.findMany()));
+  const existing = await prisma.damageReason.findMany({ orderBy: { id: "asc" } });
+  const byName = new Map<string, (typeof existing)[number]>();
+  for (const r of existing) {
+    const key = String(r.name || "").trim().toLowerCase();
+    if (!key || byName.has(key)) continue;
+    byName.set(key, r);
+  }
+  for (const name of DEFAULT_DAMAGE_REASONS) {
+    if (byName.has(name.toLowerCase())) continue;
+    const created = await prisma.damageReason.create({ data: { name } });
+    byName.set(name.toLowerCase(), created);
+  }
+  const ordered = DEFAULT_DAMAGE_REASONS.map((n) => byName.get(n.toLowerCase())!).filter(Boolean);
+  const extras = [...byName.values()].filter(
+    (r) => !DEFAULT_DAMAGE_REASONS.some((n) => n.toLowerCase() === String(r.name || "").trim().toLowerCase())
+  );
+  res.json(ok([...ordered, ...extras]));
 });
 
 router.get("/return-status/all", requireAuth, async (_req, res) => {

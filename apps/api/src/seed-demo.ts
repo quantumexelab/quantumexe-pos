@@ -180,7 +180,7 @@ export async function seedDemo() {
   });
 
   await prisma.damageReason.createMany({
-    data: [{ name: "Broken" }, { name: "Expired" }, { name: "Wet Damage" }],
+    data: [{ name: "Broken" }, { name: "Expired" }, { name: "Wet Damage" }, { name: "Other" }],
   });
   await prisma.returnStatus.createMany({
     data: [{ name: "Pending" }, { name: "Resolved" }, { name: "Written Off" }],
