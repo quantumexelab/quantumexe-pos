@@ -26,6 +26,29 @@ body {
   font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   color: var(--ink);
   background: var(--bg);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.safe-pt {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Tables inside cards scroll sideways on narrow screens */
+.card:has(> table.table),
+.card:has(> .table) {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .card {
@@ -102,6 +125,7 @@ body {
 .table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 520px;
 }
 
 .table th,
@@ -116,6 +140,22 @@ body {
   color: #6b7280;
   font-weight: 600;
   background: #f9fafb;
+}
+
+@media (max-width: 640px) {
+  .table th,
+  .table td {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  .btn {
+    min-height: 40px;
+  }
 }
 
 @keyframes authFadeIn {

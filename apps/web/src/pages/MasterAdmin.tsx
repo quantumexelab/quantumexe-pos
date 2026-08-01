@@ -215,9 +215,9 @@ export default function MasterAdmin() {
   const step3Done = selected?.status === "active";
 
   return (
-    <div className="h-full overflow-y-auto bg-[#eef1f4]">
-      <header className="bg-slate-950 text-white sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+    <div className="h-[100dvh] overflow-y-auto overscroll-contain bg-[#eef1f4]">
+      <header className="bg-slate-950 text-white sticky top-0 z-10 safe-pt">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <BrandLogo variant="dark" size="sm" showTagline />
             <div className="hidden sm:block border-l border-white/15 pl-4">
@@ -247,7 +247,7 @@ export default function MasterAdmin() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 py-5 space-y-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-5 space-y-4 safe-pb">
         {error && <ErrorBox text={error} />}
         {msg && (
           <div className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">

@@ -57,12 +57,13 @@ router.post("/auth/register", async (req, res) => {
       data: {
         name: parsed.data.ownerName,
         email: parsed.data.email,
+        username: parsed.data.phone,
         contact: parsed.data.phone,
         passwordHash: await bcrypt.hash(parsed.data.password, 10),
         roleId: adminRole.id,
         statusId: active.id,
         shopId: shop.shopId,
-      },
+      } as any,
     });
 
     // Shop-scoped settings (do not overwrite other shops on shared Firestore)

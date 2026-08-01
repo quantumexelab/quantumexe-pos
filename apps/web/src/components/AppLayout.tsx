@@ -25,8 +25,11 @@ import {
   ArrowRightLeft,
   ChevronDown,
   ChevronUp,
+  Menu,
+  X,
   type LucideIcon,
 } from "lucide-react";
+
 import api, { auth, syncApi, type SyncStatus } from "../api";
 import { useEffect, useMemo, useState } from "react";
 import { BrandLogo } from "./BrandLogo";
@@ -222,6 +225,7 @@ export default function AppLayout() {
   const [headerQuery, setHeaderQuery] = useState("");
   const [searchCursor, setSearchCursor] = useState(0);
   const [showBell, setShowBell] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -303,6 +307,7 @@ export default function AppLayout() {
   function goSearchHit(hit: SearchHit) {
     setShowSearch(false);
     setHeaderQuery("");
+    setMobileNavOpen(false);
     navigate(hit.path);
   }
 
@@ -381,26 +386,51 @@ export default function AppLayout() {
     });
   }, [location.pathname, items]);
 
+  useEffect(() => {
+    setMobileNavOpen(false);
+    setShowSearch(false);
+    setShowBell(false);
+  }, [location.pathname]);
+
   function toggle(id: string) {
     setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-[#f3f4f6]">
-      <aside className="w-[72px] lg:w-64 bg-white border-r border-gray-200 flex flex-col shrink-0 h-full">
-        <div className="h-14 flex items-center justify-center lg:justify-start lg:px-4 gap-2 border-b shrink-0">
-          <BrandLogo size="sm" className="hidden lg:block" />
-          <div className="lg:hidden text-sm font-black tracking-tight">
-            <span className="text-slate-900">Q</span>
-            <span className="text-sky-500">EXE</span>
+    <div className="h-[100dvh] flex overflow-hidden bg-[#f3f4f6]">
+      {mobileNavOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          aria-label="Close menu"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-[min(86vw,288px)] bg-white border-r border-gray-200 flex flex-col h-full shadow-xl transition-transform duration-200 ease-out lg:static lg:z-auto lg:w-64 lg:shrink-0 lg:shadow-none lg:translate-x-0 ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
+        <div className="h-14 flex items-center justify-between px-4 gap-2 border-b shrink-0">
+          <div className="min-w-0">
+            <BrandLogo size="sm" />
+            <div className="text-[10px] text-gray-400 mt-0.5 truncate">
+              {t("common.version")} {APP_VERSION}
+              {shopType ? ` · ${SHOP_TYPE_LABELS[shopType] || shopType}` : ""}
+            </div>
           </div>
-          <div className="hidden lg:block text-[10px] text-gray-400 mt-1">
-            {t("common.version")} {APP_VERSION}
-            {shopType ? ` · ${SHOP_TYPE_LABELS[shopType] || shopType}` : ""}
-          </div>
+          <button
+            type="button"
+            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+            aria-label="Close menu"
+            onClick={() => setMobileNavOpen(false)}
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1 min-h-0">
+        <nav className="flex-1 overflow-y-auto overscroll-contain py-3 px-2 space-y-1 min-h-0">
           {items.map((item) => {
             const Icon = item.icon;
             const hasChildren = !!item.children?.length;
@@ -414,14 +444,15 @@ export default function AppLayout() {
                   key={item.id}
                   to={item.path}
                   title={label}
+                  onClick={() => setMobileNavOpen(false)}
                   className={({ isActive }) =>
                     `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
                       isActive ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-100"
                     }`
                   }
                 >
-                  <Icon size={18} />
-                  <span className="hidden lg:inline">{label}</span>
+                  <Icon size={18} className="shrink-0" />
+                  <span>{label}</span>
                 </NavLink>
               );
             }
@@ -441,19 +472,20 @@ export default function AppLayout() {
                     parentActive ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-100"
                   }`}
                 >
-                  <Icon size={18} />
-                  <span className="hidden lg:inline flex-1 text-left">{label}</span>
-                  <span className="hidden lg:inline opacity-80">
+                  <Icon size={18} className="shrink-0" />
+                  <span className="flex-1 text-left">{label}</span>
+                  <span className="opacity-80">
                     {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </span>
                 </button>
 
                 {expanded && (
-                  <div className="hidden lg:block ml-5 pl-3 border-l border-gray-200 space-y-1 py-1">
+                  <div className="ml-4 pl-3 border-l border-gray-200 space-y-1 py-1">
                     {item.children!.map((child) => (
                       <NavLink
                         key={child.path}
                         to={child.path}
+                        onClick={() => setMobileNavOpen(false)}
                         className={({ isActive }) =>
                           `block px-3 py-2 rounded-md text-sm transition ${
                             isActive
@@ -472,19 +504,16 @@ export default function AppLayout() {
           })}
         </nav>
 
-        <div className="p-3 border-t space-y-2 shrink-0">
-          <div className="hidden lg:flex items-center justify-between gap-2">
+        <div className="p-3 border-t space-y-2 shrink-0 safe-pb">
+          <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-semibold text-gray-500">{t("lang.label")}</span>
             <LanguageSelect />
           </div>
-          <div className="lg:hidden flex justify-center">
-            <LanguageSelect />
-          </div>
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold">
+            <div className="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold shrink-0">
               {(user?.name || "A")[0]}
             </div>
-            <div className="hidden lg:block flex-1 min-w-0">
+            <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold truncate">{user?.name}</div>
               <div className="text-xs text-gray-500">{user?.role}</div>
             </div>
@@ -503,18 +532,38 @@ export default function AppLayout() {
       </aside>
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 shrink-0">
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center px-2 sm:px-4 gap-1.5 sm:gap-3 shrink-0 safe-pt">
+          <button
+            type="button"
+            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 text-gray-700"
+            aria-label="Open menu"
+            onClick={() => setMobileNavOpen(true)}
+          >
+            <Menu size={20} />
+          </button>
+          <div className="lg:hidden text-sm font-bold text-gray-900 truncate max-w-[28vw]">
+            Q<span className="text-sky-500">EXE</span>
+          </div>
           <div className="flex-1" />
-          <LanguageSelect />
-          <button className="btn btn-primary" onClick={() => navigate("/pos")}>
+          <div className="hidden sm:block">
+            <LanguageSelect />
+          </div>
+          <button className="btn btn-primary !px-3 !py-2 text-sm" onClick={() => navigate("/pos")}>
             {t("common.pos")}
           </button>
-          <div className={`flex items-center gap-1 text-xs font-semibold ${online ? "text-green-600" : "text-red-500"}`}>
-            {online ? t("common.online") : (
+          <div
+            className={`flex items-center gap-1 text-xs font-semibold ${online ? "text-green-600" : "text-red-500"}`}
+            title={online ? t("common.online") : t("common.offline")}
+          >
+            {online ? (
+              <span className="hidden md:inline">{t("common.online")}</span>
+            ) : (
               <>
-                <WifiOff size={14} /> {t("common.offline")}
+                <WifiOff size={14} />
+                <span className="hidden sm:inline">{t("common.offline")}</span>
               </>
             )}
+            {online && <span className="md:hidden w-2 h-2 rounded-full bg-green-500" />}
           </div>
           {sync?.enabled && (
             <button
@@ -531,20 +580,22 @@ export default function AppLayout() {
               }`}
             >
               {syncing ? <RefreshCw size={12} className="animate-spin" /> : <Cloud size={12} />}
-              {syncing
-                ? t("common.syncing")
-                : sync.status === "error"
-                  ? t("common.syncFailed")
-                  : sync.lastPushAt
-                    ? `${t("common.synced")} ${new Date(sync.lastPushAt).toLocaleTimeString()}`
-                    : t("common.cloudSync")}
+              <span className="hidden sm:inline">
+                {syncing
+                  ? t("common.syncing")
+                  : sync.status === "error"
+                    ? t("common.syncFailed")
+                    : sync.lastPushAt
+                      ? `${t("common.synced")} ${new Date(sync.lastPushAt).toLocaleTimeString()}`
+                      : t("common.cloudSync")}
+              </span>
             </button>
           )}
           {sync && !sync.enabled && sync.mode === "local-sqlite" && (
             <button
               type="button"
               onClick={() => role === "Admin" && navigate("/setting?tab=connection")}
-              className="text-[10px] text-gray-400 flex items-center gap-1 hover:text-emerald-700"
+              className="hidden sm:flex text-[10px] text-gray-400 items-center gap-1 hover:text-emerald-700"
               title={
                 sync.credentialsConfigured
                   ? "Open Connection Center to turn on cloud auto-sync"
@@ -568,7 +619,7 @@ export default function AppLayout() {
               <Search size={18} />
             </button>
             {showSearch && (
-              <div className="absolute right-0 top-11 z-40 w-80 rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+              <div className="fixed inset-x-3 top-[3.75rem] z-40 sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-80 rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
                 <form
                   className="p-3 pb-2"
                   onSubmit={(e) => {
@@ -641,7 +692,7 @@ export default function AppLayout() {
               <Bell size={18} />
             </button>
             {showBell && (
-              <div className="absolute right-0 top-11 z-40 w-80 rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+              <div className="fixed inset-x-3 top-[3.75rem] z-40 sm:absolute sm:inset-x-auto sm:right-0 sm:top-11 sm:w-80 rounded-xl border border-gray-200 bg-white shadow-lg overflow-hidden">
                 <div className="px-3 py-2 border-b border-gray-100 text-sm font-bold text-gray-800">Notifications</div>
                 <div className="max-h-72 overflow-y-auto divide-y divide-gray-50">
                   <div className="px-3 py-2.5 text-sm">
@@ -669,9 +720,9 @@ export default function AppLayout() {
                     </div>
                   )}
                   <div className="px-3 py-2.5 text-sm">
-                    <div className="font-semibold text-gray-800">Shortcuts tip</div>
+                    <div className="font-semibold text-gray-800">Mobile tip</div>
                     <div className="text-xs text-gray-500 mt-0.5">
-                      On Manage Invoices: ↑↓ navigate · Enter view · P print · F search · R reset
+                      Use the menu button (☰) to open navigation. Tables scroll sideways when needed.
                     </div>
                   </div>
                 </div>
@@ -687,7 +738,7 @@ export default function AppLayout() {
           </div>
           <button
             type="button"
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+            className="hidden sm:inline-flex p-2 rounded-lg hover:bg-gray-100 text-gray-500"
             title={isFullscreen ? "Exit full screen (Esc)" : "Full screen"}
             onClick={() => {
               if (document.fullscreenElement) {
@@ -699,9 +750,9 @@ export default function AppLayout() {
           >
             {isFullscreen ? <Minimize2 size={18} /> : <Maximize size={18} />}
           </button>
-          <div className="text-sm font-semibold text-gray-700">{user?.name}</div>
+          <div className="hidden md:block text-sm font-semibold text-gray-700 truncate max-w-[8rem]">{user?.name}</div>
         </header>
-        <main className="flex-1 overflow-y-auto min-h-0 p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto overscroll-contain min-h-0 p-3 sm:p-4 md:p-6 safe-pb">
           <Outlet />
         </main>
       </div>

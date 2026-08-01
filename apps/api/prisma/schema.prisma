@@ -26,6 +26,9 @@ model Status {
 model User {
   id           Int       @id @default(autoincrement())
   name         String
+  /** Login id (can be text like cashier1). Falls back to contact for older rows. */
+  username     String?   @unique
+  /** Phone / contact number (also accepted at login for compatibility). */
   contact      String    @unique
   email        String?
   passwordHash String
