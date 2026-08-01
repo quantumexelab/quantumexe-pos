@@ -428,7 +428,7 @@ export function CreateProduct() {
   });
   const [variations, setVariations] = useState<
     Array<{ id?: number; name: string; barcode: string; price: string; cost: string; size: string; color: string }>
-  >([{ name: "Default", barcode: "", price: "", cost: "", size: "", color: "" }]);
+  >([{ name: "", barcode: "", price: "", cost: "", size: "", color: "" }]);
 
   async function loadLookups() {
     const [c, b, u, t] = await Promise.all([
@@ -481,14 +481,14 @@ export function CreateProduct() {
           vars.length
             ? vars.map((v: any) => ({
                 id: v.id,
-                name: v.name || "Default",
+                name: v.name || "",
                 barcode: v.barcode || "",
                 price: v.price != null ? String(v.price) : "",
                 cost: v.cost != null ? String(v.cost) : "",
                 size: v.size || "",
                 color: v.color || "",
               }))
-            : [{ name: "Default", barcode: "", price: "", cost: "", size: "", color: "" }]
+            : [{ name: "", barcode: "", price: "", cost: "", size: "", color: "" }]
         );
         setMsg(`Editing product #${p.id}`);
       } catch (err) {
@@ -559,7 +559,8 @@ export function CreateProduct() {
       if (inventory.cost !== "" && (Number.isNaN(cost) || cost < 0)) return "Invalid cost price";
     }
     if (step === 2) {
-      if (!variations.length || !variations[0].name.trim()) return "At least one variation is required";
+      if (!variations.length || !variations[0].name.trim()) return "Enter a variation name";
+      if (variations.some((v) => !String(v.name || "").trim())) return "Each variation needs a name";
     }
     return "";
   }
