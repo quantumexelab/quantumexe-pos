@@ -1748,17 +1748,30 @@ function NamedCatalogManage({
         <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1.4fr_auto] gap-3 items-end">
           <div>
             <label className="text-xs font-semibold text-gray-600">Search</label>
-            <input
-              ref={searchInputRef}
-              data-page-search
-              className="input mt-1"
-              placeholder={searchPlaceholder}
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-            />
+            <div className="mt-1">
+              <SearchableSelect
+                options={searchOptions}
+                value={searchId}
+                inputRef={searchInputRef}
+                dataPageSearch
+                placeholder={searchPlaceholder}
+                emptyText={`No ${countLabel} found`}
+                onChange={(id) => {
+                  setSearchId(id);
+                  if (!id) {
+                    setSearch("");
+                  } else {
+                    const row = rows.find((r) => String(r.id) === String(id));
+                    setSearch(row?.name || "");
+                  }
+                  setPage(1);
+                }}
+                onQueryChange={(q) => {
+                  setSearch(q);
+                  setPage(1);
+                }}
+              />
+            </div>
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">{nameLabel}</label>
