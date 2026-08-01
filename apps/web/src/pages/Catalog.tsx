@@ -37,6 +37,19 @@ function sanitizeIntInput(raw: string) {
   return String(raw || "").replace(/\D/g, "");
 }
 
+/** Keep first row per name (case-insensitive) so filter dropdowns stay clean. */
+function uniqueByName<T extends { id?: string | number; name?: string }>(list: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of list || []) {
+    const key = String(item?.name || "").trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" }));
+}
+
 export function ProductsHome() {
   return (
     <div>
@@ -991,7 +1004,7 @@ export function CreateProduct() {
                   setVariations((prev) => [
                     ...prev,
                     {
-                      name: `Variant ${prev.length + 1}`,
+                      name: "",
                       barcode: "",
                       price: inventory.price,
                       cost: inventory.cost,
@@ -1963,6 +1976,7 @@ export function StockList() {
   const [categoryId, setCategoryId] = useState("");
   const [unitId, setUnitId] = useState("");
   const [supplierId, setSupplierId] = useState("");
+  const [stockAvail, setStockAvail] = useState<"in_stock" | "out" | "all">("in_stock");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [menuFor, setMenuFor] = useState<string | number | null>(null);
@@ -2040,30 +2054,82 @@ export function StockList() {
     load();
   }, []);
 
+  const categoryOptions = useMemo(
+    () => [{ id: "", name: "All Categories" }, ...uniqueByName(categories)],
+    [categories]
+  );
+  const unitOptions = useMemo(() => [{ id: "", name: "All Units" }, ...uniqueByName(units)], [units]);
+  const supplierOptions = useMemo(
+    () => [{ id: "", name: "All Suppliers" }, ...uniqueByName(suppliers)],
+    [suppliers]
+  );
+  const stockAvailOptions = useMemo(
+    () => [
+      { id: "in_stock", name: "In stock only" },
+      { id: "out", name: "Out of stock" },
+      { id: "all", name: "All products" },
+    ],
+    []
+  );
+
   const filtered = useMemo(() => {
+    const selectedCat = categories.find((c) => String(c.id) === String(categoryId));
+    const catKey = selectedCat ? String(selectedCat.name || "").trim().toLowerCase() : "";
+    const catIds = catKey
+      ? new Set(
+          categories
+            .filter((c) => String(c.name || "").trim().toLowerCase() === catKey)
+            .map((c) => String(c.id))
+        )
+      : null;
+
     return rows.filter((r) => {
-      if (categoryId && String(r.categoryId || "") !== String(categoryId)) return false;
-      if (unitId && String(r.unitId || "") !== String(unitId)) return false;
-      // Supplier dropdown kept for UI; products are not linked to suppliers yet
+      const storeQty = Number(r.storeQty ?? r.quantity ?? 0);
+      const shopQty = Number(r.shopQty ?? 0);
+      const hasStock = storeQty > 0 || shopQty > 0;
+      if (stockAvail === "in_stock" && !hasStock) return false;
+      if (stockAvail === "out" && hasStock) return false;
+
+      if (catIds) {
+        const rowCat = String(r.category || "").trim().toLowerCase();
+        if (!catIds.has(String(r.categoryId || "")) && rowCat !== catKey) return false;
+      }
+      if (unitId && String(r.unitId || "") !== String(unitId)) {
+        const selectedUnit = units.find((u) => String(u.id) === String(unitId));
+        const unitKey = String(selectedUnit?.name || "").trim().toLowerCase();
+        if (!unitKey || String(r.unit || "").trim().toLowerCase() !== unitKey) return false;
+      }
+      if (supplierId) {
+        const selectedSup = suppliers.find((s) => String(s.id) === String(supplierId));
+        const supKey = String(selectedSup?.name || "").trim().toLowerCase();
+        const rowSup = String(r.supplier || "").trim().toLowerCase();
+        if (!supKey || rowSup !== supKey) return false;
+      }
       if (!matchesQuery(query, r.productID, r.productName, r.displayName, r.barcode, r.size, r.color, r.variant_name)) {
         return false;
       }
       return true;
     });
-  }, [rows, categoryId, unitId, query]);
+  }, [rows, categoryId, unitId, supplierId, stockAvail, query, categories, units, suppliers]);
 
   const stats = useMemo(() => {
     const totalProducts = filtered.length;
-    const totalValue = filtered.reduce((s, r) => s + Number(r.quantity || 0) * Number(r.cost || 0), 0);
-    const lowStock = filtered.filter((r) => Number(r.quantity) > 0 && Number(r.quantity) <= Number(r.lowThreshold || 5)).length;
+    const totalValue = filtered.reduce(
+      (s, r) => s + (Number(r.storeQty ?? r.quantity ?? 0) + Number(r.shopQty ?? 0)) * Number(r.cost || 0),
+      0
+    );
+    const lowStock = filtered.filter((r) => {
+      const q = Number(r.storeQty ?? r.quantity ?? 0);
+      return q > 0 && q <= Number(r.lowThreshold || 5);
+    }).length;
     return {
       totalProducts,
       totalValue,
       lowStock,
-      suppliers: suppliers.length,
-      categories: categories.length,
+      suppliers: uniqueByName(suppliers).length,
+      categories: uniqueByName(categories).length,
     };
-  }, [filtered, suppliers.length, categories.length]);
+  }, [filtered, suppliers, categories]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -2080,6 +2146,7 @@ export function StockList() {
     setCategoryId("");
     setUnitId("");
     setSupplierId("");
+    setStockAvail("in_stock");
     setQuery("");
     setPage(1);
     closeMenu();
@@ -2181,39 +2248,65 @@ export function StockList() {
       </div>
 
       <form onSubmit={onSearch} className="bg-white border border-gray-200 rounded-xl p-4">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_1.3fr_auto_auto] gap-3 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-[1fr_1fr_1fr_1fr_1.2fr_auto_auto] gap-3 items-end">
           <div>
             <label className="text-xs font-semibold text-gray-600">Category</label>
-            <select className="input mt-1" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              <option value="">All Categories</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <SearchableSelect
+                options={categoryOptions}
+                value={categoryId}
+                onChange={(id) => {
+                  setCategoryId(id);
+                  setPage(1);
+                }}
+                placeholder="Search category..."
+                emptyText="No categories"
+              />
+            </div>
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">Unit</label>
-            <select className="input mt-1" value={unitId} onChange={(e) => setUnitId(e.target.value)}>
-              <option value="">All Units</option>
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <SearchableSelect
+                options={unitOptions}
+                value={unitId}
+                onChange={(id) => {
+                  setUnitId(id);
+                  setPage(1);
+                }}
+                placeholder="Search unit..."
+                emptyText="No units"
+              />
+            </div>
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">Supplier</label>
-            <select className="input mt-1" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-              <option value="">All Suppliers</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <SearchableSelect
+                options={supplierOptions}
+                value={supplierId}
+                onChange={(id) => {
+                  setSupplierId(id);
+                  setPage(1);
+                }}
+                placeholder="Search supplier..."
+                emptyText="No suppliers"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-600">Stock</label>
+            <div className="mt-1">
+              <SearchableSelect
+                options={stockAvailOptions}
+                value={stockAvail}
+                onChange={(id) => {
+                  setStockAvail((id as "in_stock" | "out" | "all") || "in_stock");
+                  setPage(1);
+                }}
+                placeholder="Stock filter..."
+              />
+            </div>
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600">Product ID / Name</label>
@@ -2239,6 +2332,9 @@ export function StockList() {
           >
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           </button>
+        </div>
+        <div className="mt-2 text-[11px] text-gray-500">
+          Default view shows <strong>in-stock</strong> items only (store or shop qty &gt; 0). Choose “All products” to see everything.
         </div>
       </form>
 
