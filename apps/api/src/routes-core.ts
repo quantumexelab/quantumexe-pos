@@ -54,9 +54,12 @@ router.post("/auth/login", async (req, res) => {
   const { invalidateFsCache } = await import("./fsdb.js");
   invalidateFsCache();
 
+  const login = parsed.data.username.trim();
   const findUser = () =>
-    prisma.user.findUnique({
-      where: { contact: parsed.data.username },
+    prisma.user.findFirst({
+      where: {
+        OR: [{ username: login }, { contact: login }],
+      },
       include: { role: true, status: true },
     });
 
@@ -149,6 +152,7 @@ router.post("/auth/login", async (req, res) => {
     user: {
       id: user.id,
       name: user.name,
+      username: (user as { username?: string | null }).username || user.contact,
       contact: user.contact,
       email: user.email,
       role_id: user.roleId,
@@ -305,6 +309,7 @@ router.get("/users/all", requireAuth, async (_req, res) => {
       users.map((u) => ({
         id: u.id,
         name: u.name,
+        username: (u as { username?: string | null }).username || u.contact,
         contact: u.contact,
         email: u.email,
         role_id: u.roleId,
@@ -319,24 +324,41 @@ router.get("/users/all", requireAuth, async (_req, res) => {
 router.post("/users/add", requireAuth, async (req, res) => {
   const schema = z.object({
     name: z.string().min(1),
-    contact: z.string().min(1),
+    username: z.string().min(2).optional(),
+    contact: z.string().optional(),
+    phone: z.string().optional(),
     email: z.string().optional(),
     password: z.string().min(4),
     role_id: z.number(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(fail(parsed.error.message));
+
+  const username = String(parsed.data.username || "").trim();
+  const phone = String(parsed.data.phone || parsed.data.contact || "").trim();
+  if (!username) return res.status(400).json(fail("Username is required"));
+  // contact stays unique — use phone if provided, otherwise username (legacy-safe)
+  const contact = phone || username;
+
+  const takenUser = await prisma.user.findFirst({
+    where: { OR: [{ username }, { contact }, ...(phone ? [{ contact: phone }] : [])] },
+  });
+  if (takenUser) {
+    return res.status(400).json(fail("Username or phone already in use"));
+  }
+
   const active = await prisma.status.findFirst({ where: { name: "Active" } });
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
   const user = await prisma.user.create({
     data: {
       name: parsed.data.name,
-      contact: parsed.data.contact,
+      username,
+      contact,
       email: parsed.data.email,
       passwordHash,
       roleId: parsed.data.role_id,
       statusId: active!.id,
-    },
+    } as any,
     include: { role: true, status: true },
   });
   res.json(ok(user, "User created"));
@@ -346,10 +368,30 @@ router.put("/users/:id", requireAuth, async (req, res) => {
   const id = parseId(req.params.id);
   const data: any = {};
   if (req.body?.name != null) data.name = String(req.body.name);
-  if (req.body?.contact != null) data.contact = String(req.body.contact);
+  if (req.body?.username != null) data.username = String(req.body.username).trim();
+  if (req.body?.phone != null) data.contact = String(req.body.phone).trim();
+  else if (req.body?.contact != null) data.contact = String(req.body.contact).trim();
   if (req.body?.email != null) data.email = String(req.body.email) || null;
   if (req.body?.role_id != null) data.roleId = Number(req.body.role_id);
   if (req.body?.password) data.passwordHash = await bcrypt.hash(String(req.body.password), 10);
+
+  if (data.username || data.contact) {
+    const clash = await prisma.user.findFirst({
+      where: {
+        AND: [
+          { id: { not: id } },
+          {
+            OR: [
+              ...(data.username ? [{ username: data.username }] : []),
+              ...(data.contact ? [{ contact: data.contact }, { username: data.contact }] : []),
+            ],
+          },
+        ],
+      },
+    });
+    if (clash) return res.status(400).json(fail("Username or phone already in use"));
+  }
+
   const user = await prisma.user.update({
     where: { id },
     data,
@@ -892,6 +934,7 @@ function mapVariationRow(
   return {
     id: variant.id,
     stockId: location === LOC_SHOP ? shop.id : store.id,
+    productId: Number((variant.product as { id?: number })?.id || 0) || undefined,
     displayName: variantDisplayName(variant),
     productName: variant.product.name,
     productID: variant.product.code,

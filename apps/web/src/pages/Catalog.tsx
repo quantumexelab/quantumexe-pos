@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag } from "lucide-react";
+import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag, ArrowRightLeft } from "lucide-react";
 import api from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
 import { IncludeArchivesSearch } from "../components/IncludeArchivesSearch";
@@ -1923,6 +1923,7 @@ function StockTable({ endpoint, title }: { endpoint: string; title: string }) {
 }
 
 export function StockList() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
@@ -1934,7 +1935,10 @@ export function StockList() {
   const [supplierId, setSupplierId] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [menuKey, setMenuKey] = useState<string | null>(null);
+  const [selected, setSelected] = useState<any | null>(null);
   const pageSize = 10;
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   async function load() {
     setLoading(true);
@@ -1960,6 +1964,22 @@ export function StockList() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (!menuKey) return;
+    function onDoc(e: MouseEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuKey(null);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuKey(null);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuKey]);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -2004,6 +2024,31 @@ export function StockList() {
     setQuery("");
     setPage(1);
     load();
+  }
+
+  function rowKey(r: any) {
+    return String(r.stockId || r.id || r.barcode || `${r.productID}-${r.variant_name}`);
+  }
+
+  function productIdOf(r: any): number | null {
+    const id = Number(r.variant?.product?.id || r.product?.id || r.productId);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  }
+
+  function printLabelForRow(r: any) {
+    setMenuKey(null);
+    void printProductLabels([
+      {
+        productName: r.productName || r.displayName || "Product",
+        size: r.size,
+        color: r.color,
+        variantName: r.variant_name,
+        barcode: r.barcode || r.productID || `V${r.id}`,
+        price: Number(r.sellingPrice ?? r.price ?? 0),
+        code: r.productID,
+        copies: 1,
+      },
+    ]);
   }
 
   function exportData(type: "csv" | "excel" | "pdf") {
@@ -2208,10 +2253,63 @@ export function StockList() {
                         {shopQty}
                       </span>
                     </td>
-                    <td className="px-3 py-3">
-                      <button type="button" className="w-8 h-8 rounded-lg border border-gray-200 grid place-items-center text-gray-500 hover:bg-gray-50">
-                        <MoreVertical size={16} />
-                      </button>
+                    <td className="px-3 py-3 relative">
+                      <div className="relative inline-block" ref={menuKey === rowKey(r) ? menuRef : undefined}>
+                        <button
+                          type="button"
+                          title="Actions"
+                          className="w-8 h-8 rounded-lg border border-gray-200 grid place-items-center text-gray-500 hover:bg-gray-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuKey((k) => (k === rowKey(r) ? null : rowKey(r)));
+                          }}
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+                        {menuKey === rowKey(r) && (
+                          <div className="absolute right-0 top-9 z-30 w-48 rounded-xl border border-gray-200 bg-white shadow-lg py-1 overflow-hidden">
+                            <button
+                              type="button"
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                              onClick={() => {
+                                setSelected(r);
+                                setMenuKey(null);
+                              }}
+                            >
+                              <Eye size={14} className="text-emerald-600" /> View details
+                            </button>
+                            <button
+                              type="button"
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                              onClick={() => printLabelForRow(r)}
+                            >
+                              <Tag size={14} className="text-amber-600" /> Print label
+                            </button>
+                            {productIdOf(r) ? (
+                              <button
+                                type="button"
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                                onClick={() => {
+                                  setMenuKey(null);
+                                  navigate(`/products/edit-product/${productIdOf(r)}`);
+                                }}
+                              >
+                                <Pencil size={14} className="text-sky-600" /> Edit product
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                              onClick={() => {
+                                setMenuKey(null);
+                                navigate("/store-release/create");
+                              }}
+                            >
+                              <ArrowRightLeft size={14} className="text-violet-600" /> Release to shop
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -2275,6 +2373,59 @@ export function StockList() {
           </div>
         </div>
       </div>
+
+      {selected && (
+        <div className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4" onClick={() => setSelected(null)}>
+          <div
+            className="bg-white rounded-2xl border border-gray-200 shadow-xl w-full max-w-md p-5 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Stock details</div>
+                <div className="text-lg font-bold text-gray-900 mt-0.5">{selected.productName || selected.displayName}</div>
+              </div>
+              <button type="button" className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500" onClick={() => setSelected(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-lg bg-gray-50 p-2.5">
+                <div className="text-[11px] text-gray-500">Product code</div>
+                <div className="font-semibold">{selected.productID || "-"}</div>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-2.5">
+                <div className="text-[11px] text-gray-500">Barcode</div>
+                <div className="font-semibold">{selected.barcode || "-"}</div>
+              </div>
+              <div className="rounded-lg bg-emerald-50 p-2.5">
+                <div className="text-[11px] text-emerald-700">Store qty</div>
+                <div className="font-bold text-emerald-900">{Number(selected.storeQty ?? selected.quantity ?? 0)}</div>
+              </div>
+              <div className="rounded-lg bg-sky-50 p-2.5">
+                <div className="text-[11px] text-sky-700">Shop qty</div>
+                <div className="font-bold text-sky-900">{Number(selected.shopQty ?? 0)}</div>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-2.5">
+                <div className="text-[11px] text-gray-500">Cost</div>
+                <div className="font-semibold">{lkr(selected.cost || 0)}</div>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-2.5">
+                <div className="text-[11px] text-gray-500">Selling</div>
+                <div className="font-semibold text-emerald-700">{lkr(selected.sellingPrice ?? selected.price ?? 0)}</div>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button type="button" className="btn btn-muted" onClick={() => printLabelForRow(selected)}>
+                <Tag size={14} /> Print label
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => navigate("/store-release/create")}>
+                Release to shop
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
