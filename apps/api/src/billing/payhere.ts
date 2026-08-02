@@ -195,10 +195,22 @@ export function buildCheckoutFields(input: {
   const recurring =
     input.recurring !== false && process.env.PAYHERE_DISABLE_RECURRING !== "1";
 
+  /**
+   * PayHere Merchant Secret is bound to the Integrations domain/app.
+   * Sandbox accounts that only registered `localhost` reject checkouts whose
+   * return/cancel URL host is something else (e.g. *.vercel.app) → "Unauthorized payment request".
+   * Override with PAYHERE_RETURN_BASE if you registered a real domain.
+   */
+  const sandbox = payhereSandbox();
+  const returnBase = (
+    process.env.PAYHERE_RETURN_BASE?.trim() ||
+    (sandbox ? "http://localhost" : webBase)
+  ).replace(/\/$/, "");
+
   const fields: Record<string, string> = {
     merchant_id: merchantId,
-    return_url: `${webBase}/setting?tab=license&billing=return`,
-    cancel_url: `${webBase}/setting?tab=license&billing=cancel`,
+    return_url: `${returnBase}/setting?tab=license&billing=return`,
+    cancel_url: `${returnBase}/setting?tab=license&billing=cancel`,
     notify_url: `${apiBase}/api/billing/webhook`,
     order_id: input.orderId,
     items: `QUANTUMEXE POS ${input.plan.label}`,
@@ -222,9 +234,10 @@ export function buildCheckoutFields(input: {
   }
 
   return {
-    sandbox: payhereSandbox(),
+    sandbox,
     action: payhereCheckoutUrl(),
     recurring,
+    returnBase,
     fields,
   };
 }

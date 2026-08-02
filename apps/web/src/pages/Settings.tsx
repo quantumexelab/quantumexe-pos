@@ -526,9 +526,11 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-[11px] text-gray-500">
-              If PayHere shows &quot;Unauthorized payment request&quot;, re-copy Merchant Secret from PayHere → Integrations
-              (localhost row), update Vercel <code className="text-[10px]">PAYHERE_MERCHANT_SECRET</code>, Redeploy, then try{" "}
-              <strong>One-time pay (test)</strong> first.
+              Sandbox tip: PayHere domain is registered as <code className="text-[10px]">localhost</code>, so return URLs
+              use localhost after pay (shop still activates via webhook on Vercel). If you still see Unauthorized, re-copy
+              Merchant Secret from PayHere → Integrations into Vercel <code className="text-[10px]">PAYHERE_MERCHANT_SECRET</code>{" "}
+              and Redeploy. Long-term: add a real domain (not vercel.app) in PayHere + set{" "}
+              <code className="text-[10px]">PAYHERE_RETURN_BASE</code>.
             </p>
           </div>
 
