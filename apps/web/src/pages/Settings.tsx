@@ -207,7 +207,7 @@ export default function SettingsPage() {
   }
 
   function goToPayHere(bridgeUrl: string | null | undefined, action: string, fields: Record<string, string>) {
-    // Prefer custom-domain bridge (quantumexe.lk) so PayHere sees the registered Referer.
+    // Prefer custom-domain bridge (pos.quantumexe.lk) so PayHere sees the registered Referer.
     if (bridgeUrl) {
       window.location.assign(bridgeUrl);
       return;
@@ -258,7 +258,7 @@ export default function SettingsPage() {
       if (!action || !fields) throw new Error("Invalid checkout response");
       setMsg(
         bridgeUrl
-          ? "Opening quantumexe.lk → PayHere…"
+          ? "Opening pos.quantumexe.lk → PayHere…"
           : recurring
             ? "Redirecting to PayHere (auto-renew)…"
             : "Redirecting to PayHere (one-time test)…"
@@ -510,16 +510,16 @@ export default function SettingsPage() {
             )}
             {billing != null && billing.configured && billing.publicWebNeedsCustomDomain && (
               <div className="text-sm text-red-900 bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
-                <div className="font-semibold">Connect quantumexe.lk for live PayHere</div>
+                <div className="font-semibold">Connect pos.quantumexe.lk for live PayHere</div>
                 <div className="text-xs leading-relaxed">
-                  Pay button will open <code className="text-[10px]">https://quantumexe.lk</code> then PayHere — but only
-                  after: (1) add <strong>quantumexe.lk</strong> on Vercel Domains, (2) register{" "}
-                  <code className="text-[10px]">quantumexe.lk</code> in PayHere Integrations + new secret, (3) set Vercel
+                  Pay button will open <code className="text-[10px]">https://pos.quantumexe.lk</code> then PayHere — but only
+                  after: (1) add <strong>pos.quantumexe.lk</strong> on Vercel Domains, (2) register{" "}
+                  <code className="text-[10px]">pos.quantumexe.lk</code> in PayHere Integrations + new secret, (3) set Vercel
                   env <code className="text-[10px]">PAYHERE_CHECKOUT_BASE</code>,{" "}
                   <code className="text-[10px]">PAYHERE_RETURN_BASE</code>,{" "}
                   <code className="text-[10px]">PUBLIC_WEB_BASE</code>,{" "}
                   <code className="text-[10px]">PUBLIC_API_BASE</code> to{" "}
-                  <code className="text-[10px]">https://quantumexe.lk</code> and Redeploy.
+                  <code className="text-[10px]">https://pos.quantumexe.lk</code> and Redeploy.
                 </div>
               </div>
             )}
@@ -590,8 +590,8 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-[11px] text-gray-500">
-              Pay button opens <strong>quantumexe.lk</strong>, then PayHere. Register{" "}
-              <code className="text-[10px]">quantumexe.lk</code> in PayHere Integrations (new secret) and point that
+              Pay button opens <strong>pos.quantumexe.lk</strong>, then PayHere. Register{" "}
+              <code className="text-[10px]">pos.quantumexe.lk</code> in PayHere Integrations (new secret) and point that
               domain to this Vercel project.
             </p>
           </div>
