@@ -455,17 +455,20 @@ export default function SettingsPage() {
                 Card is charged by PayHere. Settlements go to QUANTUMEXE&apos;s merchant bank account — we never store your card.
               </p>
             </div>
-            {!billing?.configured && (
+            {billing != null && !billing.configured && (
               <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
                 <div>
                   PayHere is not configured on this server yet. Add env vars on Vercel, then{" "}
                   <strong>Redeploy</strong> (Deployments → ⋯ → Redeploy).
                 </div>
                 <div className="text-xs font-mono text-amber-900">
-                  merchantId: {billing?.hasMerchantId ? "OK" : "MISSING"} · merchantSecret:{" "}
-                  {billing?.hasMerchantSecret ? "OK" : "MISSING"}
+                  merchantId: {billing.hasMerchantId ? "OK" : "MISSING"} · merchantSecret:{" "}
+                  {billing.hasMerchantSecret ? "OK" : "MISSING"}
                 </div>
               </div>
+            )}
+            {billing == null && (
+              <div className="text-xs text-gray-400">Checking PayHere configuration…</div>
             )}
             <div className="grid sm:grid-cols-2 gap-3">
               {(billing?.plans?.length
