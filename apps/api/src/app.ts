@@ -7,18 +7,21 @@ import core from "./routes-core.js";
 import ops from "./routes-ops.js";
 import syncRoutes from "./routes-sync.js";
 import masterRoutes from "./routes-master.js";
+import billingRoutes from "./routes-billing.js";
 
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: false }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/api", core);
 app.use("/api", ops);
 app.use("/api", syncRoutes);
 app.use("/api", masterRoutes);
+app.use("/api", billingRoutes);
 
 /** Desktop / production: serve built React UI from the same port as the API. */
 export function attachWebStatic(webDist?: string) {

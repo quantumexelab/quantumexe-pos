@@ -65,3 +65,20 @@ Set in `apps/api/.env`: `SYNC_TO_FIRESTORE=1` + Firebase Admin fields. Leave `US
 ## Cloud-only demo (Vercel)
 
 https://quantumexe-pos.vercel.app — remote demo. Day-to-day shop sales should use the **Windows installer** so offline works.
+
+### PayHere shop subscriptions (SaaS)
+
+Shop owners pay QUANTUMEXE (default **Rs. 2,000 / month** or **Rs. 20,000 / year**) via [PayHere](https://www.payhere.lk). PayHere charges the card and settles to your merchant bank — the app never stores card numbers.
+
+1. Create a PayHere **sandbox** merchant at https://sandbox.payhere.lk → Integrations → Domains/Apps → copy **Merchant ID** + **Merchant Secret**.
+2. Enable **Recurring** payments for your merchant.
+3. On Vercel (or `apps/api/.env`), set:
+   - `PAYHERE_MERCHANT_ID`
+   - `PAYHERE_MERCHANT_SECRET`
+   - `PAYHERE_MODE=sandbox` (use `live` in production)
+   - `PUBLIC_API_BASE` / `PUBLIC_WEB_BASE` = your public HTTPS origin (e.g. `https://quantumexe-pos.vercel.app`)
+4. Webhook (notify) URL used by checkout: `{PUBLIC_API_BASE}/api/billing/webhook`
+5. In the app: **Settings → License** (active shops) or **Pending access** gate (overdue/pending) → choose Monthly/Annual → **PayHere**.
+6. Master Admin still has **Mark paid** as a manual fallback. Shop cards show billing plan + last PayHere payment id.
+
+Optional amounts: `PAYHERE_AMOUNT_MONTHLY`, `PAYHERE_AMOUNT_ANNUAL`.

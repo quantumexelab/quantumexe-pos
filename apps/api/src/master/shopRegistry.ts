@@ -37,6 +37,13 @@ export type ShopRecord = {
    * 0 = retention off (keep forever). Allowed: 0 | 3 | 6 | 12 | 24. Default 12.
    */
   cloudRetentionMonths?: number;
+  /** PayHere SaaS billing */
+  billingPlan?: "monthly" | "annual" | null;
+  billingInterval?: "monthly" | "annual" | null;
+  payhereSubscriptionId?: string | null;
+  payherePaymentId?: string | null;
+  payhereCustomerToken?: string | null;
+  lastBillingAmount?: number | null;
 };
 
 const SHOPS_COL = "pos_shops";
@@ -301,14 +308,15 @@ export async function updateShop(
 
 export async function approveShop(
   shopId: string,
-  opts: { paymentNote?: string; shopType?: string } | string = {}
+  opts: { paymentNote?: string; shopType?: string; days?: number } | string = {}
 ) {
   const paymentNote =
     typeof opts === "string" ? opts : opts.paymentNote || "Payment confirmed";
   const shopType = typeof opts === "string" ? undefined : opts.shopType;
+  const days = typeof opts === "string" ? 30 : opts.days ?? 30;
 
   const now = new Date();
-  const nextDue = new Date(now.getTime() + 30 * 86400000);
+  const nextDue = new Date(now.getTime() + days * 86400000);
   const patch: Partial<ShopRecord> = {
     status: "active",
     paymentNote,
@@ -318,6 +326,51 @@ export async function approveShop(
   };
   if (shopType) patch.shopType = shopType;
   return updateShop(shopId, patch);
+}
+
+/** Apply a successful PayHere (or manual) subscription payment and extend access. */
+export async function applySubscriptionPayment(input: {
+  shopId: string;
+  interval: "monthly" | "annual";
+  paymentId: string;
+  subscriptionId?: string | null;
+  amount?: number | null;
+  paymentNote?: string;
+}) {
+  const days = input.interval === "annual" ? 365 : 30;
+  const now = new Date();
+  const shop = await getShop(input.shopId);
+  if (!shop) throw new Error("Shop not found");
+
+  const currentDue = shop.nextDueAt ? new Date(shop.nextDueAt) : null;
+  const base = currentDue && currentDue.getTime() > now.getTime() ? currentDue : now;
+  const nextDue = new Date(base.getTime() + days * 86400000);
+
+  const updated = await updateShop(input.shopId, {
+    status: "active",
+    lastPaidAt: now.toISOString(),
+    nextDueAt: nextDue.toISOString(),
+    approvedAt: shop.approvedAt || now.toISOString(),
+    billingPlan: input.interval,
+    billingInterval: input.interval,
+    payherePaymentId: input.paymentId,
+    payhereSubscriptionId: input.subscriptionId || shop.payhereSubscriptionId || input.paymentId,
+    lastBillingAmount: input.amount ?? shop.lastBillingAmount ?? null,
+    paymentNote: input.paymentNote || `PayHere ${input.paymentId}`,
+  });
+
+  // Mirror license on SQLite / desktop installs
+  if (process.env.USE_FIRESTORE !== "1") {
+    await refreshLocalAccessFromRegistry(input.shopId);
+  }
+  return updated;
+}
+
+export async function markSubscriptionFailed(shopId: string, note?: string) {
+  return updateShop(shopId, {
+    status: "overdue",
+    paymentNote: note || "PayHere recurring charge failed",
+  });
 }
 
 /** Set or change shop type and re-apply feature template (does not wipe products). */

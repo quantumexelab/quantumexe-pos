@@ -1,2 +1,2 @@
 /** Single source of truth for UI version labels (sidebar, About, Sign-in). */
-export const APP_VERSION = "1.2.7";
+export const APP_VERSION = "1.2.8";

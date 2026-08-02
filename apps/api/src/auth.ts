@@ -9,6 +9,8 @@ const JWT_SECRET = process.env.JWT_SECRET || "reox-clone-dev-secret";
 const SHOP_ACCESS_ALLOWLIST = new Set([
   "/shop/access",
   "/license/status",
+  "/billing/plans",
+  "/billing/checkout",
 ]);
 
 export type AuthUser = {

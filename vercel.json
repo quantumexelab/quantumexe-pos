@@ -16,7 +16,10 @@
   "env": {
     "JWT_SECRET": "reox-clone-dev-secret",
     "USE_FIRESTORE": "1",
-    "FIREBASE_PROJECT_ID": "quantumexe-pos-test"
+    "FIREBASE_PROJECT_ID": "quantumexe-pos-test",
+    "PAYHERE_MODE": "sandbox",
+    "PUBLIC_API_BASE": "https://quantumexe-pos.vercel.app",
+    "PUBLIC_WEB_BASE": "https://quantumexe-pos.vercel.app"
   },
   "functions": {
     "api/index.ts": {

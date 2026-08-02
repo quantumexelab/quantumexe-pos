@@ -40,6 +40,11 @@ type Shop = {
   shopType?: string;
   fingerprintAttendance?: boolean;
   cloudRetentionMonths?: number;
+  billingPlan?: string | null;
+  billingInterval?: string | null;
+  payhereSubscriptionId?: string | null;
+  payherePaymentId?: string | null;
+  lastBillingAmount?: number | null;
 };
 
 type PanelTab = "firebase" | "access" | "security";
@@ -345,6 +350,14 @@ export default function MasterAdmin() {
                       </span>
                       <span className="text-slate-300">·</span>
                       <span className="text-slate-500">Due {formatWhen(s.nextDueAt)}</span>
+                      {(s.billingPlan || s.billingInterval) && (
+                        <>
+                          <span className="text-slate-300">·</span>
+                          <span className="text-emerald-700 font-semibold capitalize">
+                            {s.billingPlan || s.billingInterval}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </button>
                 );
@@ -399,6 +412,24 @@ export default function MasterAdmin() {
                       ["Last paid", formatWhen(selected.lastPaidAt)],
                       ["Next due", formatWhen(selected.nextDueAt)],
                       ["Address", selected.address || "—"],
+                      [
+                        "Billing plan",
+                        selected.billingPlan || selected.billingInterval
+                          ? String(selected.billingPlan || selected.billingInterval)
+                          : "—",
+                      ],
+                      [
+                        "Last PayHere",
+                        selected.payherePaymentId
+                          ? `${selected.payherePaymentId}${
+                              selected.lastBillingAmount != null
+                                ? ` · Rs. ${Number(selected.lastBillingAmount).toLocaleString()}`
+                                : ""
+                            }`
+                          : "—",
+                      ],
+                      ["Subscription ID", selected.payhereSubscriptionId || "—"],
+                      ["Payment note", selected.paymentNote || "—"],
                     ].map(([k, v]) => (
                       <div key={k}>
                         <dt className="text-slate-400 font-semibold">{k}</dt>

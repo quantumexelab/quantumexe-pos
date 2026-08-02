@@ -115,6 +115,21 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [poleConnected, setPoleConnected] = useState(false);
   const [printerNames, setPrinterNames] = useState<string[]>(["XP-Q80T", "Xprinter XP-Q80T", "XP-Q80"]);
+  const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
+  const [billing, setBilling] = useState<{
+    configured: boolean;
+    sandbox: boolean;
+    plans: { id: string; label: string; amount: number; currency: string; days: number }[];
+    current: {
+      status?: string;
+      billingPlan?: string | null;
+      nextDueAt?: string | null;
+      lastPaidAt?: string | null;
+      payherePaymentId?: string | null;
+      lastBillingAmount?: number | null;
+    } | null;
+  } | null>(null);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
 
   function selectTab(id: Tab) {
     setTab(id);
@@ -137,18 +152,82 @@ export default function SettingsPage() {
     setLoading(true);
     setError("");
     try {
-      const [s, l] = await Promise.all([api.get("/settings"), api.get("/license/status")]);
+      const [s, l, b] = await Promise.all([
+        api.get("/settings"),
+        api.get("/license/status"),
+        api.get("/billing/plans").catch(() => null),
+      ]);
       const merged = { ...DEFAULTS, ...(s.data.data || {}), version: APP_VERSION };
       setSettings(merged);
       setLicense(l.data.data || null);
+      if (b?.data?.data) {
+        const bill = b.data.data;
+        setBilling(bill);
+        if (bill.current?.billingPlan === "annual" || bill.current?.billingPlan === "monthly") {
+          setBillingInterval(bill.current.billingPlan);
+        }
+      }
       const savedLang = String(merged.ui_language || "").trim();
       if (savedLang === "en" || savedLang === "si" || savedLang === "ta") {
         setLang(savedLang);
+      }
+      const billingFlag = searchParams.get("billing");
+      if (billingFlag === "return") {
+        setMsg("Returned from PayHere — refreshing subscription status…");
+        setTimeout(() => void refreshBilling(), 1500);
+      } else if (billingFlag === "cancel") {
+        setError("PayHere checkout was cancelled.");
       }
     } catch (e: any) {
       setError(e.message || "Failed to load settings");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function refreshBilling() {
+    try {
+      const [l, b] = await Promise.all([api.get("/license/status"), api.get("/billing/plans")]);
+      setLicense(l.data.data || null);
+      if (b.data?.data) setBilling(b.data.data);
+      setMsg("Subscription status refreshed");
+    } catch (e: any) {
+      setError(e.message || "Failed to refresh billing");
+    }
+  }
+
+  function submitPayHereForm(action: string, fields: Record<string, string>) {
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = action;
+    form.style.display = "none";
+    for (const [k, v] of Object.entries(fields)) {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = k;
+      input.value = String(v ?? "");
+      form.appendChild(input);
+    }
+    document.body.appendChild(form);
+    form.submit();
+  }
+
+  async function startCheckout(interval: "monthly" | "annual" = billingInterval) {
+    setError("");
+    setMsg("");
+    setCheckoutBusy(true);
+    try {
+      const { data } = await api.post("/billing/checkout", { interval });
+      if (!data?.success) throw new Error(data?.message || "Checkout failed");
+      const action = data.data?.action as string;
+      const fields = data.data?.fields as Record<string, string>;
+      if (!action || !fields) throw new Error("Invalid checkout response");
+      setMsg("Redirecting to PayHere…");
+      submitPayHereForm(action, fields);
+    } catch (e: any) {
+      const ax = e as { response?: { data?: { message?: string } }; message?: string };
+      setError(ax.response?.data?.message || ax.message || "PayHere checkout failed");
+      setCheckoutBusy(false);
     }
   }
 
@@ -206,13 +285,7 @@ export default function SettingsPage() {
   }
 
   async function refreshLicense() {
-    try {
-      const { data } = await api.get("/license/status");
-      setLicense(data.data || null);
-      setMsg("License refreshed");
-    } catch (e: any) {
-      setError(e.message || "Failed to refresh license");
-    }
+    await refreshBilling();
   }
 
   /** Resize + JPEG compress so logos survive Firestore (max ~1MB per setting doc). */
@@ -334,7 +407,10 @@ export default function SettingsPage() {
       {tab === "license" && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-xs text-gray-500">Live status from subscription check API</div>
+            <div className="text-xs text-gray-500">
+              QUANTUMEXE SaaS subscription via PayHere
+              {billing?.sandbox ? " (sandbox)" : ""}
+            </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -343,17 +419,12 @@ export default function SettingsPage() {
               >
                 Cloud sync / Connection
               </button>
-              <button type="button" onClick={refreshLicense} className="h-9 px-3 rounded-lg border border-gray-200 text-sm font-semibold inline-flex items-center gap-1 hover:bg-gray-50">
-                <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh License
-              </button>
-              <button type="button" className="h-9 px-3 rounded-lg border border-gray-200 text-sm font-semibold hover:bg-gray-50">
-                Refresh Plans
-              </button>
-              <button type="button" className="h-9 px-3 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700">
-                Remove License
-              </button>
-              <button type="button" className="h-9 px-3 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
-                Renew Subscription
+              <button
+                type="button"
+                onClick={() => void refreshLicense()}
+                className="h-9 px-3 rounded-lg border border-gray-200 text-sm font-semibold inline-flex items-center gap-1 hover:bg-gray-50"
+              >
+                <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
               </button>
             </div>
           </div>
@@ -364,38 +435,94 @@ export default function SettingsPage() {
               <div className="mt-2 text-lg font-bold text-gray-900">{license?.license_key || "—"}</div>
             </div>
             <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="text-xs font-semibold text-gray-500 tracking-wide">EXPIRY DATE</div>
+              <div className="text-xs font-semibold text-gray-500 tracking-wide">NEXT DUE</div>
               <div className="mt-2 text-lg font-bold text-gray-900">
-                {license?.expiry_date ? new Date(license.expiry_date).toLocaleDateString() : "—"}
+                {billing?.current?.nextDueAt
+                  ? new Date(billing.current.nextDueAt).toLocaleDateString()
+                  : license?.expiry_date
+                    ? new Date(license.expiry_date).toLocaleDateString()
+                    : "—"}
               </div>
             </div>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="text-sm font-bold text-gray-800 mb-3">Subscription Profile</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-              {[
-                ["Business Name", settings.business_name],
-                ["Owner Name", settings.owner_name],
-                ["Max Devices", settings.max_devices],
-                ["Status", String(license?.status || "active").toLowerCase()],
-                ["Expiry Date", license?.expiry_date ? new Date(license.expiry_date).toLocaleDateString() : "—"],
-                ["Online Access", settings.online_access],
-                ["DB Type", settings.db_type],
-              ].map(([k, v]) => (
-                <div key={k as string} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
-                  <div className="text-[11px] font-semibold text-gray-500">{k}</div>
-                  <div className="font-semibold text-gray-800 mt-0.5">{v}</div>
-                </div>
-              ))}
+          <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
+            <div>
+              <div className="text-sm font-bold text-gray-800">Choose plan</div>
+              <p className="text-xs text-gray-500 mt-1">
+                Card is charged by PayHere. Settlements go to QUANTUMEXE&apos;s merchant bank account — we never store your card.
+              </p>
+            </div>
+            {!billing?.configured && (
+              <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                PayHere is not configured on this server yet. Master Admin can still mark paid manually. Ask support to set{" "}
+                <code className="text-xs">PAYHERE_MERCHANT_ID</code> / <code className="text-xs">PAYHERE_MERCHANT_SECRET</code>.
+              </div>
+            )}
+            <div className="grid sm:grid-cols-2 gap-3">
+              {(billing?.plans?.length
+                ? billing.plans
+                : [
+                    { id: "monthly", label: "Monthly", amount: 2000, currency: "LKR", days: 30 },
+                    { id: "annual", label: "Annual", amount: 20000, currency: "LKR", days: 365 },
+                  ]
+              ).map((p) => {
+                const selected = billingInterval === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setBillingInterval(p.id as "monthly" | "annual")}
+                    className={`text-left rounded-xl border p-4 transition ${
+                      selected
+                        ? "border-emerald-600 bg-emerald-50 ring-1 ring-emerald-600"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="text-sm font-bold text-gray-900">{p.label}</div>
+                    <div className="text-2xl font-bold text-emerald-700 mt-1">
+                      {p.currency} {Number(p.amount).toLocaleString()}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">Auto-renews · {p.days} days access per charge</div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={checkoutBusy || !billing?.configured}
+                onClick={() => void startCheckout()}
+                className="btn btn-primary h-10 px-4 disabled:opacity-50"
+              >
+                {checkoutBusy ? "Opening PayHere…" : "Subscribe / Renew with PayHere"}
+              </button>
+              <button
+                type="button"
+                className="h-10 px-4 rounded-lg border border-gray-200 text-sm font-semibold hover:bg-gray-50"
+                onClick={() => void refreshBilling()}
+              >
+                Refresh status
+              </button>
             </div>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-            <div className="text-sm font-bold text-gray-800">Current Subscription Details</div>
+            <div className="text-sm font-bold text-gray-800">Current subscription</div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-gray-800">Plan: {settings.plan_name}</span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold">Active</span>
+              <span className="text-sm font-semibold text-gray-800">
+                Plan: {billing?.current?.billingPlan || settings.plan_name || "—"}
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                  (billing?.current?.status || license?.status || "").toString().toLowerCase() === "active" ||
+                  String(license?.status || "").toUpperCase() === "VALID"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-amber-100 text-amber-800"
+                }`}
+              >
+                {billing?.current?.status || license?.status || "—"}
+              </span>
               {daysRemaining != null && (
                 <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[11px] font-bold">
                   {daysRemaining} day(s) remaining
@@ -403,29 +530,17 @@ export default function SettingsPage() {
               )}
             </div>
             <div className="text-sm text-gray-600">
-              Active: 6/26/2026 | Expires:{" "}
-              {license?.expiry_date ? new Date(license.expiry_date).toLocaleDateString() : "—"}
+              Last paid:{" "}
+              {billing?.current?.lastPaidAt ? new Date(billing.current.lastPaidAt).toLocaleString() : "—"}
+              {billing?.current?.lastBillingAmount != null
+                ? ` · Rs. ${Number(billing.current.lastBillingAmount).toLocaleString()}`
+                : ""}
             </div>
             <div className="text-sm">
-              Payment History:{" "}
-              <span className="inline-flex px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-bold">
-                SUCCESS
-              </span>{" "}
-              <span className="text-gray-500">Payment ID: QX_68342500</span>
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm text-gray-600 max-w-xl">
-              Complete renewal online, then refresh this panel to sync latest subscription details.
-            </div>
-            <div className="flex gap-2">
-              <button type="button" className="btn btn-primary h-10 px-4">
-                Renew Now
-              </button>
-              <button type="button" className="h-10 px-4 rounded-lg border border-gray-200 text-sm font-semibold hover:bg-gray-50">
-                Contact Support
-              </button>
+              Payment ID:{" "}
+              <span className="font-mono text-xs text-gray-700">
+                {billing?.current?.payherePaymentId || "—"}
+              </span>
             </div>
           </div>
         </div>
