@@ -122,7 +122,7 @@ router.post("/billing/checkout", requireAuth, requireRoles("Admin"), async (req,
         amount: plan.amount,
         bridgeUrl,
         message: bridgeUrl
-          ? "Open bridgeUrl (pos.quantumexe.lk) — it posts to PayHere with the correct domain"
+          ? "Open bridgeUrl (pos.quantumexe.com) — it posts to PayHere with the correct domain"
           : "Submit the returned fields as a POST form to PayHere checkout",
       })
     );
@@ -133,8 +133,8 @@ router.post("/billing/checkout", requireAuth, requireRoles("Admin"), async (req,
 });
 
 /**
- * Public handoff page on the PayHere-registered domain (e.g. https://pos.quantumexe.lk/api/billing/bridge?t=…).
- * Browser Referer becomes pos.quantumexe.lk → PayHere accepts the payment request.
+ * Public handoff page on the PayHere-registered domain (e.g. https://pos.quantumexe.com/api/billing/bridge?t=…).
+ * Browser Referer becomes pos.quantumexe.com → PayHere accepts the payment request.
  */
 router.get("/billing/bridge", (req, res) => {
   try {
@@ -172,7 +172,7 @@ router.get("/billing/bridge", (req, res) => {
   <div class="box">
     <h1>QUANTUMEXE POS</h1>
     <p>Redirecting to PayHere secure checkout…</p>
-    <p class="muted">pos.quantumexe.lk → PayHere</p>
+    <p class="muted">pos.quantumexe.com → PayHere</p>
   </div>
   <form id="ph" method="POST" action="${esc(action)}">${inputs}</form>
   <script>document.getElementById("ph").submit();</script>

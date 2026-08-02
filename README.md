@@ -71,18 +71,18 @@ https://quantumexe-pos.vercel.app — remote demo. Day-to-day shop sales should 
 Shop owners pay QUANTUMEXE (default **Rs. 2,000 / month** or **Rs. 20,000 / year**) via [PayHere](https://www.payhere.lk). PayHere charges the card and settles to your merchant bank — the app never stores card numbers.
 
 **Important — public web checkout needs your own domain.**  
-PayHere Integrations does **not** allow `*.vercel.app` (subdomains). `localhost` works only for local/dev. Shop owners paying on the live site need a real domain (e.g. `pos.quantumexe.lk` or `quantumexe.lk`) registered in PayHere **and** pointed at Vercel.
+PayHere Integrations does **not** allow `*.vercel.app` (subdomains). `localhost` works only for local/dev. Shop owners paying on the live site need a real domain (e.g. `pos.quantumexe.com` or `quantumexe.lk`) registered in PayHere **and** pointed at Vercel.
 
-1. Keep company site on apex (`quantumexe.lk`, e.g. Squarespace). Create subdomain **pos.quantumexe.lk** → Vercel.
+1. Keep company site on apex (`quantumexe.lk`, e.g. Squarespace). Create subdomain **pos.quantumexe.com** → Vercel.
 2. Squarespace → Domains → `quantumexe.lk` → **DNS Settings** → add **CNAME**: Host `pos` → Data `cname.vercel-dns.com` (or the exact target Vercel shows).
-3. Vercel → **Settings → Domains** → add `pos.quantumexe.lk` → wait for SSL Valid.
-4. PayHere → **Integrations → Add Domain/App** → `pos.quantumexe.lk` → Save → copy that row’s **Merchant Secret** (not localhost).
+3. Vercel → **Settings → Domains** → add `pos.quantumexe.com` → wait for SSL Valid.
+4. PayHere → **Integrations → Add Domain/App** → `pos.quantumexe.com` → Save → copy that row’s **Merchant Secret** (not localhost).
 5. Vercel env (Production):
    - `PAYHERE_MERCHANT_ID` / `PAYHERE_MERCHANT_SECRET` (subdomain secret)
    - `PAYHERE_MODE=sandbox` (use `live` in production)
-   - `PUBLIC_API_BASE` / `PUBLIC_WEB_BASE` / `PAYHERE_RETURN_BASE` / `PAYHERE_CHECKOUT_BASE` = `https://pos.quantumexe.lk`
+   - `PUBLIC_API_BASE` / `PUBLIC_WEB_BASE` / `PAYHERE_RETURN_BASE` / `PAYHERE_CHECKOUT_BASE` = `https://pos.quantumexe.com`
 6. **Redeploy** after env + DNS.
-7. Flow: Pay → `https://pos.quantumexe.lk/api/billing/bridge?…` → PayHere.
+7. Flow: Pay → `https://pos.quantumexe.com/api/billing/bridge?…` → PayHere.
 8. Webhook: `{PUBLIC_API_BASE}/api/billing/webhook`
 9. Master Admin **Mark paid** remains a manual fallback.
 

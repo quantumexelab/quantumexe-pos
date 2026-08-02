@@ -55,7 +55,7 @@ function hostLooksLikeVercelApp(url: string) {
 
 /**
  * Origin that must POST to PayHere (Referer / Integrations domain).
- * Prefer PAYHERE_CHECKOUT_BASE / PAYHERE_RETURN_BASE (e.g. https://pos.quantumexe.lk).
+ * Prefer PAYHERE_CHECKOUT_BASE / PAYHERE_RETURN_BASE (e.g. https://pos.quantumexe.com).
  */
 export function payhereCheckoutBase() {
   const fromEnv =
