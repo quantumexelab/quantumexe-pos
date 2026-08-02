@@ -16,28 +16,31 @@ function money(n: number) {
   return Number(n).toFixed(2);
 }
 
-function cleanEnv(value: string | undefined) {
-  return String(value || "")
-    .trim()
-    .replace(/^["']|["']$/g, "")
-    .replace(/\r?\n/g, "");
+/** Strip copy/paste junk from Vercel / dashboard secrets. */
+export function sanitizePayHereSecret(raw: string) {
+  let s = String(raw || "").trim();
+  // Remove wrapping quotes if pasted from .env
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1).trim();
+  }
+  // Remove accidental whitespace / newlines inside
+  s = s.replace(/\s+/g, "");
+  return s;
 }
 
 export function payhereConfigured() {
-  return Boolean(cleanEnv(process.env.PAYHERE_MERCHANT_ID) && cleanEnv(process.env.PAYHERE_MERCHANT_SECRET));
+  return Boolean(
+    process.env.PAYHERE_MERCHANT_ID?.trim() && sanitizePayHereSecret(process.env.PAYHERE_MERCHANT_SECRET || "")
+  );
 }
 
 /** Safe diagnostics for Settings UI (no secret values). */
 export function payhereConfigStatus() {
-  const secret = cleanEnv(process.env.PAYHERE_MERCHANT_SECRET);
   return {
     configured: payhereConfigured(),
     mode: (process.env.PAYHERE_MODE || "sandbox").toLowerCase(),
-    hasMerchantId: Boolean(cleanEnv(process.env.PAYHERE_MERCHANT_ID)),
-    hasMerchantSecret: Boolean(secret),
-    merchantIdLength: cleanEnv(process.env.PAYHERE_MERCHANT_ID).length,
-    merchantSecretLength: secret.length,
-    recurringEnabled: cleanEnv(process.env.PAYHERE_RECURRING || "1") !== "0",
+    hasMerchantId: Boolean(process.env.PAYHERE_MERCHANT_ID?.trim()),
+    hasMerchantSecret: Boolean(process.env.PAYHERE_MERCHANT_SECRET?.trim()),
     hasPublicApiBase: Boolean(process.env.PUBLIC_API_BASE?.trim() || process.env.VERCEL_URL),
     hasPublicWebBase: Boolean(process.env.PUBLIC_WEB_BASE?.trim() || process.env.VERCEL_URL),
   };
@@ -111,11 +114,9 @@ export function verifyNotifySignature(params: {
   status_code: string;
   md5sig: string;
 }) {
-  const secret = process.env.PAYHERE_MERCHANT_SECRET || "";
+  const secret = sanitizePayHereSecret(process.env.PAYHERE_MERCHANT_SECRET || "");
   if (!secret) return false;
-  const merchantSecret = cleanEnv(secret);
-  if (!merchantSecret) return false;
-  const secretHash = crypto.createHash("md5").update(merchantSecret).digest("hex").toUpperCase();
+  const secretHash = crypto.createHash("md5").update(secret).digest("hex").toUpperCase();
   const local = crypto
     .createHash("md5")
     .update(
@@ -149,30 +150,19 @@ export function publicWebBase() {
   );
 }
 
-/** order_id embeds shop + plan: qxsub-{shopSafe}-{interval}-{ts} (PayHere-safe chars) */
+/** order_id must stay simple — PayHere rejects odd characters / long ids. */
 export function buildOrderId(shopId: string, interval: BillingInterval) {
-  const safeShop = shopId.replace(/[^a-zA-Z0-9]/g, "").slice(-16) || "shop";
-  return `qxsub-${safeShop}-${interval}-${Date.now().toString(36)}`;
+  const short = shopId.replace(/[^a-zA-Z0-9]/g, "").slice(-8) || "shop";
+  const plan = interval === "annual" ? "Y" : "M";
+  return `QX${plan}${short}${Date.now().toString(36)}`.slice(0, 40);
 }
 
 export function parseOrderId(orderId: string): { shopId: string; interval: BillingInterval } | null {
-  const m = String(orderId || "").match(/^qxsub-([a-zA-Z0-9]+)-(monthly|annual)-([a-z0-9]+)$/);
-  if (!m) {
-    // legacy format qxsub__shop__interval__ts
-    const parts = String(orderId || "").split("__");
-    if (parts.length >= 4 && parts[0] === "qxsub") {
-      const interval = parts[parts.length - 2] as BillingInterval;
-      if (interval === "monthly" || interval === "annual") {
-        return { shopId: parts.slice(1, -2).join("__"), interval };
-      }
-    }
-    return null;
-  }
-  return { shopId: m[1], interval: m[2] as BillingInterval };
-}
-
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  // Prefer custom_1 / custom_2 from webhook; this is a weak fallback only.
+  const id = String(orderId || "");
+  if (!id.startsWith("QX")) return null;
+  const interval: BillingInterval = id[2] === "Y" ? "annual" : "monthly";
+  return { shopId: "", interval };
 }
 
 export function buildCheckoutFields(input: {
@@ -185,11 +175,11 @@ export function buildCheckoutFields(input: {
   address?: string;
   city?: string;
   shopId: string;
+  /** When false, one-time payment (no recurrence) — useful to debug Unauthorized errors. */
+  recurring?: boolean;
 }) {
-  const merchantId = cleanEnv(process.env.PAYHERE_MERCHANT_ID);
-  const merchantSecret = cleanEnv(process.env.PAYHERE_MERCHANT_SECRET);
-  if (!merchantId || !merchantSecret) throw new Error("PayHere credentials missing");
-
+  const merchantId = process.env.PAYHERE_MERCHANT_ID!.trim();
+  const merchantSecret = sanitizePayHereSecret(process.env.PAYHERE_MERCHANT_SECRET || "");
   const apiBase = publicApiBase();
   const webBase = publicWebBase();
   const amount = money(input.plan.amount);
@@ -202,10 +192,8 @@ export function buildCheckoutFields(input: {
     merchantSecret,
   });
 
-  const email = isValidEmail(input.email) ? input.email : "billing@quantumexe.com";
-  const phoneDigits = String(input.phone || "").replace(/\D/g, "");
-  const phone = phoneDigits.length >= 9 ? phoneDigits.slice(-10) : "0771234567";
-  const recurring = cleanEnv(process.env.PAYHERE_RECURRING || "1") !== "0";
+  const recurring =
+    input.recurring !== false && process.env.PAYHERE_DISABLE_RECURRING !== "1";
 
   const fields: Record<string, string> = {
     merchant_id: merchantId,
@@ -218,9 +206,9 @@ export function buildCheckoutFields(input: {
     amount,
     first_name: input.firstName.slice(0, 40) || "Shop",
     last_name: input.lastName.slice(0, 40) || "Owner",
-    email,
-    phone,
-    address: (input.address || "Colombo").slice(0, 100),
+    email: input.email || "billing@quantumexe.local",
+    phone: String(input.phone || "0700000000").replace(/[^\d+]/g, "").slice(0, 15) || "0700000000",
+    address: (input.address || "Sri Lanka").slice(0, 100),
     city: (input.city || "Colombo").slice(0, 40),
     country: "Sri Lanka",
     custom_1: input.shopId.slice(0, 100),
@@ -228,7 +216,6 @@ export function buildCheckoutFields(input: {
     hash,
   };
 
-  // Recurring (requires PayHere Subscriptions enabled on merchant)
   if (recurring) {
     fields.recurrence = input.plan.recurrence;
     fields.duration = input.plan.duration;

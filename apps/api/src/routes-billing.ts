@@ -12,8 +12,6 @@ import {
   buildCheckoutFields,
   buildOrderId,
   getPlan,
-  getPlans,
-  parseOrderId,
   payhereConfigStatus,
   payhereConfigured,
   payhereSandbox,
@@ -25,6 +23,7 @@ const router = Router();
 
 const checkoutSchema = z.object({
   interval: z.enum(["monthly", "annual"]),
+  recurring: z.boolean().optional(),
 });
 
 router.get("/billing/plans", requireAuth, async (req, res) => {
@@ -101,6 +100,7 @@ router.post("/billing/checkout", requireAuth, requireRoles("Admin"), async (req,
       address: shop.address,
       city: shop.city,
       shopId,
+      recurring: parsed.data.recurring,
     });
 
     res.json(

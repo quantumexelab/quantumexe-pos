@@ -214,17 +214,17 @@ export default function SettingsPage() {
     form.submit();
   }
 
-  async function startCheckout(interval: "monthly" | "annual" = billingInterval) {
+  async function startCheckout(interval: "monthly" | "annual" = billingInterval, recurring = true) {
     setError("");
     setMsg("");
     setCheckoutBusy(true);
     try {
-      const { data } = await api.post("/billing/checkout", { interval });
+      const { data } = await api.post("/billing/checkout", { interval, recurring });
       if (!data?.success) throw new Error(data?.message || "Checkout failed");
       const action = data.data?.action as string;
       const fields = data.data?.fields as Record<string, string>;
       if (!action || !fields) throw new Error("Invalid checkout response");
-      setMsg("Redirecting to PayHere…");
+      setMsg(recurring ? "Redirecting to PayHere (auto-renew)…" : "Redirecting to PayHere (one-time test)…");
       submitPayHereForm(action, fields);
     } catch (e: any) {
       const ax = e as { response?: { data?: { message?: string } }; message?: string };
@@ -462,11 +462,8 @@ export default function SettingsPage() {
                   <strong>Redeploy</strong> (Deployments → ⋯ → Redeploy).
                 </div>
                 <div className="text-xs font-mono text-amber-900">
-                  merchantId: {billing?.hasMerchantId ? `OK (${(billing as { merchantIdLength?: number }).merchantIdLength || "?"})` : "MISSING"} ·
-                  merchantSecret:{" "}
-                  {billing?.hasMerchantSecret
-                    ? `OK (${(billing as { merchantSecretLength?: number }).merchantSecretLength || "?"} chars)`
-                    : "MISSING"}
+                  merchantId: {billing?.hasMerchantId ? "OK" : "MISSING"} · merchantSecret:{" "}
+                  {billing?.hasMerchantSecret ? "OK" : "MISSING"}
                 </div>
               </div>
             )}
@@ -503,10 +500,19 @@ export default function SettingsPage() {
               <button
                 type="button"
                 disabled={checkoutBusy}
-                onClick={() => void startCheckout()}
+                onClick={() => void startCheckout(billingInterval, true)}
                 className="btn btn-primary h-10 px-4 disabled:opacity-50"
               >
                 {checkoutBusy ? "Opening PayHere…" : "Subscribe / Renew with PayHere"}
+              </button>
+              <button
+                type="button"
+                disabled={checkoutBusy}
+                onClick={() => void startCheckout(billingInterval, false)}
+                className="h-10 px-4 rounded-lg border border-gray-200 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50"
+                title="One-time charge without auto-renew — use to test if Unauthorized is from recurring"
+              >
+                One-time pay (test)
               </button>
               <button
                 type="button"
@@ -516,6 +522,11 @@ export default function SettingsPage() {
                 Refresh status
               </button>
             </div>
+            <p className="text-[11px] text-gray-500">
+              If PayHere shows &quot;Unauthorized payment request&quot;, re-copy Merchant Secret from PayHere → Integrations
+              (localhost row), update Vercel <code className="text-[10px]">PAYHERE_MERCHANT_SECRET</code>, Redeploy, then try{" "}
+              <strong>One-time pay (test)</strong> first.
+            </p>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
