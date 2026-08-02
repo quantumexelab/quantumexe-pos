@@ -126,6 +126,8 @@ export default function SettingsPage() {
     secretTail?: string | null;
     returnBase?: string;
     notifyBase?: string;
+    publicWebNeedsCustomDomain?: boolean;
+    publicWebCheckoutOk?: boolean;
     plans: { id: string; label: string; amount: number; currency: string; days: number }[];
     current: {
       status?: string;
@@ -491,16 +493,25 @@ export default function SettingsPage() {
             {billing == null && (
               <div className="text-xs text-gray-400">Checking PayHere configuration…</div>
             )}
+            {billing != null && billing.configured && billing.publicWebNeedsCustomDomain && (
+              <div className="text-sm text-red-900 bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
+                <div className="font-semibold">Live web payments need your own domain</div>
+                <div className="text-xs leading-relaxed">
+                  PayHere does not allow <code className="text-[10px]">*.vercel.app</code>. Shop owners paying on this
+                  site will get <strong>Unauthorized</strong> until you: (1) add a real domain on Vercel, (2) register
+                  the same domain in PayHere → Integrations, (3) put that domain&apos;s Merchant Secret in Vercel as{" "}
+                  <code className="text-[10px]">PAYHERE_MERCHANT_SECRET</code>, (4) set{" "}
+                  <code className="text-[10px]">PUBLIC_WEB_BASE</code>, <code className="text-[10px]">PUBLIC_API_BASE</code>
+                  , and <code className="text-[10px]">PAYHERE_RETURN_BASE</code> to{" "}
+                  <code className="text-[10px]">https://your-domain</code>, then Redeploy. Localhost still works for
+                  testing only.
+                </div>
+              </div>
+            )}
             {billing != null && billing.configured && (
               <div className="text-[11px] text-gray-500 font-mono bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
                 PayHere OK · id {billing.merchantId || "—"} · secret len {billing.secretLength ?? "?"} ends{" "}
                 {billing.secretTail || "????"} · return {billing.returnBase || "—"}
-                <div className="mt-1 text-gray-400">
-                  Secret looks loaded (ends {billing.secretTail}). If PayHere still says Unauthorized, it is usually
-                  because PayHere domain is <code className="text-[10px]">localhost</code> while this site is on
-                  vercel.app — allow pop-ups and retry (we open checkout without the Vercel referrer). Long-term: use a
-                  real domain in PayHere.
-                </div>
               </div>
             )}
             <div className="grid sm:grid-cols-2 gap-3">
@@ -559,11 +570,9 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-[11px] text-gray-500">
-              Sandbox tip: PayHere domain is registered as <code className="text-[10px]">localhost</code>, so return URLs
-              use localhost after pay (shop still activates via webhook on Vercel). If you still see Unauthorized, re-copy
-              Merchant Secret from PayHere → Integrations into Vercel <code className="text-[10px]">PAYHERE_MERCHANT_SECRET</code>{" "}
-              and Redeploy. Long-term: add a real domain (not vercel.app) in PayHere + set{" "}
-              <code className="text-[10px]">PAYHERE_RETURN_BASE</code>.
+              Shop owners must pay on your public site. That requires a <strong>real domain</strong> in PayHere (not{" "}
+              <code className="text-[10px]">vercel.app</code>, not only <code className="text-[10px]">localhost</code>).
+              After DNS → Vercel + PayHere Integrations secret + env Redeploy, checkout works in the browser for customers.
             </p>
           </div>
 

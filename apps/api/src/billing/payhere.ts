@@ -37,14 +37,34 @@ export function payhereConfigured() {
   );
 }
 
+function resolveReturnBase() {
+  const sandbox = payhereSandbox();
+  const explicit = process.env.PAYHERE_RETURN_BASE?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  const web = publicWebBase().replace(/\/$/, "");
+  // *.vercel.app cannot be registered in PayHere — keep localhost returns only when
+  // no custom PAYHERE_RETURN_BASE (local/dev secret). Production web must set a real domain.
+  if (sandbox && /vercel\.app$/i.test(web.replace(/^https?:\/\//, "").split("/")[0] || "")) {
+    return "http://localhost";
+  }
+  return web || (sandbox ? "http://localhost" : "");
+}
+
+function hostLooksLikeVercelApp(url: string) {
+  try {
+    const host = new URL(url.includes("://") ? url : `https://${url}`).hostname;
+    return /\.vercel\.app$/i.test(host) || host === "vercel.app";
+  } catch {
+    return /vercel\.app/i.test(url);
+  }
+}
+
 /** Safe diagnostics for Settings UI (no full secret). */
 export function payhereConfigStatus() {
   const secret = sanitizePayHereSecret(process.env.PAYHERE_MERCHANT_SECRET || "");
-  const sandbox = payhereSandbox();
-  const returnBase = (
-    process.env.PAYHERE_RETURN_BASE?.trim() ||
-    (sandbox ? "http://localhost" : publicWebBase())
-  ).replace(/\/$/, "");
+  const returnBase = resolveReturnBase();
+  const webBase = publicWebBase().replace(/\/$/, "");
+  const publicWebNeedsCustomDomain = hostLooksLikeVercelApp(webBase);
   return {
     configured: payhereConfigured(),
     mode: (process.env.PAYHERE_MODE || "sandbox").toLowerCase(),
@@ -57,6 +77,9 @@ export function payhereConfigStatus() {
     notifyBase: publicApiBase(),
     hasPublicApiBase: Boolean(process.env.PUBLIC_API_BASE?.trim() || process.env.VERCEL_URL),
     hasPublicWebBase: Boolean(process.env.PUBLIC_WEB_BASE?.trim() || process.env.VERCEL_URL),
+    /** false when site is on *.vercel.app — PayHere rejects that domain for Integrations */
+    publicWebCheckoutOk: !publicWebNeedsCustomDomain,
+    publicWebNeedsCustomDomain,
   };
 }
 
@@ -211,15 +234,9 @@ export function buildCheckoutFields(input: {
 
   /**
    * PayHere Merchant Secret is bound to the Integrations domain/app.
-   * Sandbox accounts that only registered `localhost` reject checkouts whose
-   * return/cancel URL host is something else (e.g. *.vercel.app) → "Unauthorized payment request".
-   * Override with PAYHERE_RETURN_BASE if you registered a real domain.
+   * *.vercel.app cannot be registered → use a real domain + PAYHERE_RETURN_BASE / PUBLIC_WEB_BASE.
    */
-  const sandbox = payhereSandbox();
-  const returnBase = (
-    process.env.PAYHERE_RETURN_BASE?.trim() ||
-    (sandbox ? "http://localhost" : webBase)
-  ).replace(/\/$/, "");
+  const returnBase = resolveReturnBase() || webBase.replace(/\/$/, "");
 
   const fields: Record<string, string> = {
     merchant_id: merchantId,

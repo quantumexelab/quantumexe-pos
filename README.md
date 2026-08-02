@@ -70,15 +70,22 @@ https://quantumexe-pos.vercel.app — remote demo. Day-to-day shop sales should 
 
 Shop owners pay QUANTUMEXE (default **Rs. 2,000 / month** or **Rs. 20,000 / year**) via [PayHere](https://www.payhere.lk). PayHere charges the card and settles to your merchant bank — the app never stores card numbers.
 
-1. Create a PayHere **sandbox** merchant at https://sandbox.payhere.lk → Integrations → Domains/Apps → copy **Merchant ID** + **Merchant Secret**.
-2. Enable **Recurring** payments for your merchant.
-3. On Vercel (or `apps/api/.env`), set:
+**Important — public web checkout needs your own domain.**  
+PayHere Integrations does **not** allow `*.vercel.app` (subdomains). `localhost` works only for local/dev. Shop owners paying on the live site need a real domain (e.g. `pos.quantumexe.lk` or `quantumexe.lk`) registered in PayHere **and** pointed at Vercel.
+
+1. Buy/use a domain → Vercel project → **Settings → Domains** → add it (HTTPS).
+2. PayHere (sandbox or live) → **Integrations → Add Domain/App** → enter that **same** domain (no `https://`) → Save → copy the **Merchant Secret** for that row.
+3. Enable **Recurring** payments for your merchant.
+4. On Vercel env (Production):
    - `PAYHERE_MERCHANT_ID`
-   - `PAYHERE_MERCHANT_SECRET`
+   - `PAYHERE_MERCHANT_SECRET` (secret for **that** domain, not the localhost one)
    - `PAYHERE_MODE=sandbox` (use `live` in production)
-   - `PUBLIC_API_BASE` / `PUBLIC_WEB_BASE` = your public HTTPS origin (e.g. `https://quantumexe-pos.vercel.app`)
-4. Webhook (notify) URL used by checkout: `{PUBLIC_API_BASE}/api/billing/webhook`
-5. In the app: **Settings → License** (active shops) or **Pending access** gate (overdue/pending) → choose Monthly/Annual → **PayHere**.
-6. Master Admin still has **Mark paid** as a manual fallback. Shop cards show billing plan + last PayHere payment id.
+   - `PUBLIC_API_BASE` / `PUBLIC_WEB_BASE` / `PAYHERE_RETURN_BASE` = `https://your-domain` (same origin shop owners open)
+5. **Redeploy** after changing env.
+6. Webhook: `{PUBLIC_API_BASE}/api/billing/webhook`
+7. In the app: **Settings → License** or **Pending access** → Monthly/Annual → **PayHere**.
+8. Master Admin **Mark paid** remains a manual fallback.
+
+Local test only: PayHere domain `localhost` + `apps/api/.env` PayHere vars + `npm run dev` → http://localhost:5173.
 
 Optional amounts: `PAYHERE_AMOUNT_MONTHLY`, `PAYHERE_AMOUNT_ANNUAL`.

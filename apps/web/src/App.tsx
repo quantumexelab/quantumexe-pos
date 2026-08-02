@@ -152,6 +152,7 @@ export default function App() {
             <Route path="/reports/quotation-list" element={<SalesQuotationReport />} />
 
             <Route path="/setting" element={<SettingsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/back-up" element={<BackupPage />} />
           </Route>
         </Route>
