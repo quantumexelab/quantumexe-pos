@@ -122,7 +122,7 @@ router.post("/billing/checkout", requireAuth, requireRoles("Admin"), async (req,
         amount: plan.amount,
         bridgeUrl,
         message: bridgeUrl
-          ? "Open bridgeUrl (pos.quantumexe.com) — it posts to PayHere with the correct domain"
+          ? "Open bridgeUrl on apex domain (quantumexe.com/pos-pay) then PayHere"
           : "Submit the returned fields as a POST form to PayHere checkout",
       })
     );
@@ -133,8 +133,24 @@ router.post("/billing/checkout", requireAuth, requireRoles("Admin"), async (req,
 });
 
 /**
- * Public handoff page on the PayHere-registered domain (e.g. https://pos.quantumexe.com/api/billing/bridge?t=…).
- * Browser Referer becomes pos.quantumexe.com → PayHere accepts the payment request.
+ * JSON handoff for apex-domain bridge page (Squarespace on quantumexe.com).
+ * Page at https://quantumexe.com/pos-pay fetches this, then POSTs to PayHere (Referer = apex).
+ */
+router.get("/billing/bridge-json", (req, res) => {
+  try {
+    const token = String(req.query.t || "");
+    if (!token) return res.status(400).json(fail("Missing checkout token"));
+    const payload = verifyCheckoutBridge(token);
+    res.json(ok(payload));
+  } catch (e) {
+    console.warn("[billing/bridge-json]", e instanceof Error ? e.message : e);
+    res.status(400).json(fail("Checkout link expired or invalid"));
+  }
+});
+
+/**
+ * HTML bridge when checkout base IS this same app (e.g. apex pointed at Vercel).
+ * For Squarespace apex, use /billing/bridge-json + /pos-pay page instead.
  */
 router.get("/billing/bridge", (req, res) => {
   try {
@@ -172,7 +188,7 @@ router.get("/billing/bridge", (req, res) => {
   <div class="box">
     <h1>QUANTUMEXE POS</h1>
     <p>Redirecting to PayHere secure checkout…</p>
-    <p class="muted">pos.quantumexe.com → PayHere</p>
+    <p class="muted">Secure payment handoff</p>
   </div>
   <form id="ph" method="POST" action="${esc(action)}">${inputs}</form>
   <script>document.getElementById("ph").submit();</script>

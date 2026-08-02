@@ -103,7 +103,10 @@ export function verifyCheckoutBridge(token: string): { action: string; fields: R
 export function buildBridgeUrl(token: string) {
   const base = payhereCheckoutBase();
   if (!base) return null;
-  return `${base}/api/billing/bridge?t=${encodeURIComponent(token)}`;
+  // Apex domain page (e.g. Squarespace /pos-pay) — PayHere sandbox rejects subdomains.
+  const bridgePath = (process.env.PAYHERE_BRIDGE_PATH || "/pos-pay").trim();
+  const path = bridgePath.startsWith("/") ? bridgePath : `/${bridgePath}`;
+  return `${base}${path}?t=${encodeURIComponent(token)}`;
 }
 
 /** Safe diagnostics for Settings UI (no full secret). */
@@ -289,11 +292,16 @@ export function buildCheckoutFields(input: {
    * *.vercel.app cannot be registered → use a real domain + PAYHERE_RETURN_BASE / PUBLIC_WEB_BASE.
    */
   const returnBase = resolveReturnBase() || webBase.replace(/\/$/, "");
+  // Apex marketing site (Squarespace) uses short paths that redirect back to POS.
+  const returnPath = process.env.PAYHERE_RETURN_PATH?.trim() || "/pos-return";
+  const cancelPath = process.env.PAYHERE_CANCEL_PATH?.trim() || "/pos-cancel";
+  const returnOk = returnPath.startsWith("/") ? returnPath : `/${returnPath}`;
+  const cancelOk = cancelPath.startsWith("/") ? cancelPath : `/${cancelPath}`;
 
   const fields: Record<string, string> = {
     merchant_id: merchantId,
-    return_url: `${returnBase}/setting?tab=license&billing=return`,
-    cancel_url: `${returnBase}/setting?tab=license&billing=cancel`,
+    return_url: `${returnBase}${returnOk}`,
+    cancel_url: `${returnBase}${cancelOk}`,
     notify_url: `${apiBase}/api/billing/webhook`,
     order_id: input.orderId,
     items: `QUANTUMEXE POS ${input.plan.label}`,

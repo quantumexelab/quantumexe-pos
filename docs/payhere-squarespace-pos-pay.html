@@ -1,0 +1,39 @@
+<!--
+  Squarespace: create a blank page with URL slug "pos-pay".
+  Add a Code Block and paste EVERYTHING below (from <div> to end).
+  Company site stays on quantumexe.com; POS stays on pos.quantumexe.com.
+-->
+<div id="qx-status" style="font-family:system-ui,sans-serif;padding:48px;text-align:center">
+  Opening PayHere secure checkout…
+</div>
+<script>
+(async function () {
+  var el = document.getElementById("qx-status");
+  var t = new URLSearchParams(window.location.search).get("t");
+  if (!t) {
+    el.textContent = "Missing payment token. Go back to POS → Settings → License and try again.";
+    return;
+  }
+  try {
+    var r = await fetch("https://pos.quantumexe.com/api/billing/bridge-json?t=" + encodeURIComponent(t));
+    var j = await r.json();
+    if (!r.ok || !j.success) throw new Error((j && j.message) || "Invalid or expired checkout link");
+    var action = j.data.action;
+    var fields = j.data.fields || {};
+    var form = document.createElement("form");
+    form.method = "POST";
+    form.action = action;
+    Object.keys(fields).forEach(function (k) {
+      var input = document.createElement("input");
+      input.type = "hidden";
+      input.name = k;
+      input.value = fields[k] == null ? "" : String(fields[k]);
+      form.appendChild(input);
+    });
+    document.body.appendChild(form);
+    form.submit();
+  } catch (e) {
+    el.textContent = "Checkout failed: " + (e && e.message ? e.message : e);
+  }
+})();
+</script>

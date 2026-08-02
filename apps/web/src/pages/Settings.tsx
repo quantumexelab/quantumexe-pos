@@ -258,7 +258,7 @@ export default function SettingsPage() {
       if (!action || !fields) throw new Error("Invalid checkout response");
       setMsg(
         bridgeUrl
-          ? "Opening pos.quantumexe.com → PayHere…"
+          ? "Opening quantumexe.com → PayHere…"
           : recurring
             ? "Redirecting to PayHere (auto-renew)…"
             : "Redirecting to PayHere (one-time test)…"
@@ -510,16 +510,13 @@ export default function SettingsPage() {
             )}
             {billing != null && billing.configured && billing.publicWebNeedsCustomDomain && (
               <div className="text-sm text-red-900 bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
-                <div className="font-semibold">Connect pos.quantumexe.com for live PayHere</div>
+                <div className="font-semibold">PayHere needs apex domain (not pos.*)</div>
                 <div className="text-xs leading-relaxed">
-                  Pay button will open <code className="text-[10px]">https://pos.quantumexe.com</code> then PayHere — but only
-                  after: (1) add <strong>pos.quantumexe.com</strong> on Vercel Domains, (2) register{" "}
-                  <code className="text-[10px]">pos.quantumexe.com</code> in PayHere Integrations + new secret, (3) set Vercel
-                  env <code className="text-[10px]">PAYHERE_CHECKOUT_BASE</code>,{" "}
-                  <code className="text-[10px]">PAYHERE_RETURN_BASE</code>,{" "}
-                  <code className="text-[10px]">PUBLIC_WEB_BASE</code>,{" "}
-                  <code className="text-[10px]">PUBLIC_API_BASE</code> to{" "}
-                  <code className="text-[10px]">https://pos.quantumexe.com</code> and Redeploy.
+                  PayHere sandbox blocks subdomains. Register <code className="text-[10px]">quantumexe.com</code> in
+                  PayHere, add Squarespace pages <code className="text-[10px]">/pos-pay</code>,{" "}
+                  <code className="text-[10px]">/pos-return</code>, <code className="text-[10px]">/pos-cancel</code>, set
+                  env <code className="text-[10px]">PAYHERE_CHECKOUT_BASE=https://quantumexe.com</code>, then Redeploy.
+                  POS stays on <code className="text-[10px]">pos.quantumexe.com</code>.
                 </div>
               </div>
             )}
@@ -590,9 +587,9 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-[11px] text-gray-500">
-              Pay button opens <strong>pos.quantumexe.com</strong>, then PayHere. Register{" "}
-              <code className="text-[10px]">pos.quantumexe.com</code> in PayHere Integrations (new secret) and point that
-              domain to this Vercel project.
+              Pay button opens <strong>quantumexe.com/pos-pay</strong> → PayHere. Register apex{" "}
+              <code className="text-[10px]">quantumexe.com</code> in PayHere (subdomains are blocked). POS remains on{" "}
+              <code className="text-[10px]">pos.quantumexe.com</code>.
             </p>
           </div>
 

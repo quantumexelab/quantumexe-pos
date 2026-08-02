@@ -87,7 +87,7 @@ export default function PendingAccess() {
       if (!data?.success) throw new Error(data?.message || "Checkout failed");
       const bridgeUrl = data.data?.bridgeUrl as string | undefined;
       if (bridgeUrl) {
-        setMsg("Opening pos.quantumexe.com → PayHere…");
+        setMsg("Opening quantumexe.com → PayHere…");
         window.location.assign(bridgeUrl);
         return;
       }

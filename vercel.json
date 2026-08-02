@@ -20,8 +20,9 @@
     "PAYHERE_MODE": "sandbox",
     "PUBLIC_API_BASE": "https://pos.quantumexe.com",
     "PUBLIC_WEB_BASE": "https://pos.quantumexe.com",
-    "PAYHERE_RETURN_BASE": "https://pos.quantumexe.com",
-    "PAYHERE_CHECKOUT_BASE": "https://pos.quantumexe.com"
+    "PAYHERE_RETURN_BASE": "https://quantumexe.com",
+    "PAYHERE_CHECKOUT_BASE": "https://quantumexe.com",
+    "PAYHERE_BRIDGE_PATH": "/pos-pay"
   },
   "functions": {
     "api/index.ts": {
