@@ -910,6 +910,7 @@ router.post("/products/import", requireAuth, async (req, res) => {
 function mapVariationRow(
   variant: {
     id: number;
+    productId: number;
     name: string;
     barcode: string | null;
     price: number;
