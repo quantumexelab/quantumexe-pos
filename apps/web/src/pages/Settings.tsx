@@ -510,13 +510,12 @@ export default function SettingsPage() {
             )}
             {billing != null && billing.configured && billing.publicWebNeedsCustomDomain && (
               <div className="text-sm text-red-900 bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
-                <div className="font-semibold">PayHere needs apex domain (not pos.*)</div>
+                <div className="font-semibold">Connect apex quantumexe.com to Vercel (PayHere)</div>
                 <div className="text-xs leading-relaxed">
-                  PayHere sandbox blocks subdomains. Register <code className="text-[10px]">quantumexe.com</code> in
-                  PayHere, add Squarespace pages <code className="text-[10px]">/pos-pay</code>,{" "}
-                  <code className="text-[10px]">/pos-return</code>, <code className="text-[10px]">/pos-cancel</code>, set
-                  env <code className="text-[10px]">PAYHERE_CHECKOUT_BASE=https://quantumexe.com</code>, then Redeploy.
-                  POS stays on <code className="text-[10px]">pos.quantumexe.com</code>.
+                  PayHere blocks subdomains. Keep POS on <code className="text-[10px]">pos.quantumexe.com</code>. Add{" "}
+                  <code className="text-[10px]">quantumexe.com</code> on Vercel Domains, point Squarespace DNS apex A
+                  record to Vercel, register <code className="text-[10px]">quantumexe.com</code> in PayHere, set checkout
+                  env to apex, Redeploy. No Squarespace pages needed.
                 </div>
               </div>
             )}
@@ -587,9 +586,8 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-[11px] text-gray-500">
-              Pay button opens <strong>quantumexe.com/pos-pay</strong> → PayHere. Register apex{" "}
-              <code className="text-[10px]">quantumexe.com</code> in PayHere (subdomains are blocked). POS remains on{" "}
-              <code className="text-[10px]">pos.quantumexe.com</code>.
+              Pay button opens <strong>quantumexe.com</strong> → PayHere. Register apex in PayHere; point apex DNS to
+              this Vercel project (Squarespace domain-only is OK — no website pages required).
             </p>
           </div>
 

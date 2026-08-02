@@ -22,7 +22,9 @@
     "PUBLIC_WEB_BASE": "https://pos.quantumexe.com",
     "PAYHERE_RETURN_BASE": "https://quantumexe.com",
     "PAYHERE_CHECKOUT_BASE": "https://quantumexe.com",
-    "PAYHERE_BRIDGE_PATH": "/pos-pay"
+    "PAYHERE_BRIDGE_PATH": "/api/billing/bridge",
+    "PAYHERE_RETURN_PATH": "/pos-return",
+    "PAYHERE_CANCEL_PATH": "/pos-cancel"
   },
   "functions": {
     "api/index.ts": {

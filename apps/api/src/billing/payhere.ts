@@ -103,8 +103,9 @@ export function verifyCheckoutBridge(token: string): { action: string; fields: R
 export function buildBridgeUrl(token: string) {
   const base = payhereCheckoutBase();
   if (!base) return null;
-  // Apex domain page (e.g. Squarespace /pos-pay) — PayHere sandbox rejects subdomains.
-  const bridgePath = (process.env.PAYHERE_BRIDGE_PATH || "/pos-pay").trim();
+  // Prefer API HTML bridge on the PayHere-registered apex (Vercel).
+  // Override with PAYHERE_BRIDGE_PATH if using an external page (e.g. /pos-pay on Squarespace).
+  const bridgePath = (process.env.PAYHERE_BRIDGE_PATH || "/api/billing/bridge").trim();
   const path = bridgePath.startsWith("/") ? bridgePath : `/${bridgePath}`;
   return `${base}${path}?t=${encodeURIComponent(token)}`;
 }
