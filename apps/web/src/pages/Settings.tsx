@@ -586,8 +586,8 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-[11px] text-gray-500">
-              Pay button opens <strong>quantumexe.com</strong> → PayHere. Register apex in PayHere; point apex DNS to
-              this Vercel project (Squarespace domain-only is OK — no website pages required).
+              Pay opens via <strong>quantumexe.com</strong> → PayHere. After pay you return to POS on{" "}
+              <code className="text-[10px]">pos.quantumexe.com</code>. Company homepage is unchanged.
             </p>
           </div>
 
