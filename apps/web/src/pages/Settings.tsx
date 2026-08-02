@@ -175,7 +175,7 @@ export default function SettingsPage() {
     setError("");
     setMsg("");
     try {
-      const payload = { ...settings, ui_language: lang, version: APP_VERSION };
+      const payload: Record<string, string> = { ...settings, ui_language: lang, version: APP_VERSION };
       // Avoid sending multi‑MB data URLs that break Firestore (1MB/doc) / Vercel body limits
       for (const k of ["store_logo", "customer_logo"] as const) {
         const v = String(payload[k] || "");

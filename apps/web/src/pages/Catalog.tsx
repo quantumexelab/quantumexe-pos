@@ -1,4 +1,4 @@
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag, ArrowRightLeft, Banknote } from "lucide-react";
 import api from "../api";
@@ -21,7 +21,7 @@ function matchesQuery(q: string, ...parts: unknown[]) {
 }
 
 /** Block scientific-notation keys that browsers allow in type=number (e / E / + / -). */
-function blockInvalidNumberKeys(e: KeyboardEvent<HTMLInputElement>) {
+function blockInvalidNumberKeys(e: ReactKeyboardEvent<HTMLInputElement>) {
   if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
 }
 
