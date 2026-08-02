@@ -12,8 +12,7 @@ import {
   buildCheckoutFields,
   buildOrderId,
   getPlan,
-  getPlans,
-  parseOrderId,
+  payhereConfigStatus,
   payhereConfigured,
   payhereSandbox,
   type BillingInterval,
@@ -33,7 +32,7 @@ router.get("/billing/plans", requireAuth, async (req, res) => {
     const access = shopId ? await resolveShopAccess(shopId) : null;
     res.json(
       ok({
-        configured: payhereConfigured(),
+        ...payhereConfigStatus(),
         sandbox: payhereSandbox(),
         currency: "LKR",
         plans: getPlans().map((p) => ({

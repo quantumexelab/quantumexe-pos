@@ -20,6 +20,18 @@ export function payhereConfigured() {
   return Boolean(process.env.PAYHERE_MERCHANT_ID?.trim() && process.env.PAYHERE_MERCHANT_SECRET?.trim());
 }
 
+/** Safe diagnostics for Settings UI (no secret values). */
+export function payhereConfigStatus() {
+  return {
+    configured: payhereConfigured(),
+    mode: (process.env.PAYHERE_MODE || "sandbox").toLowerCase(),
+    hasMerchantId: Boolean(process.env.PAYHERE_MERCHANT_ID?.trim()),
+    hasMerchantSecret: Boolean(process.env.PAYHERE_MERCHANT_SECRET?.trim()),
+    hasPublicApiBase: Boolean(process.env.PUBLIC_API_BASE?.trim() || process.env.VERCEL_URL),
+    hasPublicWebBase: Boolean(process.env.PUBLIC_WEB_BASE?.trim() || process.env.VERCEL_URL),
+  };
+}
+
 export function payhereSandbox() {
   const mode = (process.env.PAYHERE_MODE || "sandbox").toLowerCase();
   return mode !== "live" && mode !== "production";

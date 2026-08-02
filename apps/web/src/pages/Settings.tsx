@@ -119,6 +119,8 @@ export default function SettingsPage() {
   const [billing, setBilling] = useState<{
     configured: boolean;
     sandbox: boolean;
+    hasMerchantId?: boolean;
+    hasMerchantSecret?: boolean;
     plans: { id: string; label: string; amount: number; currency: string; days: number }[];
     current: {
       status?: string;
@@ -454,9 +456,15 @@ export default function SettingsPage() {
               </p>
             </div>
             {!billing?.configured && (
-              <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                PayHere is not configured on this server yet. Master Admin can still mark paid manually. Ask support to set{" "}
-                <code className="text-xs">PAYHERE_MERCHANT_ID</code> / <code className="text-xs">PAYHERE_MERCHANT_SECRET</code>.
+              <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
+                <div>
+                  PayHere is not configured on this server yet. Add env vars on Vercel, then{" "}
+                  <strong>Redeploy</strong> (Deployments → ⋯ → Redeploy).
+                </div>
+                <div className="text-xs font-mono text-amber-900">
+                  merchantId: {billing?.hasMerchantId ? "OK" : "MISSING"} · merchantSecret:{" "}
+                  {billing?.hasMerchantSecret ? "OK" : "MISSING"}
+                </div>
               </div>
             )}
             <div className="grid sm:grid-cols-2 gap-3">
@@ -491,7 +499,7 @@ export default function SettingsPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={checkoutBusy || !billing?.configured}
+                disabled={checkoutBusy}
                 onClick={() => void startCheckout()}
                 className="btn btn-primary h-10 px-4 disabled:opacity-50"
               >
