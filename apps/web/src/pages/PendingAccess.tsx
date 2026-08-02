@@ -85,6 +85,12 @@ export default function PendingAccess() {
     try {
       const { data } = await api.post("/billing/checkout", { interval });
       if (!data?.success) throw new Error(data?.message || "Checkout failed");
+      const bridgeUrl = data.data?.bridgeUrl as string | undefined;
+      if (bridgeUrl) {
+        setMsg("Opening quantumexe.lk → PayHere…");
+        window.location.assign(bridgeUrl);
+        return;
+      }
       submitPayHereForm(data.data.action, data.data.fields);
     } catch (e: unknown) {
       const ax = e as { response?: { data?: { message?: string } }; message?: string };

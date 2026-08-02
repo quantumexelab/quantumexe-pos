@@ -9,6 +9,7 @@ import {
   resolveShopAccess,
 } from "./master/shopRegistry.js";
 import {
+  buildBridgeUrl,
   buildCheckoutFields,
   buildOrderId,
   getPlan,
@@ -17,6 +18,8 @@ import {
   payhereConfigStatus,
   payhereConfigured,
   payhereSandbox,
+  signCheckoutBridge,
+  verifyCheckoutBridge,
   type BillingInterval,
   verifyNotifySignature,
 } from "./billing/payhere.js";
@@ -105,18 +108,84 @@ router.post("/billing/checkout", requireAuth, requireRoles("Admin"), async (req,
       recurring: parsed.data.recurring,
     });
 
+    const bridgeToken = signCheckoutBridge({
+      action: checkout.action,
+      fields: checkout.fields,
+    });
+    const bridgeUrl = buildBridgeUrl(bridgeToken);
+
     res.json(
       ok({
         ...checkout,
         orderId,
         interval,
         amount: plan.amount,
-        message: "Submit the returned fields as a POST form to PayHere checkout",
+        bridgeUrl,
+        message: bridgeUrl
+          ? "Open bridgeUrl (quantumexe.lk) — it posts to PayHere with the correct domain"
+          : "Submit the returned fields as a POST form to PayHere checkout",
       })
     );
   } catch (e) {
     console.error("[billing/checkout]", e);
     res.status(500).json(fail(e instanceof Error ? e.message : "Checkout failed", 500));
+  }
+});
+
+/**
+ * Public handoff page on the PayHere-registered domain (e.g. https://quantumexe.lk/api/billing/bridge?t=…).
+ * Browser Referer becomes quantumexe.lk → PayHere accepts the payment request.
+ */
+router.get("/billing/bridge", (req, res) => {
+  try {
+    const token = String(req.query.t || "");
+    if (!token) {
+      res.status(400).type("html").send("<h1>Missing checkout token</h1>");
+      return;
+    }
+    const { action, fields } = verifyCheckoutBridge(token);
+    const esc = (s: string) =>
+      String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    const inputs = Object.entries(fields)
+      .map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}" />`)
+      .join("\n");
+    res
+      .status(200)
+      .type("html")
+      .send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QUANTUMEXE — Pay with PayHere</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#0b1220;color:#e8eef8;margin:0;min-height:100vh;display:grid;place-items:center}
+    .box{text-align:center;padding:2rem}
+    .muted{opacity:.7;font-size:.9rem;margin-top:.75rem}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>QUANTUMEXE POS</h1>
+    <p>Redirecting to PayHere secure checkout…</p>
+    <p class="muted">quantumexe.lk → PayHere</p>
+  </div>
+  <form id="ph" method="POST" action="${esc(action)}">${inputs}</form>
+  <script>document.getElementById("ph").submit();</script>
+</body>
+</html>`);
+  } catch (e) {
+    console.warn("[billing/bridge]", e instanceof Error ? e.message : e);
+    res
+      .status(400)
+      .type("html")
+      .send(
+        `<h1>Checkout link expired or invalid</h1><p>Go back to Settings → License and try Pay again.</p>`
+      );
   }
 });
 

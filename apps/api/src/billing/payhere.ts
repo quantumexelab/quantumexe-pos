@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 
 export type BillingInterval = "monthly" | "annual";
 
@@ -12,8 +13,14 @@ export type PayHerePlan = {
   days: number;
 };
 
+const BRIDGE_AUD = "payhere-bridge";
+
 function money(n: number) {
   return Number(n).toFixed(2);
+}
+
+function jwtSecret() {
+  return process.env.JWT_SECRET || "reox-clone-dev-secret";
 }
 
 /** Strip copy/paste junk from Vercel / dashboard secrets. */
@@ -37,19 +44,6 @@ export function payhereConfigured() {
   );
 }
 
-function resolveReturnBase() {
-  const sandbox = payhereSandbox();
-  const explicit = process.env.PAYHERE_RETURN_BASE?.trim();
-  if (explicit) return explicit.replace(/\/$/, "");
-  const web = publicWebBase().replace(/\/$/, "");
-  // *.vercel.app cannot be registered in PayHere — keep localhost returns only when
-  // no custom PAYHERE_RETURN_BASE (local/dev secret). Production web must set a real domain.
-  if (sandbox && /vercel\.app$/i.test(web.replace(/^https?:\/\//, "").split("/")[0] || "")) {
-    return "http://localhost";
-  }
-  return web || (sandbox ? "http://localhost" : "");
-}
-
 function hostLooksLikeVercelApp(url: string) {
   try {
     const host = new URL(url.includes("://") ? url : `https://${url}`).hostname;
@@ -59,12 +53,67 @@ function hostLooksLikeVercelApp(url: string) {
   }
 }
 
+/**
+ * Origin that must POST to PayHere (Referer / Integrations domain).
+ * Prefer PAYHERE_CHECKOUT_BASE / PAYHERE_RETURN_BASE (e.g. https://quantumexe.lk).
+ */
+export function payhereCheckoutBase() {
+  const fromEnv =
+    process.env.PAYHERE_CHECKOUT_BASE?.trim() || process.env.PAYHERE_RETURN_BASE?.trim() || "";
+  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  const web = publicWebBase().replace(/\/$/, "");
+  if (web && !hostLooksLikeVercelApp(web)) return web;
+  return "";
+}
+
+function resolveReturnBase() {
+  const sandbox = payhereSandbox();
+  const explicit = process.env.PAYHERE_RETURN_BASE?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  const checkout = payhereCheckoutBase();
+  if (checkout) return checkout;
+  const web = publicWebBase().replace(/\/$/, "");
+  // *.vercel.app cannot be registered in PayHere — localhost only for local secret testing.
+  if (sandbox && hostLooksLikeVercelApp(web)) {
+    return "http://localhost";
+  }
+  return web || (sandbox ? "http://localhost" : "");
+}
+
+/** Signed one-time handoff: vercel.app → custom domain → PayHere. */
+export function signCheckoutBridge(input: { action: string; fields: Record<string, string> }) {
+  return jwt.sign(
+    { action: input.action, fields: input.fields },
+    jwtSecret(),
+    { expiresIn: "15m", audience: BRIDGE_AUD }
+  );
+}
+
+export function verifyCheckoutBridge(token: string): { action: string; fields: Record<string, string> } {
+  const decoded = jwt.verify(token, jwtSecret(), { audience: BRIDGE_AUD }) as {
+    action?: string;
+    fields?: Record<string, string>;
+  };
+  if (!decoded?.action || !decoded?.fields || typeof decoded.fields !== "object") {
+    throw new Error("Invalid checkout bridge token");
+  }
+  return { action: decoded.action, fields: decoded.fields };
+}
+
+export function buildBridgeUrl(token: string) {
+  const base = payhereCheckoutBase();
+  if (!base) return null;
+  return `${base}/api/billing/bridge?t=${encodeURIComponent(token)}`;
+}
+
 /** Safe diagnostics for Settings UI (no full secret). */
 export function payhereConfigStatus() {
   const secret = sanitizePayHereSecret(process.env.PAYHERE_MERCHANT_SECRET || "");
   const returnBase = resolveReturnBase();
   const webBase = publicWebBase().replace(/\/$/, "");
-  const publicWebNeedsCustomDomain = hostLooksLikeVercelApp(webBase);
+  const checkoutBase = payhereCheckoutBase();
+  const bridgeHost = checkoutBase || webBase;
+  const publicWebNeedsCustomDomain = !checkoutBase && hostLooksLikeVercelApp(webBase);
   return {
     configured: payhereConfigured(),
     mode: (process.env.PAYHERE_MODE || "sandbox").toLowerCase(),
@@ -74,11 +123,12 @@ export function payhereConfigStatus() {
     secretLength: secret.length,
     secretTail: secret ? secret.slice(-4) : null,
     returnBase,
+    checkoutBase: checkoutBase || null,
     notifyBase: publicApiBase(),
     hasPublicApiBase: Boolean(process.env.PUBLIC_API_BASE?.trim() || process.env.VERCEL_URL),
     hasPublicWebBase: Boolean(process.env.PUBLIC_WEB_BASE?.trim() || process.env.VERCEL_URL),
-    /** false when site is on *.vercel.app — PayHere rejects that domain for Integrations */
-    publicWebCheckoutOk: !publicWebNeedsCustomDomain,
+    /** false when checkout still stuck on *.vercel.app with no custom bridge domain */
+    publicWebCheckoutOk: Boolean(checkoutBase) || !hostLooksLikeVercelApp(bridgeHost),
     publicWebNeedsCustomDomain,
   };
 }
@@ -231,6 +281,8 @@ export function buildCheckoutFields(input: {
 
   const recurring =
     input.recurring !== false && process.env.PAYHERE_DISABLE_RECURRING !== "1";
+
+  const sandbox = payhereSandbox();
 
   /**
    * PayHere Merchant Secret is bound to the Integrations domain/app.

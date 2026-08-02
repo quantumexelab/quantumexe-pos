@@ -126,6 +126,7 @@ export default function SettingsPage() {
     secretTail?: string | null;
     returnBase?: string;
     notifyBase?: string;
+    checkoutBase?: string | null;
     publicWebNeedsCustomDomain?: boolean;
     publicWebCheckoutOk?: boolean;
     plans: { id: string; label: string; amount: number; currency: string; days: number }[];
@@ -205,10 +206,17 @@ export default function SettingsPage() {
     }
   }
 
+  function goToPayHere(bridgeUrl: string | null | undefined, action: string, fields: Record<string, string>) {
+    // Prefer custom-domain bridge (quantumexe.lk) so PayHere sees the registered Referer.
+    if (bridgeUrl) {
+      window.location.assign(bridgeUrl);
+      return;
+    }
+    submitPayHereForm(action, fields);
+  }
+
   function submitPayHereForm(action: string, fields: Record<string, string>) {
-    // PayHere Integrations is registered as "localhost" only. Submitting a form from
-    // *.vercel.app sends Referer=vercel.app → "Unauthorized payment request".
-    // Open a blank document (no referrer) and POST from there.
+    // Fallback when no PAYHERE_CHECKOUT_BASE (local/dev).
     const w = window.open("", "_blank");
     if (!w) {
       setError("Pop-up blocked — allow pop-ups for this site, then try again.");
@@ -246,9 +254,16 @@ export default function SettingsPage() {
       if (!data?.success) throw new Error(data?.message || "Checkout failed");
       const action = data.data?.action as string;
       const fields = data.data?.fields as Record<string, string>;
+      const bridgeUrl = data.data?.bridgeUrl as string | undefined;
       if (!action || !fields) throw new Error("Invalid checkout response");
-      setMsg(recurring ? "Redirecting to PayHere (auto-renew)…" : "Redirecting to PayHere (one-time test)…");
-      submitPayHereForm(action, fields);
+      setMsg(
+        bridgeUrl
+          ? "Opening quantumexe.lk → PayHere…"
+          : recurring
+            ? "Redirecting to PayHere (auto-renew)…"
+            : "Redirecting to PayHere (one-time test)…"
+      );
+      goToPayHere(bridgeUrl, action, fields);
     } catch (e: any) {
       const ax = e as { response?: { data?: { message?: string } }; message?: string };
       setError(ax.response?.data?.message || ax.message || "PayHere checkout failed");
@@ -495,17 +510,22 @@ export default function SettingsPage() {
             )}
             {billing != null && billing.configured && billing.publicWebNeedsCustomDomain && (
               <div className="text-sm text-red-900 bg-red-50 border border-red-200 rounded-lg px-3 py-2 space-y-1">
-                <div className="font-semibold">Live web payments need your own domain</div>
+                <div className="font-semibold">Connect quantumexe.lk for live PayHere</div>
                 <div className="text-xs leading-relaxed">
-                  PayHere does not allow <code className="text-[10px]">*.vercel.app</code>. Shop owners paying on this
-                  site will get <strong>Unauthorized</strong> until you: (1) add a real domain on Vercel, (2) register
-                  the same domain in PayHere → Integrations, (3) put that domain&apos;s Merchant Secret in Vercel as{" "}
-                  <code className="text-[10px]">PAYHERE_MERCHANT_SECRET</code>, (4) set{" "}
-                  <code className="text-[10px]">PUBLIC_WEB_BASE</code>, <code className="text-[10px]">PUBLIC_API_BASE</code>
-                  , and <code className="text-[10px]">PAYHERE_RETURN_BASE</code> to{" "}
-                  <code className="text-[10px]">https://your-domain</code>, then Redeploy. Localhost still works for
-                  testing only.
+                  Pay button will open <code className="text-[10px]">https://quantumexe.lk</code> then PayHere — but only
+                  after: (1) add <strong>quantumexe.lk</strong> on Vercel Domains, (2) register{" "}
+                  <code className="text-[10px]">quantumexe.lk</code> in PayHere Integrations + new secret, (3) set Vercel
+                  env <code className="text-[10px]">PAYHERE_CHECKOUT_BASE</code>,{" "}
+                  <code className="text-[10px]">PAYHERE_RETURN_BASE</code>,{" "}
+                  <code className="text-[10px]">PUBLIC_WEB_BASE</code>,{" "}
+                  <code className="text-[10px]">PUBLIC_API_BASE</code> to{" "}
+                  <code className="text-[10px]">https://quantumexe.lk</code> and Redeploy.
                 </div>
+              </div>
+            )}
+            {billing != null && billing.configured && billing.checkoutBase && (
+              <div className="text-sm text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-xs">
+                Pay opens via <code className="text-[10px]">{billing.checkoutBase}</code> → PayHere
               </div>
             )}
             {billing != null && billing.configured && (
@@ -570,9 +590,9 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-[11px] text-gray-500">
-              Shop owners must pay on your public site. That requires a <strong>real domain</strong> in PayHere (not{" "}
-              <code className="text-[10px]">vercel.app</code>, not only <code className="text-[10px]">localhost</code>).
-              After DNS → Vercel + PayHere Integrations secret + env Redeploy, checkout works in the browser for customers.
+              Pay button opens <strong>quantumexe.lk</strong>, then PayHere. Register{" "}
+              <code className="text-[10px]">quantumexe.lk</code> in PayHere Integrations (new secret) and point that
+              domain to this Vercel project.
             </p>
           </div>
 

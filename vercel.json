@@ -18,8 +18,10 @@
     "USE_FIRESTORE": "1",
     "FIREBASE_PROJECT_ID": "quantumexe-pos-test",
     "PAYHERE_MODE": "sandbox",
-    "PUBLIC_API_BASE": "https://quantumexe-pos.vercel.app",
-    "PUBLIC_WEB_BASE": "https://quantumexe-pos.vercel.app"
+    "PUBLIC_API_BASE": "https://quantumexe.lk",
+    "PUBLIC_WEB_BASE": "https://quantumexe.lk",
+    "PAYHERE_RETURN_BASE": "https://quantumexe.lk",
+    "PAYHERE_CHECKOUT_BASE": "https://quantumexe.lk"
   },
   "functions": {
     "api/index.ts": {
