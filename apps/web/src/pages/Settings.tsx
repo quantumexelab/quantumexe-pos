@@ -121,6 +121,11 @@ export default function SettingsPage() {
     sandbox: boolean;
     hasMerchantId?: boolean;
     hasMerchantSecret?: boolean;
+    merchantId?: string | null;
+    secretLength?: number;
+    secretTail?: string | null;
+    returnBase?: string;
+    notifyBase?: string;
     plans: { id: string; label: string; amount: number; currency: string; days: number }[];
     current: {
       status?: string;
@@ -469,6 +474,16 @@ export default function SettingsPage() {
             )}
             {billing == null && (
               <div className="text-xs text-gray-400">Checking PayHere configuration…</div>
+            )}
+            {billing != null && billing.configured && (
+              <div className="text-[11px] text-gray-500 font-mono bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">
+                PayHere OK · id {billing.merchantId || "—"} · secret len {billing.secretLength ?? "?"} ends{" "}
+                {billing.secretTail || "????"} · return {billing.returnBase || "—"}
+                <div className="mt-1 text-gray-400">
+                  Expected secret ends with <span className="text-gray-600">OQ==</span> and length ~56. If different,
+                  re-paste secret in Vercel (include the == at the end) and Redeploy.
+                </div>
+              </div>
             )}
             <div className="grid sm:grid-cols-2 gap-3">
               {(billing?.plans?.length

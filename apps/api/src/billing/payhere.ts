@@ -25,6 +25,9 @@ export function sanitizePayHereSecret(raw: string) {
   }
   // Remove accidental whitespace / newlines inside
   s = s.replace(/\s+/g, "");
+  // Vercel / some UIs truncate trailing "=" on base64 secrets — restore padding
+  if (/^[A-Za-z0-9+/]+$/.test(s) && s.length % 4 === 2) s += "==";
+  else if (/^[A-Za-z0-9+/]+$/.test(s) && s.length % 4 === 3) s += "=";
   return s;
 }
 
@@ -34,13 +37,24 @@ export function payhereConfigured() {
   );
 }
 
-/** Safe diagnostics for Settings UI (no secret values). */
+/** Safe diagnostics for Settings UI (no full secret). */
 export function payhereConfigStatus() {
+  const secret = sanitizePayHereSecret(process.env.PAYHERE_MERCHANT_SECRET || "");
+  const sandbox = payhereSandbox();
+  const returnBase = (
+    process.env.PAYHERE_RETURN_BASE?.trim() ||
+    (sandbox ? "http://localhost" : publicWebBase())
+  ).replace(/\/$/, "");
   return {
     configured: payhereConfigured(),
     mode: (process.env.PAYHERE_MODE || "sandbox").toLowerCase(),
     hasMerchantId: Boolean(process.env.PAYHERE_MERCHANT_ID?.trim()),
-    hasMerchantSecret: Boolean(process.env.PAYHERE_MERCHANT_SECRET?.trim()),
+    hasMerchantSecret: Boolean(secret),
+    merchantId: process.env.PAYHERE_MERCHANT_ID?.trim() || null,
+    secretLength: secret.length,
+    secretTail: secret ? secret.slice(-4) : null,
+    returnBase,
+    notifyBase: publicApiBase(),
     hasPublicApiBase: Boolean(process.env.PUBLIC_API_BASE?.trim() || process.env.VERCEL_URL),
     hasPublicWebBase: Boolean(process.env.PUBLIC_WEB_BASE?.trim() || process.env.VERCEL_URL),
   };
@@ -218,8 +232,14 @@ export function buildCheckoutFields(input: {
     amount,
     first_name: input.firstName.slice(0, 40) || "Shop",
     last_name: input.lastName.slice(0, 40) || "Owner",
-    email: input.email || "billing@quantumexe.local",
-    phone: String(input.phone || "0700000000").replace(/[^\d+]/g, "").slice(0, 15) || "0700000000",
+    email: /@/.test(input.email || "") && !String(input.email).endsWith(".local")
+      ? input.email
+      : "saman@gmail.com",
+    phone: (() => {
+      const p = String(input.phone || "").replace(/[^\d]/g, "");
+      if (p.length >= 9) return p.slice(-10);
+      return "0771234567";
+    })(),
     address: (input.address || "Sri Lanka").slice(0, 100),
     city: (input.city || "Colombo").slice(0, 40),
     country: "Sri Lanka",
