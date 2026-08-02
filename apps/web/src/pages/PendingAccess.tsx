@@ -50,19 +50,32 @@ export default function PendingAccess() {
   }, []);
 
   function submitPayHereForm(action: string, fields: Record<string, string>) {
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = action;
-    form.style.display = "none";
-    for (const [k, v] of Object.entries(fields)) {
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = k;
-      input.value = String(v ?? "");
-      form.appendChild(input);
+    const w = window.open("", "_blank");
+    if (!w) {
+      setError("Pop-up blocked — allow pop-ups for this site, then try again.");
+      setCheckoutBusy(false);
+      return;
     }
-    document.body.appendChild(form);
-    form.submit();
+    const inputs = Object.entries(fields)
+      .map(
+        ([k, v]) =>
+          `<input type="hidden" name="${String(k).replace(/"/g, "&quot;")}" value="${String(v ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/</g, "&lt;")}" />`
+      )
+      .join("");
+    w.document.open();
+    w.document.write(`<!doctype html><html><head>
+      <meta name="referrer" content="no-referrer" />
+      <title>Redirecting to PayHere…</title>
+      </head><body>
+      <p style="font-family:sans-serif;padding:24px">Redirecting to PayHere secure checkout…</p>
+      <form id="ph" method="POST" action="${action.replace(/"/g, "")}" referrerpolicy="no-referrer">${inputs}</form>
+      <script>document.getElementById("ph").submit();<\/script>
+      </body></html>`);
+    w.document.close();
+    setCheckoutBusy(false);
   }
 
   async function payNow() {
