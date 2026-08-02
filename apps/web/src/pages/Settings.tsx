@@ -462,8 +462,11 @@ export default function SettingsPage() {
                   <strong>Redeploy</strong> (Deployments → ⋯ → Redeploy).
                 </div>
                 <div className="text-xs font-mono text-amber-900">
-                  merchantId: {billing?.hasMerchantId ? "OK" : "MISSING"} · merchantSecret:{" "}
-                  {billing?.hasMerchantSecret ? "OK" : "MISSING"}
+                  merchantId: {billing?.hasMerchantId ? `OK (${(billing as { merchantIdLength?: number }).merchantIdLength || "?"})` : "MISSING"} ·
+                  merchantSecret:{" "}
+                  {billing?.hasMerchantSecret
+                    ? `OK (${(billing as { merchantSecretLength?: number }).merchantSecretLength || "?"} chars)`
+                    : "MISSING"}
                 </div>
               </div>
             )}
