@@ -18,6 +18,7 @@ import {
   payhereConfigStatus,
   payhereConfigured,
   payhereSandbox,
+  quoteSubscription,
   signCheckoutBridge,
   verifyCheckoutBridge,
   type BillingInterval,
@@ -41,14 +42,24 @@ router.get("/billing/plans", requireAuth, async (req, res) => {
         ...payhereConfigStatus(),
         sandbox: payhereSandbox(),
         currency: "LKR",
-        plans: getPlans().map((p) => ({
-          id: p.id,
-          label: p.label,
-          amount: p.amount,
-          currency: p.currency,
-          days: p.days,
-          recurrence: p.recurrence,
-        })),
+        plans: getPlans().map((p) => {
+          const quote = quoteSubscription(p, shop);
+          return {
+            id: p.id,
+            label: p.label,
+            amount: p.amount,
+            currency: p.currency,
+            days: p.days,
+            recurrence: p.recurrence,
+            quote,
+          };
+        }),
+        billingTerms: shop
+          ? {
+              discountPercent: Number(shop.billingDiscountPercent) || 0,
+              creditBalance: Number(shop.billingCreditBalance) || 0,
+            }
+          : null,
         current: shop
           ? {
               shopId: shop.shopId,
@@ -60,6 +71,8 @@ router.get("/billing/plans", requireAuth, async (req, res) => {
               payhereSubscriptionId: shop.payhereSubscriptionId || null,
               lastBillingAmount: shop.lastBillingAmount ?? null,
               paymentNote: shop.paymentNote || null,
+              billingDiscountPercent: shop.billingDiscountPercent ?? 0,
+              billingCreditBalance: shop.billingCreditBalance ?? 0,
             }
           : null,
       })
@@ -90,10 +103,33 @@ router.post("/billing/checkout", requireAuth, requireRoles("Admin"), async (req,
 
     const interval = parsed.data.interval as BillingInterval;
     const plan = getPlan(interval);
+    const quote = quoteSubscription(plan, shop);
     const orderId = buildOrderId(shopId, interval);
     const nameParts = String(shop.ownerName || "Shop Owner").trim().split(/\s+/);
     const firstName = nameParts[0] || "Shop";
     const lastName = nameParts.slice(1).join(" ") || "Owner";
+
+    // Fully covered by Master credit after discount — no PayHere charge.
+    if (quote.payable <= 0) {
+      await applySubscriptionPayment({
+        shopId,
+        interval,
+        paymentId: `CREDIT-${Date.now().toString(36)}`,
+        amount: 0,
+        creditConsumed: quote.creditApplied,
+        paymentNote: `Covered by credit (discount ${quote.discountPercent}%)`,
+      });
+      return res.json(
+        ok({
+          coveredByCredit: true,
+          quote,
+          orderId,
+          interval,
+          amount: 0,
+          message: "Subscription renewed using discount/credit — no PayHere payment needed",
+        })
+      );
+    }
 
     const checkout = buildCheckoutFields({
       orderId,
@@ -106,6 +142,7 @@ router.post("/billing/checkout", requireAuth, requireRoles("Admin"), async (req,
       city: shop.city,
       shopId,
       recurring: parsed.data.recurring,
+      amountOverride: quote.payable,
     });
 
     const bridgeToken = signCheckoutBridge({
@@ -119,10 +156,11 @@ router.post("/billing/checkout", requireAuth, requireRoles("Admin"), async (req,
         ...checkout,
         orderId,
         interval,
-        amount: plan.amount,
+        amount: quote.payable,
+        quote,
         bridgeUrl,
         message: bridgeUrl
-          ? "Open bridgeUrl on apex domain (quantumexe.com/pos-pay) then PayHere"
+          ? "Open bridgeUrl on apex domain then PayHere"
           : "Submit the returned fields as a POST form to PayHere checkout",
       })
     );
@@ -260,12 +298,15 @@ router.post("/billing/webhook", async (req, res) => {
 
     // Success
     if (status_code === "2") {
+      const shopRow = await getShop(shopId);
+      const quote = quoteSubscription(getPlan(interval), shopRow);
       await applySubscriptionPayment({
         shopId,
         interval,
         paymentId: payment_id || order_id,
         subscriptionId: subscription_id || payment_id || null,
-        amount: Number(payhere_amount) || null,
+        amount: Number(payhere_amount) || quote.payable,
+        creditConsumed: quote.creditApplied,
         paymentNote: recurring === "1" ? `PayHere recurring ${payment_id}` : `PayHere checkout ${payment_id}`,
       });
       console.log("[billing/webhook] activated", shopId, interval, payment_id);

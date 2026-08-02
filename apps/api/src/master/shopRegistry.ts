@@ -44,6 +44,10 @@ export type ShopRecord = {
   payherePaymentId?: string | null;
   payhereCustomerToken?: string | null;
   lastBillingAmount?: number | null;
+  /** Master Admin: % off list subscription price (0–100). */
+  billingDiscountPercent?: number | null;
+  /** Master Admin: prepaid credit in LKR applied after discount on next checkout(s). */
+  billingCreditBalance?: number | null;
 };
 
 const SHOPS_COL = "pos_shops";
@@ -336,6 +340,8 @@ export async function applySubscriptionPayment(input: {
   subscriptionId?: string | null;
   amount?: number | null;
   paymentNote?: string;
+  /** LKR credit used on this charge — deducted from billingCreditBalance. */
+  creditConsumed?: number | null;
 }) {
   const days = input.interval === "annual" ? 365 : 30;
   const now = new Date();
@@ -357,6 +363,14 @@ export async function applySubscriptionPayment(input: {
     payhereSubscriptionId: input.subscriptionId || shop.payhereSubscriptionId || input.paymentId,
     lastBillingAmount: input.amount ?? shop.lastBillingAmount ?? null,
     paymentNote: input.paymentNote || `PayHere ${input.paymentId}`,
+    ...(input.creditConsumed != null && input.creditConsumed > 0
+      ? {
+          billingCreditBalance: Math.max(
+            0,
+            Math.round(((Number(shop.billingCreditBalance) || 0) - input.creditConsumed) * 100) / 100
+          ),
+        }
+      : {}),
   });
 
   // Mirror license on SQLite / desktop installs
@@ -526,6 +540,30 @@ export async function ensureDemoShopApproved() {
 }
 
 export { DEFAULT_MASTER_USER, SHOP_ID_KEY, SHOP_STATUS_KEY };
+
+export async function setShopBillingTerms(
+  shopId: string,
+  input: {
+    billingDiscountPercent?: number | null;
+    billingCreditBalance?: number | null;
+    paymentNote?: string;
+  }
+) {
+  const patch: Partial<ShopRecord> = {};
+  if (input.billingDiscountPercent !== undefined) {
+    const p = Number(input.billingDiscountPercent);
+    if (Number.isNaN(p) || p < 0 || p > 100) throw new Error("Discount must be 0–100%");
+    patch.billingDiscountPercent = Math.round(p * 100) / 100;
+  }
+  if (input.billingCreditBalance !== undefined) {
+    const c = Number(input.billingCreditBalance);
+    if (Number.isNaN(c) || c < 0) throw new Error("Credit balance must be ≥ 0");
+    patch.billingCreditBalance = Math.round(c * 100) / 100;
+  }
+  if (input.paymentNote !== undefined) patch.paymentNote = String(input.paymentNote || "");
+  if (!Object.keys(patch).length) throw new Error("No billing fields to update");
+  return updateShop(shopId, patch);
+}
 
 /** Strip secrets for Master Admin API responses. */
 export function toPublicShop(shop: ShopRecord) {

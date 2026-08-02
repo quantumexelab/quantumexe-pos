@@ -15,9 +15,11 @@ import {
   resetShopPassword,
   revokeShop,
   setShopFirebase,
+  setShopBillingTerms,
   setShopType,
   toPublicShop,
   verifyMasterLogin,
+  getShop,
 } from "./master/shopRegistry.js";
 
 const router = Router();
@@ -331,6 +333,30 @@ router.post("/master/shops/:shopId/mark-paid", requireAuth, requireRoles("Master
     res.json(ok(toPublicShop(shop!), "Payment recorded — access active for 30 days"));
   } catch (e) {
     res.status(400).json(fail(e instanceof Error ? e.message : "Payment update failed"));
+  }
+});
+
+router.post("/master/shops/:shopId/billing", requireAuth, requireRoles("MasterAdmin"), async (req, res) => {
+  try {
+    const shopId = String(req.params.shopId);
+    const existing = await getShop(shopId);
+    if (!existing) return res.status(404).json(fail("Shop not found", 404));
+
+    const body = req.body || {};
+    const shop = await setShopBillingTerms(shopId, {
+      billingDiscountPercent:
+        body.billingDiscountPercent !== undefined && body.billingDiscountPercent !== ""
+          ? Number(body.billingDiscountPercent)
+          : undefined,
+      billingCreditBalance:
+        body.billingCreditBalance !== undefined && body.billingCreditBalance !== ""
+          ? Number(body.billingCreditBalance)
+          : undefined,
+      paymentNote: body.paymentNote !== undefined ? String(body.paymentNote) : undefined,
+    });
+    res.json(ok(toPublicShop(shop), "Billing terms updated"));
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Billing update failed"));
   }
 });
 

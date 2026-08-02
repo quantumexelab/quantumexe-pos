@@ -129,7 +129,23 @@ export default function SettingsPage() {
     checkoutBase?: string | null;
     publicWebNeedsCustomDomain?: boolean;
     publicWebCheckoutOk?: boolean;
-    plans: { id: string; label: string; amount: number; currency: string; days: number }[];
+    plans: {
+      id: string;
+      label: string;
+      amount: number;
+      currency: string;
+      days: number;
+      quote?: {
+        listAmount: number;
+        discountPercent: number;
+        discountAmount: number;
+        afterDiscount: number;
+        creditBalance: number;
+        creditApplied: number;
+        payable: number;
+      };
+    }[];
+    billingTerms?: { discountPercent: number; creditBalance: number } | null;
     current: {
       status?: string;
       billingPlan?: string | null;
@@ -137,6 +153,8 @@ export default function SettingsPage() {
       lastPaidAt?: string | null;
       payherePaymentId?: string | null;
       lastBillingAmount?: number | null;
+      billingDiscountPercent?: number;
+      billingCreditBalance?: number;
     } | null;
   } | null>(null);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
@@ -252,6 +270,12 @@ export default function SettingsPage() {
     try {
       const { data } = await api.post("/billing/checkout", { interval, recurring });
       if (!data?.success) throw new Error(data?.message || "Checkout failed");
+      if (data.data?.coveredByCredit) {
+        setMsg(data.data?.message || "Renewed using discount/credit — no PayHere charge");
+        setCheckoutBusy(false);
+        await refreshBilling();
+        return;
+      }
       const action = data.data?.action as string;
       const fields = data.data?.fields as Record<string, string>;
       const bridgeUrl = data.data?.bridgeUrl as string | undefined;
@@ -539,6 +563,8 @@ export default function SettingsPage() {
                   ]
               ).map((p) => {
                 const selected = billingInterval === p.id;
+                const q = p.quote;
+                const showPayable = q && (q.discountPercent > 0 || q.creditApplied > 0 || q.payable !== p.amount);
                 return (
                   <button
                     key={p.id}
@@ -552,13 +578,31 @@ export default function SettingsPage() {
                   >
                     <div className="text-sm font-bold text-gray-900">{p.label}</div>
                     <div className="text-2xl font-bold text-emerald-700 mt-1">
-                      {p.currency} {Number(p.amount).toLocaleString()}
+                      {p.currency}{" "}
+                      {Number(showPayable ? q!.payable : p.amount).toLocaleString()}
                     </div>
+                    {showPayable && (
+                      <div className="text-[11px] text-gray-500 mt-1 space-y-0.5">
+                        <div>
+                          List {p.currency} {Number(p.amount).toLocaleString()}
+                          {q!.discountPercent > 0 ? ` · −${q!.discountPercent}%` : ""}
+                          {q!.creditApplied > 0
+                            ? ` · credit −${p.currency} ${Number(q!.creditApplied).toLocaleString()}`
+                            : ""}
+                        </div>
+                      </div>
+                    )}
                     <div className="text-xs text-gray-500 mt-1">Auto-renews · {p.days} days access per charge</div>
                   </button>
                 );
               })}
             </div>
+            {(billing?.billingTerms?.discountPercent || billing?.billingTerms?.creditBalance) ? (
+              <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                Your terms: discount {billing?.billingTerms?.discountPercent || 0}% · credit balance LKR{" "}
+                {Number(billing?.billingTerms?.creditBalance || 0).toLocaleString()} (set by Master Admin)
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"

@@ -15,8 +15,46 @@ export type PayHerePlan = {
 
 const BRIDGE_AUD = "payhere-bridge";
 
-function money(n: number) {
+export function money(n: number) {
   return Number(n).toFixed(2);
+}
+
+export type BillingQuote = {
+  listAmount: number;
+  discountPercent: number;
+  discountAmount: number;
+  afterDiscount: number;
+  creditBalance: number;
+  creditApplied: number;
+  payable: number;
+  currency: string;
+};
+
+/** Per-shop Master Admin discount % + prepaid credit → amount charged on PayHere. */
+export function quoteSubscription(
+  plan: PayHerePlan,
+  shop?: {
+    billingDiscountPercent?: number | null;
+    billingCreditBalance?: number | null;
+  } | null
+): BillingQuote {
+  const listAmount = Number(plan.amount) || 0;
+  const discountPercent = Math.min(100, Math.max(0, Number(shop?.billingDiscountPercent) || 0));
+  const discountAmount = Math.round(listAmount * discountPercent) / 100;
+  const afterDiscount = Math.max(0, Math.round((listAmount - discountAmount) * 100) / 100);
+  const creditBalance = Math.max(0, Number(shop?.billingCreditBalance) || 0);
+  const creditApplied = Math.min(creditBalance, afterDiscount);
+  const payable = Math.max(0, Math.round((afterDiscount - creditApplied) * 100) / 100);
+  return {
+    listAmount,
+    discountPercent,
+    discountAmount,
+    afterDiscount,
+    creditBalance,
+    creditApplied,
+    payable,
+    currency: plan.currency,
+  };
 }
 
 function jwtSecret() {
@@ -268,12 +306,18 @@ export function buildCheckoutFields(input: {
   shopId: string;
   /** When false, one-time payment (no recurrence) — useful to debug Unauthorized errors. */
   recurring?: boolean;
+  /** Override list price (after discount/credit). */
+  amountOverride?: number;
 }) {
   const merchantId = process.env.PAYHERE_MERCHANT_ID!.trim();
   const merchantSecret = sanitizePayHereSecret(process.env.PAYHERE_MERCHANT_SECRET || "");
   const apiBase = publicApiBase();
   const webBase = publicWebBase();
-  const amount = money(input.plan.amount);
+  const amount = money(
+    input.amountOverride != null && Number.isFinite(input.amountOverride)
+      ? input.amountOverride
+      : input.plan.amount
+  );
   const currency = input.plan.currency;
   const hash = createPaymentHash({
     merchantId,

@@ -45,6 +45,8 @@ type Shop = {
   payhereSubscriptionId?: string | null;
   payherePaymentId?: string | null;
   lastBillingAmount?: number | null;
+  billingDiscountPercent?: number | null;
+  billingCreditBalance?: number | null;
 };
 
 type PanelTab = "firebase" | "access" | "security";
@@ -83,6 +85,7 @@ export default function MasterAdmin() {
   });
   const [typeModal, setTypeModal] = useState<TypeModalMode>(null);
   const [pickType, setPickType] = useState("clothing");
+  const [billingForm, setBillingForm] = useState({ discountPercent: "0", creditBalance: "0" });
 
   async function load() {
     setLoading(true);
@@ -99,6 +102,10 @@ export default function MasterAdmin() {
             firebaseProjectId: updated.firebaseProjectId || "",
             firebaseClientEmail: updated.firebaseClientEmail || "",
             firebasePrivateKey: "",
+          });
+          setBillingForm({
+            discountPercent: String(updated.billingDiscountPercent ?? 0),
+            creditBalance: String(updated.billingCreditBalance ?? 0),
           });
         }
       }
@@ -169,6 +176,10 @@ export default function MasterAdmin() {
       firebaseProjectId: s.firebaseProjectId || "",
       firebaseClientEmail: s.firebaseClientEmail || "",
       firebasePrivateKey: "",
+    });
+    setBillingForm({
+      discountPercent: String(s.billingDiscountPercent ?? 0),
+      creditBalance: String(s.billingCreditBalance ?? 0),
     });
   }
 
@@ -428,6 +439,11 @@ export default function MasterAdmin() {
                             }`
                           : "—",
                       ],
+                      ["Discount", `${Number(selected.billingDiscountPercent) || 0}%`],
+                      [
+                        "Credit balance",
+                        `Rs. ${Number(selected.billingCreditBalance || 0).toLocaleString()}`,
+                      ],
                       ["Subscription ID", selected.payhereSubscriptionId || "—"],
                       ["Payment note", selected.paymentNote || "—"],
                     ].map(([k, v]) => (
@@ -648,6 +664,65 @@ export default function MasterAdmin() {
                             }
                           >
                             <ShieldOff size={16} /> Revoke
+                          </button>
+                        </div>
+
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 space-y-3">
+                          <div>
+                            <div className="text-sm font-bold text-slate-900">Subscription discount &amp; credit</div>
+                            <p className="text-xs text-slate-600 mt-0.5">
+                              Per-shop terms for PayHere. Discount % off list price, then prepaid credit (LKR) is
+                              applied. If payable becomes Rs. 0, shop renews without PayHere.
+                            </p>
+                          </div>
+                          <div className="grid sm:grid-cols-2 gap-3">
+                            <label className="block text-xs font-semibold text-slate-700">
+                              Discount %
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={0.01}
+                                className="mt-1 w-full h-9 px-3 rounded-lg border border-slate-200 text-sm"
+                                value={billingForm.discountPercent}
+                                onChange={(e) =>
+                                  setBillingForm((f) => ({ ...f, discountPercent: e.target.value }))
+                                }
+                              />
+                            </label>
+                            <label className="block text-xs font-semibold text-slate-700">
+                              Credit balance (LKR)
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                className="mt-1 w-full h-9 px-3 rounded-lg border border-slate-200 text-sm"
+                                value={billingForm.creditBalance}
+                                onChange={(e) =>
+                                  setBillingForm((f) => ({ ...f, creditBalance: e.target.value }))
+                                }
+                              />
+                            </label>
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            Example: Monthly Rs. 2,000 · 10% off → Rs. 1,800 · credit Rs. 500 → PayHere Rs. 1,300.
+                          </p>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="btn btn-primary h-9"
+                            onClick={() =>
+                              void act(
+                                `/master/shops/${selected.shopId}/billing`,
+                                {
+                                  billingDiscountPercent: Number(billingForm.discountPercent) || 0,
+                                  billingCreditBalance: Number(billingForm.creditBalance) || 0,
+                                },
+                                "Billing terms saved"
+                              )
+                            }
+                          >
+                            Save discount &amp; credit
                           </button>
                         </div>
 
