@@ -208,7 +208,7 @@ router.post("/master/shops/:shopId/reprovision", requireAuth, requireRoles("Mast
     res.json(
       ok(
         toPublicShop(shop),
-        "Re-provisioned — Storekeeper role, damage/return lookups, walk-in customer ready"
+        "Re-provisioned — Storekeeper, banks, customers, receipt settings ready"
       )
     );
   } catch (e) {

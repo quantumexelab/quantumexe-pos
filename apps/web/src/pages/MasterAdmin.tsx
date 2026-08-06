@@ -617,7 +617,7 @@ export default function MasterAdmin() {
                                   void act(
                                     `/master/shops/${selected.shopId}/reprovision`,
                                     {},
-                                    "Roles & lookups re-seeded (Storekeeper added)"
+                                    "Roles, banks, customers & settings re-seeded"
                                   )
                                 }
                               >

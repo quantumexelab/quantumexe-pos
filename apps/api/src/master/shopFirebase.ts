@@ -267,6 +267,18 @@ export async function provisionShopDatabase(shop: ShopRecord): Promise<void> {
     await ensureNamedDoc(db, "ReturnStatus", st);
   }
 
+  // Common SL banks so supplier / bank-transfer forms work out of the box
+  for (const bank of [
+    "Bank of Ceylon (BOC)",
+    "Commercial Bank of Ceylon",
+    "People's Bank",
+    "Sampath Bank",
+    "Hatton National Bank (HNB)",
+    "Nations Trust Bank",
+  ]) {
+    await ensureNamedDoc(db, "Bank", bank);
+  }
+
   const users = await db.collection("User").where("contact", "==", shop.phone).limit(1).get();
   if (users.empty) {
     const nextId = await nextCounterId(db, "User");
@@ -286,29 +298,54 @@ export async function provisionShopDatabase(shop: ShopRecord): Promise<void> {
       });
   }
 
-  const settingsSnap = await db.collection("Setting").where("key", "==", "shop_name").limit(1).get();
-  if (settingsSnap.empty) {
+  const ensureSetting = async (key: string, value: string) => {
+    const snap = await db.collection("Setting").where("key", "==", key).limit(1).get();
+    if (!snap.empty) return;
     const nextId = await nextCounterId(db, "Setting");
     await db.collection("Setting").doc(String(nextId)).set({
       id: nextId,
-      key: "shop_name",
-      value: shop.shopName,
+      key,
+      value,
       shopId: shop.shopId,
     });
-  }
+  };
 
-  // Walk-in customer so POS / sales have a default party
-  const walkIn = await db.collection("Customer").where("name", "==", "Walk-in Customer").limit(1).get();
-  if (walkIn.empty) {
-    const nextId = await nextCounterId(db, "Customer");
-    await db.collection("Customer").doc(String(nextId)).set({
-      id: nextId,
-      name: "Walk-in Customer",
-      phone: "0700000000",
-      statusId: activeStatusId || 1,
-      shopId: shop.shopId,
-      createdAt: new Date(),
-    });
+  await ensureSetting("shop_name", shop.shopName);
+  await ensureSetting("business_name", shop.shopName);
+  await ensureSetting("owner_name", shop.ownerName || "");
+  await ensureSetting("store_phone", shop.phone || "");
+  await ensureSetting("store_email", shop.email || "");
+  await ensureSetting("currency", "Rs.");
+  await ensureSetting("tax_rate", "0");
+  await ensureSetting("low_stock_threshold", "5");
+  await ensureSetting("enable_sound", "1");
+  await ensureSetting("print_language", "English");
+  await ensureSetting("receipt_header", `WELCOME TO ${shop.shopName}`);
+  await ensureSetting("receipt_footer", "Thank you for your purchase!");
+  await ensureSetting("show_logo", "1");
+  await ensureSetting("show_barcode", "1");
+  await ensureSetting("auto_cut", "1");
+  await ensureSetting("print_date", "1");
+  await ensureSetting("print_time", "1");
+  await ensureSetting("customer_display_enabled", "1");
+
+  // Default customers for POS / quotations
+  for (const cust of [
+    { name: "Walk-in Customer", phone: "0700000000" },
+    { name: "Temporary Customer", phone: "0700000001" },
+  ]) {
+    const existing = await db.collection("Customer").where("name", "==", cust.name).limit(1).get();
+    if (existing.empty) {
+      const nextId = await nextCounterId(db, "Customer");
+      await db.collection("Customer").doc(String(nextId)).set({
+        id: nextId,
+        name: cust.name,
+        phone: cust.phone,
+        statusId: activeStatusId || 1,
+        shopId: shop.shopId,
+        createdAt: new Date(),
+      });
+    }
   }
 
   await db.collection("_qx_meta").doc("shop").set(
