@@ -1,6 +1,6 @@
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag, ArrowRightLeft, Banknote } from "lucide-react";
+import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag, ArrowRightLeft, Banknote, Plus, ChevronRight } from "lucide-react";
 import api from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
 import { IncludeArchivesSearch } from "../components/IncludeArchivesSearch";
@@ -442,6 +442,8 @@ export function CreateProduct() {
   const [variations, setVariations] = useState<
     Array<{ id?: number; name: string; barcode: string; price: string; cost: string; size: string; color: string }>
   >([{ name: "", barcode: "", price: "", cost: "", size: "", color: "" }]);
+  const [structureModalOpen, setStructureModalOpen] = useState(false);
+  const [productStructure, setProductStructure] = useState<"simple" | "variable" | null>(null);
 
   async function loadLookups() {
     const [c, b, u, t] = await Promise.all([
@@ -503,6 +505,10 @@ export function CreateProduct() {
               }))
             : [{ name: "", barcode: "", price: "", cost: "", size: "", color: "" }]
         );
+        const isVariable =
+          vars.length > 1 ||
+          vars.some((v: any) => String(v.size || "").trim() || String(v.color || "").trim() || (v.name && v.name !== "Default"));
+        setProductStructure(isVariable ? "variable" : "simple");
         setMsg(`Editing product #${p.id}`);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load product");
@@ -613,6 +619,11 @@ export function CreateProduct() {
       } finally {
         setSaving(false);
       }
+      // Reox-style: ask Simple vs Variable before Inventory
+      if (!isEdit || productStructure == null) {
+        setStructureModalOpen(true);
+        return;
+      }
     }
     // Carry inventory prices into the default variation when leaving Inventory step
     if (step === 1) {
@@ -621,18 +632,52 @@ export function CreateProduct() {
           i === 0
             ? {
                 ...v,
+                name: v.name || (productStructure === "simple" ? "Default" : v.name),
                 cost: v.cost !== "" ? v.cost : inventory.cost,
                 price: v.price !== "" ? v.price : inventory.price,
               }
             : v
         )
       );
+      if (productStructure === "simple") {
+        setStep(3);
+        return;
+      }
     }
     setStep((s) => Math.min(3, s + 1));
   }
 
+  function chooseProductStructure(kind: "simple" | "variable") {
+    setProductStructure(kind);
+    setStructureModalOpen(false);
+    setError("");
+    if (kind === "simple") {
+      setVariations((prev) => {
+        const first = prev[0] || { name: "", barcode: "", price: "", cost: "", size: "", color: "" };
+        return [
+          {
+            ...first,
+            name: first.name || "Default",
+            size: "",
+            color: "",
+          },
+        ];
+      });
+    }
+    setStep(1);
+  }
+
   function back() {
     setError("");
+    if (step === 3 && productStructure === "simple") {
+      setStep(1);
+      return;
+    }
+    if (step === 1) {
+      setStructureModalOpen(true);
+      setStep(0);
+      return;
+    }
     setStep((s) => Math.max(0, s - 1));
   }
 
@@ -861,24 +906,32 @@ export function CreateProduct() {
       )}
 
       <div className="bg-white border border-gray-200 rounded-xl p-3">
-        <div className="grid grid-cols-4 gap-2">
-          {steps.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setStep(s.id)}
-              className={`rounded-lg px-3 py-3 text-sm font-semibold border transition ${
-                step === s.id
-                  ? "bg-green-50 border-green-600 text-green-700"
-                  : step > s.id
-                    ? "bg-white border-green-200 text-green-700"
-                    : "bg-gray-50 border-gray-200 text-gray-400"
-              }`}
-            >
-              <div className="text-[10px] tracking-wide mb-1">STEP {s.id + 1}</div>
-              {s.label}
-            </button>
-          ))}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {steps.map((s) => {
+            if (productStructure === "simple" && s.id === 2) return null;
+            const visualIndex =
+              productStructure === "simple" && s.id === 3 ? 3 : s.id + 1;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  if (s.id === 2 && productStructure === "simple") return;
+                  setStep(s.id);
+                }}
+                className={`rounded-lg px-3 py-3 text-sm font-semibold border transition ${
+                  step === s.id
+                    ? "bg-green-50 border-green-600 text-green-700"
+                    : step > s.id
+                      ? "bg-white border-green-200 text-green-700"
+                      : "bg-gray-50 border-gray-200 text-gray-400"
+                }`}
+              >
+                <div className="text-[10px] tracking-wide mb-1">STEP {visualIndex}</div>
+                {s.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -1157,6 +1210,73 @@ export function CreateProduct() {
           </div>
         </div>
       </div>
+
+      {structureModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/45 grid place-items-center p-4">
+          <div
+            className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-gray-100 overflow-hidden"
+            role="dialog"
+            aria-labelledby="product-structure-title"
+          >
+            <div className="h-1 bg-gradient-to-r from-sky-500 via-violet-500 to-pink-500" />
+            <div className="p-6 space-y-5">
+              <div className="text-center space-y-2">
+                <div className="mx-auto h-11 w-11 rounded-xl bg-emerald-100 text-emerald-700 grid place-items-center">
+                  <Package size={22} />
+                </div>
+                <h2 id="product-structure-title" className="text-lg font-bold text-gray-900">
+                  Product Structure
+                </h2>
+                <p className="text-sm text-gray-600">
+                  Does this product come in different variants like <strong>Size</strong>, <strong>Color</strong>, or{" "}
+                  <strong>Storage</strong>?
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => chooseProductStructure("simple")}
+                className="w-full flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 text-left hover:border-sky-300 hover:bg-sky-50/60 transition"
+              >
+                <span className="h-10 w-10 rounded-lg bg-sky-100 text-sky-700 grid place-items-center shrink-0">
+                  <Package size={18} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-gray-900">Simple Product</span>
+                  <span className="block text-xs text-gray-500">Single stock item with no variants</span>
+                </span>
+                <ChevronRight size={18} className="text-gray-400 shrink-0" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => chooseProductStructure("variable")}
+                className="w-full flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 text-left hover:border-emerald-300 hover:bg-emerald-50/60 transition"
+              >
+                <span className="h-10 w-10 rounded-lg bg-emerald-100 text-emerald-700 grid place-items-center shrink-0">
+                  <Plus size={18} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-gray-900">Variable Product</span>
+                  <span className="block text-xs text-gray-500">Has multiple sizes, colors, etc.</span>
+                </span>
+                <ChevronRight size={18} className="text-gray-400 shrink-0" />
+              </button>
+
+              <button
+                type="button"
+                className="w-full text-center text-xs font-semibold text-gray-500 hover:text-gray-800 py-1"
+                onClick={() => {
+                  setStructureModalOpen(false);
+                  setStep(0);
+                }}
+              >
+                CANCEL &amp; RETURN
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {quickAdd && (
         <div className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4" onClick={() => setQuickAdd(null)}>
