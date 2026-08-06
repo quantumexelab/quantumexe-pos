@@ -609,8 +609,110 @@ router.get("/products/search", requireAuth, async (req, res) => {
 });
 
 router.get("/products/check-code/:code", requireAuth, async (req, res) => {
-  const found = await prisma.product.findUnique({ where: { code: param(req.params.code) } });
-  res.json(ok({ exists: !!found }));
+  const found = await prisma.product.findFirst({
+    where: { code: param(req.params.code) },
+  });
+  res.json(ok({ exists: !!found, id: found?.id ?? null }));
+});
+
+/** Same Name+Code+Category+Brand+Unit+Type (or same code / same identity combo) → duplicate. */
+router.post("/products/check-duplicate", requireAuth, async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim();
+    const code = String(req.body?.code || "").trim();
+    const categoryId = req.body?.categoryId != null && req.body.categoryId !== "" ? Number(req.body.categoryId) : null;
+    const brandId = req.body?.brandId != null && req.body.brandId !== "" ? Number(req.body.brandId) : null;
+    const unitId = req.body?.unitId != null && req.body.unitId !== "" ? Number(req.body.unitId) : null;
+    const productTypeId =
+      req.body?.productTypeId != null && req.body.productTypeId !== "" ? Number(req.body.productTypeId) : null;
+    const excludeId = req.body?.excludeId != null ? Number(req.body.excludeId) : null;
+
+    if (!name || !code) {
+      return res.json(ok({ duplicate: false }));
+    }
+
+    const notSelf = excludeId && Number.isFinite(excludeId) ? { id: { not: excludeId } } : {};
+
+    const byCode = await prisma.product.findFirst({
+      where: { code, ...notSelf },
+      select: { id: true, name: true, code: true },
+    });
+    if (byCode) {
+      return res.json(
+        ok({
+          duplicate: true,
+          reason: "code",
+          message: `Product code "${code}" already exists (#${byCode.id})`,
+          existingId: byCode.id,
+        })
+      );
+    }
+
+    const all = await prisma.product.findMany({
+      where: {
+        ...notSelf,
+        ...(categoryId != null && Number.isFinite(categoryId) ? { categoryId } : {}),
+        ...(brandId != null && Number.isFinite(brandId) ? { brandId } : {}),
+        ...(unitId != null && Number.isFinite(unitId) ? { unitId } : {}),
+        ...(productTypeId != null && Number.isFinite(productTypeId) ? { productTypeId } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        categoryId: true,
+        brandId: true,
+        unitId: true,
+        productTypeId: true,
+      },
+    });
+
+    const nameKey = name.toLowerCase();
+    const codeKey = code.toLowerCase();
+    const exact = all.find(
+      (p) =>
+        String(p.name || "").trim().toLowerCase() === nameKey &&
+        String(p.code || "").trim().toLowerCase() === codeKey &&
+        (p.categoryId ?? null) === (categoryId ?? null) &&
+        (p.brandId ?? null) === (brandId ?? null) &&
+        (p.unitId ?? null) === (unitId ?? null) &&
+        (p.productTypeId ?? null) === (productTypeId ?? null)
+    );
+    if (exact) {
+      return res.json(
+        ok({
+          duplicate: true,
+          reason: "exact",
+          message:
+            "A product with the same Name, Code, Category, Brand, Unit and Product Type already exists",
+          existingId: exact.id,
+        })
+      );
+    }
+
+    const sameIdentity = all.find(
+      (p) =>
+        String(p.name || "").trim().toLowerCase() === nameKey &&
+        (p.categoryId ?? null) === (categoryId ?? null) &&
+        (p.brandId ?? null) === (brandId ?? null) &&
+        (p.unitId ?? null) === (unitId ?? null) &&
+        (p.productTypeId ?? null) === (productTypeId ?? null)
+    );
+    if (sameIdentity) {
+      return res.json(
+        ok({
+          duplicate: true,
+          reason: "identity",
+          message: `A product with the same Name, Category, Brand, Unit and Product Type already exists (#${sameIdentity.id}, code ${sameIdentity.code})`,
+          existingId: sameIdentity.id,
+        })
+      );
+    }
+
+    res.json(ok({ duplicate: false }));
+  } catch (e) {
+    res.status(500).json(fail(e instanceof Error ? e.message : "Duplicate check failed", 500));
+  }
 });
 
 router.get("/products/:id", requireAuth, async (req, res) => {
@@ -649,6 +751,29 @@ router.post("/products/create", requireAuth, async (req, res) => {
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(fail(parsed.error.message));
+
+  const codeClash = await prisma.product.findFirst({ where: { code: parsed.data.code } });
+  if (codeClash) return res.status(400).json(fail(`Product code "${parsed.data.code}" already exists`));
+
+  const nameKey = parsed.data.name.trim().toLowerCase();
+  const siblings = await prisma.product.findMany({
+    where: {
+      categoryId: parsed.data.categoryId ?? null,
+      brandId: parsed.data.brandId ?? null,
+      unitId: parsed.data.unitId ?? null,
+      productTypeId: parsed.data.productTypeId ?? null,
+    },
+    select: { id: true, name: true, code: true },
+  });
+  const identityClash = siblings.find((p) => String(p.name || "").trim().toLowerCase() === nameKey);
+  if (identityClash) {
+    return res.status(400).json(
+      fail(
+        `A product with the same Name, Category, Brand, Unit and Product Type already exists (#${identityClash.id})`
+      )
+    );
+  }
+
   const active = await prisma.status.findFirst({ where: { name: "Active" } });
   const product = await prisma.product.create({
     data: {
@@ -691,16 +816,37 @@ router.put("/products/update/:id", requireAuth, async (req, res) => {
     if (clash) return res.status(400).json(fail("Product code already exists"));
   }
 
+  const nextName = data.name != null ? String(data.name).trim() : existing.name;
+  const nextCategoryId = data.categoryId != null ? Number(data.categoryId) : existing.categoryId;
+  const nextBrandId = data.brandId != null ? Number(data.brandId) : existing.brandId;
+  const nextUnitId = data.unitId != null ? Number(data.unitId) : existing.unitId;
+  const nextTypeId = data.productTypeId != null ? Number(data.productTypeId) : existing.productTypeId;
+  const identityRows = await prisma.product.findMany({
+    where: {
+      id: { not: id },
+      categoryId: nextCategoryId ?? null,
+      brandId: nextBrandId ?? null,
+      unitId: nextUnitId ?? null,
+      productTypeId: nextTypeId ?? null,
+    },
+    select: { id: true, name: true },
+  });
+  if (identityRows.some((p) => String(p.name || "").trim().toLowerCase() === nextName.toLowerCase())) {
+    return res.status(400).json(
+      fail("A product with the same Name, Category, Brand, Unit and Product Type already exists")
+    );
+  }
+
   await prisma.product.update({
     where: { id },
     data: {
       name: data.name != null ? String(data.name) : existing.name,
       code: data.code != null ? String(data.code) : existing.code,
       description: data.description != null ? data.description : existing.description,
-      categoryId: data.categoryId != null ? Number(data.categoryId) : existing.categoryId,
-      brandId: data.brandId != null ? Number(data.brandId) : existing.brandId,
-      unitId: data.unitId != null ? Number(data.unitId) : existing.unitId,
-      productTypeId: data.productTypeId != null ? Number(data.productTypeId) : existing.productTypeId,
+      categoryId: nextCategoryId,
+      brandId: nextBrandId,
+      unitId: nextUnitId,
+      productTypeId: nextTypeId,
     },
   });
 

@@ -578,13 +578,42 @@ export function CreateProduct() {
     return "";
   }
 
-  function next() {
+  async function assertNotDuplicateProduct() {
+    const { data } = await api.post("/products/check-duplicate", {
+      name: basic.name.trim(),
+      code: basic.code.trim(),
+      categoryId: Number(basic.categoryId),
+      brandId: Number(basic.brandId),
+      unitId: Number(basic.unitId),
+      productTypeId: Number(basic.productTypeId),
+      excludeId: isEdit && editId ? Number(editId) : undefined,
+    });
+    if (!data?.success) throw new Error(data?.message || "Duplicate check failed");
+    if (data.data?.duplicate) {
+      throw new Error(data.data.message || "This product already exists");
+    }
+  }
+
+  async function next() {
     const msg = validateStep();
     if (msg) {
       setError(msg);
       return;
     }
     setError("");
+    if (step === 0) {
+      try {
+        setSaving(true);
+        await assertNotDuplicateProduct();
+      } catch (err) {
+        const ax = err as { response?: { data?: { message?: string } }; message?: string };
+        setError(ax.response?.data?.message || ax.message || "Duplicate product");
+        setSaving(false);
+        return;
+      } finally {
+        setSaving(false);
+      }
+    }
     // Carry inventory prices into the default variation when leaving Inventory step
     if (step === 1) {
       setVariations((prev) =>
@@ -716,6 +745,7 @@ export function CreateProduct() {
     setSaving(true);
     setError("");
     try {
+      await assertNotDuplicateProduct();
       const primary = variations[0];
       const payload = {
         name: basic.name,
@@ -769,7 +799,12 @@ export function CreateProduct() {
       }
       navigate("/products/product-list");
     } catch (err) {
-      setError(err instanceof Error ? err.message : isEdit ? "Failed to update product" : "Failed to create product");
+      const ax = err as { response?: { data?: { message?: string } }; message?: string };
+      setError(
+        ax.response?.data?.message ||
+          ax.message ||
+          (isEdit ? "Failed to update product" : "Failed to create product")
+      );
     } finally {
       setSaving(false);
     }
@@ -1111,8 +1146,8 @@ export function CreateProduct() {
               </button>
             )}
             {step < 3 ? (
-              <button type="button" className="btn btn-primary" onClick={next} disabled={loadingProduct}>
-                Next Step &gt;
+              <button type="button" className="btn btn-primary" onClick={() => void next()} disabled={loadingProduct || saving}>
+                {saving && step === 0 ? "Checking…" : "Next Step >"}
               </button>
             ) : (
               <button type="button" className="btn btn-primary" disabled={saving || loadingProduct} onClick={saveProduct}>
