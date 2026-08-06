@@ -944,7 +944,7 @@ export function CreateProduct() {
                 <FieldLabel text="Product Name" required />
                 <input
                   className="input"
-                  placeholder="e.g. iPhone 15 Pro"
+                  placeholder="Enter product name"
                   value={basic.name}
                   onChange={(e) => setBasic({ ...basic, name: e.target.value })}
                 />
