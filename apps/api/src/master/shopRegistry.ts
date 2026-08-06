@@ -623,3 +623,22 @@ export async function clearShopFirebase(shopId: string) {
     firebaseProvisionedAt: null,
   });
 }
+
+/** Re-run core seed (roles including Storekeeper, lookups) without re-pasting keys. */
+export async function reprovisionShop(shopId: string) {
+  const { provisionShopDatabase, shopHasFirebase } = await import("./shopFirebase.js");
+  const shop = await getShop(shopId);
+  if (!shop) throw new Error("Shop not found");
+  if (!shopHasFirebase(shop)) throw new Error("Shop Firebase credentials not set");
+  await provisionShopDatabase(shop);
+  const updated = await updateShop(shopId, { firebaseProvisionedAt: new Date().toISOString() });
+  if (shop.shopType) {
+    try {
+      const { isShopType, applyShopTemplate } = await import("./shopTemplates.js");
+      if (isShopType(shop.shopType)) await applyShopTemplate(updated, shop.shopType);
+    } catch {
+      /* template re-apply is best-effort */
+    }
+  }
+  return updated;
+}

@@ -214,7 +214,38 @@ export async function testShopFirebase(creds: ShopFirebaseCreds): Promise<{ ok: 
   }
 }
 
-/** Seed Role / Status / Super Admin user into a brand-new shop Firebase project. */
+async function nextCounterId(db: Firestore, counterName: string): Promise<number> {
+  const counterRef = db.collection("counters").doc(counterName);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(counterRef);
+    const current = snap.exists ? Number(snap.data()?.value || 0) : 0;
+    const next = current + 1;
+    tx.set(counterRef, { value: next }, { merge: true });
+    return next;
+  });
+}
+
+/** Ensure a named lookup row exists (Role, Status, DamageReason, …). Idempotent. */
+async function ensureNamedDoc(
+  db: Firestore,
+  col: string,
+  name: string,
+  extra: Record<string, unknown> = {}
+): Promise<number> {
+  const existing = await db.collection(col).where("name", "==", name).limit(1).get();
+  if (!existing.empty) {
+    const id = Number(existing.docs[0].data()?.id || existing.docs[0].id);
+    return Number.isFinite(id) && id > 0 ? id : Number(existing.docs[0].id) || 0;
+  }
+  const id = await nextCounterId(db, col);
+  await db.collection(col).doc(String(id)).set({ id, name, ...extra });
+  return id;
+}
+
+/**
+ * Seed core lookups + owner Admin into a shop Firebase project.
+ * Safe to re-run (adds missing Storekeeper / DamageReason / etc without wiping data).
+ */
 export async function provisionShopDatabase(shop: ShopRecord): Promise<void> {
   if (!shopHasFirebase(shop)) throw new Error("Shop Firebase credentials not set");
   const db = getShopFirestoreFromCreds(shop.shopId, {
@@ -223,29 +254,22 @@ export async function provisionShopDatabase(shop: ShopRecord): Promise<void> {
     firebasePrivateKey: shop.firebasePrivateKey!,
   });
 
-  const ensureDoc = async (col: string, id: string, data: Record<string, unknown>) => {
-    const ref = db.collection(col).doc(id);
-    const snap = await ref.get();
-    if (!snap.exists) await ref.set(data);
-  };
+  const adminRoleId = await ensureNamedDoc(db, "Role", "Admin");
+  await ensureNamedDoc(db, "Role", "Cashier");
+  await ensureNamedDoc(db, "Role", "Storekeeper");
+  const activeStatusId = await ensureNamedDoc(db, "Status", "Active");
+  await ensureNamedDoc(db, "Status", "Inactive");
 
-  await ensureDoc("Role", "1", { id: 1, name: "Admin" });
-  await ensureDoc("Role", "2", { id: 2, name: "Cashier" });
-  await ensureDoc("Status", "1", { id: 1, name: "Active" });
-  await ensureDoc("Status", "2", { id: 2, name: "Inactive" });
-  await db.collection("counters").doc("Role").set({ value: 2 }, { merge: true });
-  await db.collection("counters").doc("Status").set({ value: 2 }, { merge: true });
+  for (const reason of ["Broken", "Expired", "Wet Damage", "Other"]) {
+    await ensureNamedDoc(db, "DamageReason", reason);
+  }
+  for (const st of ["Pending", "Resolved", "Written Off"]) {
+    await ensureNamedDoc(db, "ReturnStatus", st);
+  }
 
   const users = await db.collection("User").where("contact", "==", shop.phone).limit(1).get();
   if (users.empty) {
-    const counterRef = db.collection("counters").doc("User");
-    const nextId = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(counterRef);
-      const current = snap.exists ? Number(snap.data()?.value || 0) : 0;
-      const next = current + 1;
-      tx.set(counterRef, { value: next }, { merge: true });
-      return next;
-    });
+    const nextId = await nextCounterId(db, "User");
     await db
       .collection("User")
       .doc(String(nextId))
@@ -255,8 +279,8 @@ export async function provisionShopDatabase(shop: ShopRecord): Promise<void> {
         email: shop.email,
         contact: shop.phone,
         passwordHash: shop.passwordHash,
-        roleId: 1,
-        statusId: 1,
+        roleId: adminRoleId || 1,
+        statusId: activeStatusId || 1,
         shopId: shop.shopId,
         createdAt: new Date(),
       });
@@ -264,19 +288,26 @@ export async function provisionShopDatabase(shop: ShopRecord): Promise<void> {
 
   const settingsSnap = await db.collection("Setting").where("key", "==", "shop_name").limit(1).get();
   if (settingsSnap.empty) {
-    const counterRef = db.collection("counters").doc("Setting");
-    const nextId = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(counterRef);
-      const current = snap.exists ? Number(snap.data()?.value || 0) : 0;
-      const next = current + 1;
-      tx.set(counterRef, { value: next }, { merge: true });
-      return next;
-    });
+    const nextId = await nextCounterId(db, "Setting");
     await db.collection("Setting").doc(String(nextId)).set({
       id: nextId,
       key: "shop_name",
       value: shop.shopName,
       shopId: shop.shopId,
+    });
+  }
+
+  // Walk-in customer so POS / sales have a default party
+  const walkIn = await db.collection("Customer").where("name", "==", "Walk-in Customer").limit(1).get();
+  if (walkIn.empty) {
+    const nextId = await nextCounterId(db, "Customer");
+    await db.collection("Customer").doc(String(nextId)).set({
+      id: nextId,
+      name: "Walk-in Customer",
+      phone: "0700000000",
+      statusId: activeStatusId || 1,
+      shopId: shop.shopId,
+      createdAt: new Date(),
     });
   }
 

@@ -608,21 +608,37 @@ export default function MasterAdmin() {
                             <Cloud size={16} /> Save &amp; provision DB
                           </button>
                           {selected.firebaseConfigured ? (
-                            <button
-                              type="button"
-                              disabled={busy}
-                              className="btn btn-muted"
-                              onClick={() =>
-                                void act(
-                                  `/master/shops/${selected.shopId}/firebase`,
-                                  undefined,
-                                  "Firebase disconnected",
-                                  "delete"
-                                )
-                              }
-                            >
-                              Disconnect
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                className="btn btn-muted"
+                                onClick={() =>
+                                  void act(
+                                    `/master/shops/${selected.shopId}/reprovision`,
+                                    {},
+                                    "Roles & lookups re-seeded (Storekeeper added)"
+                                  )
+                                }
+                              >
+                                Re-seed roles
+                              </button>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                className="btn btn-muted"
+                                onClick={() =>
+                                  void act(
+                                    `/master/shops/${selected.shopId}/firebase`,
+                                    undefined,
+                                    "Firebase disconnected",
+                                    "delete"
+                                  )
+                                }
+                              >
+                                Disconnect
+                              </button>
+                            </>
                           ) : null}
                         </div>
                         {selected.firebaseProvisionedAt ? (

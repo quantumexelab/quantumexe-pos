@@ -20,6 +20,7 @@ import {
   toPublicShop,
   verifyMasterLogin,
   getShop,
+  reprovisionShop,
 } from "./master/shopRegistry.js";
 
 const router = Router();
@@ -198,6 +199,20 @@ router.delete("/master/shops/:shopId/firebase", requireAuth, requireRoles("Maste
     res.json(ok(toPublicShop(shop), "Shop Firebase disconnected"));
   } catch (e) {
     res.status(400).json(fail(e instanceof Error ? e.message : "Disconnect failed"));
+  }
+});
+
+router.post("/master/shops/:shopId/reprovision", requireAuth, requireRoles("MasterAdmin"), async (req, res) => {
+  try {
+    const shop = await reprovisionShop(String(req.params.shopId));
+    res.json(
+      ok(
+        toPublicShop(shop),
+        "Re-provisioned — Storekeeper role, damage/return lookups, walk-in customer ready"
+      )
+    );
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Re-provision failed"));
   }
 });
 
