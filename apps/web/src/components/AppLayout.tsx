@@ -27,6 +27,7 @@ import {
   ChevronUp,
   Menu,
   X,
+  Plus,
   type LucideIcon,
 } from "lucide-react";
 
@@ -227,6 +228,7 @@ export default function AppLayout() {
   const [showBell, setShowBell] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [railFlyout, setRailFlyout] = useState<string | null>(null);
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [features, setFeatures] = useState<ShopFeatures | null>(() => readCachedFeatures());
@@ -396,6 +398,154 @@ export default function AppLayout() {
     setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
+  useEffect(() => {
+    setRailFlyout(null);
+  }, [location.pathname]);
+
+  function logout() {
+    auth.logout();
+    navigate("/signin", { replace: true });
+  }
+
+  function renderNavItems(mode: "rail" | "drawer") {
+    return items.map((item) => {
+      const Icon = item.icon;
+      const hasChildren = !!item.children?.length;
+      const expanded = !!open[item.id];
+      const parentActive = sectionActive(location.pathname, item);
+      const label = t(item.labelKey);
+
+      if (mode === "rail") {
+        if (!hasChildren && item.path) {
+          return (
+            <NavLink
+              key={item.id}
+              to={item.path}
+              title={label}
+              onClick={() => setRailFlyout(null)}
+              className={({ isActive }) =>
+                `mx-auto flex h-11 w-11 items-center justify-center rounded-full transition ${
+                  isActive
+                    ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
+                    : "text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                }`
+              }
+            >
+              <Icon size={20} strokeWidth={1.75} />
+            </NavLink>
+          );
+        }
+
+        const flyoutOpen = railFlyout === item.id;
+        return (
+          <div key={item.id} className="relative flex justify-center">
+            <button
+              type="button"
+              title={label}
+              onClick={() => {
+                setRailFlyout((cur) => (cur === item.id ? null : item.id));
+                const first = item.children?.[0];
+                if (first && !parentActive) navigate(first.path);
+              }}
+              className={`flex h-11 w-11 items-center justify-center rounded-full transition ${
+                parentActive || flyoutOpen
+                  ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
+                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+              }`}
+            >
+              <Icon size={20} strokeWidth={1.75} />
+            </button>
+            {flyoutOpen && (
+              <div className="absolute left-[calc(100%+10px)] top-0 z-[60] w-56 rounded-xl border border-gray-200 bg-white py-2 shadow-xl">
+                <div className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                  {label}
+                </div>
+                {item.children!.map((child) => (
+                  <NavLink
+                    key={child.path}
+                    to={child.path}
+                    onClick={() => setRailFlyout(null)}
+                    className={({ isActive }) =>
+                      `mx-2 block rounded-lg px-3 py-2 text-sm transition ${
+                        isActive
+                          ? "bg-emerald-50 font-semibold text-emerald-900 border border-emerald-500"
+                          : "text-gray-700 hover:bg-gray-50 border border-transparent"
+                      }`
+                    }
+                  >
+                    {t(child.labelKey)}
+                  </NavLink>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      if (!hasChildren && item.path) {
+        return (
+          <NavLink
+            key={item.id}
+            to={item.path}
+            title={label}
+            onClick={() => setMobileNavOpen(false)}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                isActive ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-100"
+              }`
+            }
+          >
+            <Icon size={18} className="shrink-0" />
+            <span>{label}</span>
+          </NavLink>
+        );
+      }
+
+      return (
+        <div key={item.id} className="space-y-1">
+          <button
+            type="button"
+            title={label}
+            onClick={() => {
+              toggle(item.id);
+              const first = item.children?.[0];
+              if (first && !expanded) navigate(first.path);
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+              parentActive ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            <Icon size={18} className="shrink-0" />
+            <span className="flex-1 text-left">{label}</span>
+            <span className="opacity-80">
+              {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </span>
+          </button>
+          {expanded && (
+            <div className="ml-4 pl-3 border-l border-gray-200 space-y-1 py-1">
+              {item.children!.map((child) => (
+                <NavLink
+                  key={child.path}
+                  to={child.path}
+                  onClick={() => setMobileNavOpen(false)}
+                  className={({ isActive }) =>
+                    `block px-3 py-2 rounded-md text-sm transition ${
+                      isActive
+                        ? "bg-green-50 text-gray-900 font-semibold border border-green-600"
+                        : "text-gray-600 hover:bg-gray-50 border border-transparent"
+                    }`
+                  }
+                >
+                  {t(child.labelKey)}
+                </NavLink>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    });
+  }
+
   return (
     <div className="h-[100dvh] flex overflow-hidden bg-[#f3f4f6]">
       {mobileNavOpen && (
@@ -406,10 +556,47 @@ export default function AppLayout() {
           onClick={() => setMobileNavOpen(false)}
         />
       )}
+      {railFlyout && (
+        <button
+          type="button"
+          className="fixed inset-0 z-[55] hidden lg:block cursor-default bg-transparent"
+          aria-label="Close submenu"
+          onClick={() => setRailFlyout(null)}
+        />
+      )}
+
+      <aside className="hidden lg:flex w-[72px] shrink-0 bg-white border-r border-gray-200 flex-col h-full relative z-[56]">
+        <div className="h-14 flex flex-col items-center justify-center gap-0.5 border-b shrink-0">
+          <div className="font-black text-sm leading-none tracking-tight">
+            <span className="text-slate-900">Q</span>
+            <span className="text-sky-500">X</span>
+          </div>
+          <div className="text-[9px] text-gray-400 leading-none">v{APP_VERSION}</div>
+        </div>
+        <nav className="flex-1 overflow-y-auto overscroll-contain py-3 px-2 space-y-1.5 min-h-0">
+          {renderNavItems("rail")}
+        </nav>
+        <div className="shrink-0 border-t border-gray-100 py-3 flex flex-col items-center gap-2 safe-pb">
+          <div
+            className="h-10 w-10 rounded-full bg-emerald-50 text-emerald-700 text-sm font-bold grid place-items-center"
+            title={user?.name || ""}
+          >
+            {(user?.name || "A")[0]}
+          </div>
+          <button
+            type="button"
+            className="h-10 w-10 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 grid place-items-center transition"
+            title={t("common.logout")}
+            onClick={logout}
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
+      </aside>
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-[min(86vw,288px)] bg-white border-r border-gray-200 flex flex-col h-full shadow-xl transition-transform duration-200 ease-out lg:static lg:z-auto lg:w-64 lg:shrink-0 lg:shadow-none lg:translate-x-0 ${
-          mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        className={`fixed inset-y-0 left-0 z-50 w-[min(86vw,288px)] bg-white border-r border-gray-200 flex flex-col h-full shadow-xl transition-transform duration-200 ease-out lg:hidden ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="h-14 flex items-center justify-between px-4 gap-2 border-b shrink-0">
@@ -422,108 +609,34 @@ export default function AppLayout() {
           </div>
           <button
             type="button"
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
             aria-label="Close menu"
             onClick={() => setMobileNavOpen(false)}
           >
             <X size={18} />
           </button>
         </div>
-
         <nav className="flex-1 overflow-y-auto overscroll-contain py-3 px-2 space-y-1 min-h-0">
-          {items.map((item) => {
-            const Icon = item.icon;
-            const hasChildren = !!item.children?.length;
-            const expanded = !!open[item.id];
-            const parentActive = sectionActive(location.pathname, item);
-
-            if (!hasChildren && item.path) {
-              const label = t(item.labelKey);
-              return (
-                <NavLink
-                  key={item.id}
-                  to={item.path}
-                  title={label}
-                  onClick={() => setMobileNavOpen(false)}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
-                      isActive ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-100"
-                    }`
-                  }
-                >
-                  <Icon size={18} className="shrink-0" />
-                  <span>{label}</span>
-                </NavLink>
-              );
-            }
-
-            const label = t(item.labelKey);
-            return (
-              <div key={item.id} className="space-y-1">
-                <button
-                  type="button"
-                  title={label}
-                  onClick={() => {
-                    toggle(item.id);
-                    const first = item.children?.[0];
-                    if (first && !expanded) navigate(first.path);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
-                    parentActive ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  <Icon size={18} className="shrink-0" />
-                  <span className="flex-1 text-left">{label}</span>
-                  <span className="opacity-80">
-                    {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </span>
-                </button>
-
-                {expanded && (
-                  <div className="ml-4 pl-3 border-l border-gray-200 space-y-1 py-1">
-                    {item.children!.map((child) => (
-                      <NavLink
-                        key={child.path}
-                        to={child.path}
-                        onClick={() => setMobileNavOpen(false)}
-                        className={({ isActive }) =>
-                          `block px-3 py-2 rounded-md text-sm transition ${
-                            isActive
-                              ? "bg-green-50 text-gray-900 font-semibold border border-green-600"
-                              : "text-gray-600 hover:bg-gray-50 border border-transparent"
-                          }`
-                        }
-                      >
-                        {t(child.labelKey)}
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {renderNavItems("drawer")}
         </nav>
-
-        <div className="p-3 border-t space-y-2 shrink-0 safe-pb">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold text-gray-500">{t("lang.label")}</span>
+        <div className="border-t border-gray-100 shrink-0 safe-pb">
+          <div className="px-3 pt-3 pb-2 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-gray-500 shrink-0">{t("lang.label")}</span>
             <LanguageSelect />
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold shrink-0">
+          <div className="px-3 pb-3 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold shrink-0">
               {(user?.name || "A")[0]}
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 leading-tight">
               <div className="text-sm font-semibold truncate">{user?.name}</div>
-              <div className="text-xs text-gray-500">{user?.role}</div>
+              <div className="text-xs text-gray-500 truncate">{user?.role}</div>
             </div>
             <button
-              className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
+              type="button"
+              className="h-10 w-10 shrink-0 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 grid place-items-center"
               title={t("common.logout")}
-              onClick={() => {
-                auth.logout();
-                navigate("/signin", { replace: true });
-              }}
+              onClick={logout}
             >
               <LogOut size={16} />
             </button>
@@ -548,7 +661,11 @@ export default function AppLayout() {
           <div className="hidden sm:block">
             <LanguageSelect />
           </div>
-          <button className="btn btn-primary !px-3 !py-2 text-sm" onClick={() => navigate("/pos")}>
+          <button
+            className="btn btn-primary !px-3 !py-2 text-sm inline-flex items-center gap-1.5"
+            onClick={() => navigate("/pos")}
+          >
+            <Plus size={15} strokeWidth={2.5} />
             {t("common.pos")}
           </button>
           <div

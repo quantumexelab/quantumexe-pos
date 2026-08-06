@@ -1,6 +1,6 @@
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag, ArrowRightLeft, Banknote, Plus, ChevronRight } from "lucide-react";
+import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag, ArrowRightLeft, Banknote, Plus, ChevronRight, UserPlus, Phone, Mail } from "lucide-react";
 import api from "../api";
 import { ErrorBox, PageHeader, SubNav } from "../components/ui";
 import { IncludeArchivesSearch } from "../components/IncludeArchivesSearch";
@@ -4552,10 +4552,54 @@ export function CreateGrn() {
 
   function addToGrn() {
     setError("");
+    if (!supplierId) {
+      setError("Select a supplier before adding products");
+      return;
+    }
     if (!productId || !variantId) {
       setError("Select product and variant");
       return;
     }
+    if (cost === "" || !Number.isFinite(Number(cost)) || Number(cost) <= 0) {
+      setError("Cost price is required and must be greater than 0");
+      return;
+    }
+    if (rsp === "" || !Number.isFinite(Number(rsp)) || Number(rsp) <= 0) {
+      setError("Retail selling price is required and must be greater than 0");
+      return;
+    }
+    const costNum = Number(cost);
+    const rspNum = Number(rsp);
+    const mrpNum = mrp === "" ? 0 : Number(mrp);
+    const wspNum = wsp === "" ? 0 : Number(wsp);
+
+    if (rspNum < costNum) {
+      setError("Retail selling price cannot be less than cost price");
+      return;
+    }
+    if (mrp === "" || mrpNum <= 0) {
+      setError("MRP is required and must be greater than 0");
+      return;
+    }
+    if (mrpNum < rspNum) {
+      setError("MRP cannot be less than retail selling price");
+      return;
+    }
+    if (mrpNum < costNum) {
+      setError("MRP cannot be less than cost price");
+      return;
+    }
+    if (wsp !== "" && wspNum > 0) {
+      if (wspNum < costNum) {
+        setError("Wholesale price cannot be less than cost price");
+        return;
+      }
+      if (wspNum > rspNum) {
+        setError("Wholesale price cannot be greater than retail selling price");
+        return;
+      }
+    }
+
     const qtyNum = qty === "" ? 0 : Number(qty);
     if (qtyNum < 1) {
       setError("Quantity must be at least 1");
@@ -4573,10 +4617,10 @@ export function CreateGrn() {
         batchNo: batchNo || "-",
         mfd,
         exp,
-        cost: Number(cost || 0),
-        mrp: Number(mrp || 0),
-        rsp: Number(rsp || 0),
-        wsp: Number(wsp || 0),
+        cost: costNum,
+        mrp: mrpNum,
+        rsp: rspNum,
+        wsp: wspNum,
         qty: qtyNum,
         freeQty: Number(freeQty || 0),
       },
@@ -4615,12 +4659,15 @@ export function CreateGrn() {
           variantId: l.variantId,
           qty: Number(l.qty) + Number(l.freeQty || 0),
           cost: Number(l.cost || 0),
+          price: Number(l.rsp || 0),
+          mrp: Number(l.mrp || 0),
         })),
       });
       if (!data.success) throw new Error(data.message);
       navigate("/grn/grn-list");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create GRN");
+      const ax = err as { response?: { data?: { message?: string } }; message?: string };
+      setError(ax.response?.data?.message || ax.message || "Failed to create GRN");
     } finally {
       setSaving(false);
     }
@@ -4649,7 +4696,9 @@ export function CreateGrn() {
             <input className="input mt-1 bg-gray-50" value={billNo} readOnly />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-600">Select Supplier</label>
+            <label className="text-xs font-semibold text-gray-600">
+              Select Supplier <span className="text-red-500">*</span>
+            </label>
             <select className="input mt-1" value={supplierId} onChange={(e) => setSupplierId(e.target.value)} required>
               <option value="">Search / select supplier...</option>
               {suppliers.map((s) => (
@@ -4658,6 +4707,15 @@ export function CreateGrn() {
                 </option>
               ))}
             </select>
+            {!suppliers.length && (
+              <div className="text-xs text-amber-700 mt-1">
+                No suppliers found.{" "}
+                <Link className="font-semibold underline" to="/supplier/manage-supplier">
+                  Add a supplier
+                </Link>{" "}
+                first.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -4721,34 +4779,43 @@ export function CreateGrn() {
             <input type="date" className="input mt-1" value={exp} onChange={(e) => setExp(e.target.value)} />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-600">Cost Price</label>
+            <label className="text-xs font-semibold text-gray-600">
+              Cost Price <span className="text-red-500">*</span>
+            </label>
             <input
               type="number"
               min={0}
+              step="0.01"
               className="input mt-1"
-              placeholder="0"
+              placeholder="Required"
               value={cost}
               onChange={(e) => setCost(parseNonNeg(e.target.value))}
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-600">MRP</label>
+            <label className="text-xs font-semibold text-gray-600">
+              MRP <span className="text-red-500">*</span>
+            </label>
             <input
               type="number"
               min={0}
+              step="0.01"
               className="input mt-1"
-              placeholder="0"
+              placeholder="≥ Retail"
               value={mrp}
               onChange={(e) => setMrp(parseNonNeg(e.target.value))}
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-600">Retail Selling Price</label>
+            <label className="text-xs font-semibold text-gray-600">
+              Retail Selling Price <span className="text-red-500">*</span>
+            </label>
             <input
               type="number"
               min={0}
+              step="0.01"
               className="input mt-1"
-              placeholder="0"
+              placeholder="≥ Cost"
               value={rsp}
               onChange={(e) => setRsp(parseNonNeg(e.target.value))}
             />
@@ -4758,8 +4825,9 @@ export function CreateGrn() {
             <input
               type="number"
               min={0}
+              step="0.01"
               className="input mt-1"
-              placeholder="0"
+              placeholder="Cost ≤ WSP ≤ Retail"
               value={wsp}
               onChange={(e) => setWsp(parseNonNeg(e.target.value))}
             />
@@ -4791,9 +4859,17 @@ export function CreateGrn() {
             />
           </div>
         </div>
-        <button type="button" onClick={addToGrn} className="w-full h-11 rounded-lg bg-gray-700 hover:bg-gray-800 text-white font-semibold">
+        <button
+          type="button"
+          onClick={addToGrn}
+          disabled={!supplierId}
+          className="w-full h-11 rounded-lg bg-gray-700 hover:bg-gray-800 text-white font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed"
+        >
           + Add to GRN
         </button>
+        {!supplierId && (
+          <div className="text-xs text-amber-700 -mt-2">Select a supplier first, then add products.</div>
+        )}
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -4880,9 +4956,9 @@ export function CreateGrn() {
           </div>
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || !supplierId || !lines.length}
             onClick={createGrn}
-            className="w-full h-11 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold"
+            className="w-full h-11 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving ? "Creating..." : "Create GRN (Shift+Enter)"}
           </button>
@@ -5261,6 +5337,11 @@ export function QuotationForm({ edit = false }: { edit?: boolean }) {
   const [saving, setSaving] = useState(false);
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [showProductList, setShowProductList] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [registerBusy, setRegisterBusy] = useState(false);
+  const [registerError, setRegisterError] = useState("");
+  const [registerForm, setRegisterForm] = useState({ name: "", phone: "", email: "" });
+  const customerInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.get("/customers/all").then((r) => setCustomers(r.data.data?.rows || []));
@@ -5319,6 +5400,62 @@ export function QuotationForm({ edit = false }: { edit?: boolean }) {
     setCustomerQuery(c.name);
     setShowCustomerList(false);
   }
+
+  function openRegister(prefillName = "") {
+    setRegisterError("");
+    setRegisterForm({ name: prefillName, phone: "", email: "" });
+    setRegisterOpen(true);
+  }
+
+  async function registerCustomer(e?: FormEvent) {
+    e?.preventDefault();
+    if (!registerForm.name.trim() || !registerForm.phone.trim()) {
+      setRegisterError("Customer name and contact number are required");
+      return;
+    }
+    setRegisterBusy(true);
+    setRegisterError("");
+    try {
+      const { data } = await api.post("/customers/add", {
+        name: registerForm.name.trim(),
+        phone: registerForm.phone.trim(),
+        email: registerForm.email.trim() || undefined,
+      });
+      if (!data?.success) throw new Error(data?.message || "Failed to register customer");
+      const row = data.data;
+      setCustomers((prev) => [row, ...prev.filter((c) => c.id !== row.id)]);
+      pickCustomer(row);
+      setRegisterOpen(false);
+      setRegisterForm({ name: "", phone: "", email: "" });
+    } catch (err) {
+      const ax = err as { response?: { data?: { message?: string } }; message?: string };
+      setRegisterError(ax.response?.data?.message || ax.message || "Failed to register customer");
+    } finally {
+      setRegisterBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+      if (e.key === "F2") {
+        e.preventDefault();
+        customerInputRef.current?.focus();
+        setShowCustomerList(true);
+      }
+      if (e.key === "Insert" && !typing && !registerOpen) {
+        e.preventDefault();
+        openRegister();
+      }
+      if (e.key === "Escape" && registerOpen) {
+        e.preventDefault();
+        setRegisterOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [registerOpen]);
 
   function pickProduct(v: any) {
     setSelectedVariantId(String(v.id));
@@ -5460,12 +5597,26 @@ export function QuotationForm({ edit = false }: { edit?: boolean }) {
       <div className="grid xl:grid-cols-[360px_1fr] gap-4">
         <div className="space-y-4">
           <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-            <div className="text-xs font-bold tracking-wide text-gray-700">CUSTOMER DETAILS</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-bold tracking-wide text-gray-700 inline-flex items-center gap-1.5">
+                <UserPlus size={14} className="text-emerald-700" />
+                CUSTOMER DETAILS
+              </div>
+              <button
+                type="button"
+                title="Register Customer (Ins)"
+                onClick={() => openRegister()}
+                className="h-8 w-8 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 grid place-items-center hover:bg-emerald-100"
+              >
+                <UserPlus size={15} />
+              </button>
+            </div>
             <div className="relative">
               <label className="text-xs font-semibold text-gray-600">Selected Customer</label>
               <div className="relative mt-1">
                 <Search size={14} className="input-icon" />
                 <input
+                  ref={customerInputRef}
                   className="input has-icon"
                   placeholder="Identify Customer (F2)..."
                   value={customerQuery}
@@ -5490,7 +5641,21 @@ export function QuotationForm({ edit = false }: { edit?: boolean }) {
                       <div className="text-xs text-gray-500">{c.phone || "No phone"}</div>
                     </button>
                   ))}
-                  {!filteredCustomers.length && <div className="px-3 py-2 text-sm text-gray-400">No customers</div>}
+                  {!filteredCustomers.length && (
+                    <div className="px-3 py-2 space-y-2">
+                      <div className="text-sm text-gray-400">No customers</div>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-emerald-700 hover:underline"
+                        onClick={() => {
+                          setShowCustomerList(false);
+                          openRegister(customerQuery);
+                        }}
+                      >
+                        + Register “{customerQuery || "new customer"}”
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -5709,6 +5874,89 @@ export function QuotationForm({ edit = false }: { edit?: boolean }) {
           </div>
         </div>
       </div>
+
+      {registerOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4"
+          onClick={() => !registerBusy && setRegisterOpen(false)}
+        >
+          <form
+            onSubmit={registerCustomer}
+            className="bg-white rounded-xl w-full max-w-md shadow-xl border border-gray-100 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-900">Register Customer</h2>
+              <button
+                type="button"
+                className="h-8 w-8 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 grid place-items-center"
+                onClick={() => !registerBusy && setRegisterOpen(false)}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {registerError && <ErrorBox text={registerError} />}
+              <div>
+                <label className="text-xs font-semibold text-gray-700">
+                  Customer Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="input mt-1"
+                  placeholder="Enter customer name"
+                  value={registerForm.name}
+                  onChange={(e) => setRegisterForm((f) => ({ ...f, name: e.target.value }))}
+                  autoFocus
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700">
+                  Contact Number <span className="text-red-500">*</span>
+                </label>
+                <div className="relative mt-1">
+                  <Phone size={14} className="input-icon" />
+                  <input
+                    className="input has-icon"
+                    placeholder="Enter contact number"
+                    value={registerForm.phone}
+                    onChange={(e) => setRegisterForm((f) => ({ ...f, phone: e.target.value }))}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700">Email Address</label>
+                <div className="relative mt-1">
+                  <Mail size={14} className="input-icon" />
+                  <input
+                    type="email"
+                    className="input has-icon"
+                    placeholder="Enter email (optional)"
+                    value={registerForm.email}
+                    onChange={(e) => setRegisterForm((f) => ({ ...f, email: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                className="h-10 px-4 rounded-lg border border-gray-200 bg-white text-gray-700 font-semibold hover:bg-gray-50"
+                disabled={registerBusy}
+                onClick={() => setRegisterOpen(false)}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary h-10 px-5 inline-flex items-center gap-1.5" disabled={registerBusy}>
+                <Plus size={16} />
+                {registerBusy ? "Registering..." : "Register"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

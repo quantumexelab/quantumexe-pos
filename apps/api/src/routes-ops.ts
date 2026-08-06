@@ -313,9 +313,35 @@ router.get("/grn/bills/:supplierId", requireAuth, async (req, res) => {
 
 router.post("/grn/add", requireAuth, async (req, res) => {
   const supplierId = Number(req.body?.supplierId || req.body?.supplier_id);
-  const items = (req.body?.items || []) as Array<{ variantId: number; qty: number; cost: number }>;
-  if (!supplierId || !items.length) return res.status(400).json(fail("supplierId and items required"));
-  const totalAmount = items.reduce((s, i) => s + i.qty * i.cost, 0);
+  const items = (req.body?.items || []) as Array<{
+    variantId: number;
+    qty: number;
+    cost: number;
+    price?: number;
+    mrp?: number;
+  }>;
+  if (!supplierId) return res.status(400).json(fail("Supplier is required"));
+  if (!items.length) return res.status(400).json(fail("At least one item is required"));
+
+  const supplier = await prisma.supplier.findUnique({ where: { id: supplierId } });
+  if (!supplier) return res.status(400).json(fail("Supplier not found"));
+
+  for (const item of items) {
+    const cost = Number(item.cost);
+    const price = Number(item.price ?? 0);
+    const mrp = Number(item.mrp ?? price);
+    if (!Number(item.variantId) || !Number(item.qty)) {
+      return res.status(400).json(fail("Each item needs variantId and qty"));
+    }
+    if (!(cost > 0)) return res.status(400).json(fail("Cost price is required and must be greater than 0"));
+    if (!(price > 0)) return res.status(400).json(fail("Retail selling price is required and must be greater than 0"));
+    if (price < cost) return res.status(400).json(fail("Retail selling price cannot be less than cost price"));
+    if (!(mrp > 0)) return res.status(400).json(fail("MRP is required and must be greater than 0"));
+    if (mrp < price) return res.status(400).json(fail("MRP cannot be less than retail selling price"));
+    if (mrp < cost) return res.status(400).json(fail("MRP cannot be less than cost price"));
+  }
+
+  const totalAmount = items.reduce((s, i) => s + Number(i.qty) * Number(i.cost), 0);
   const grn = await prisma.grn.create({
     data: {
       supplierId,
@@ -337,7 +363,10 @@ router.post("/grn/add", requireAuth, async (req, res) => {
     await addToStoreStock(prisma, Number(item.variantId), Number(item.qty));
     await prisma.productVariant.update({
       where: { id: Number(item.variantId) },
-      data: { cost: Number(item.cost) },
+      data: {
+        cost: Number(item.cost),
+        price: Number(item.price || item.cost),
+      },
     });
   }
   res.json(ok(grn, "GRN created"));
@@ -426,6 +455,7 @@ router.get("/pos/products/barcode/:code", requireAuth, async (req, res) => {
       color: color || null,
       variantName: vname,
       price: variant.price,
+      cost: variant.cost,
       quantity: qty,
     })
   );
@@ -545,20 +575,20 @@ router.get("/pos/invoice/:no", requireAuth, async (req, res) => {
 });
 
 router.post("/pos/convert", requireAuth, async (req, res) => {
-  // bulk to loose conceptual convert: adjust stock quantities between two variants
+  // bulk to loose: adjust shop stock quantities between two variants
   const fromId = Number(req.body?.fromVariantId);
   const toId = Number(req.body?.toVariantId);
   const qty = Number(req.body?.qty || 0);
   const factor = Number(req.body?.factor || 1);
-  const from = await prisma.stock.findFirst({ where: { variantId: fromId } });
-  const to = await prisma.stock.findFirst({ where: { variantId: toId } });
-  if (!from || from.quantity < qty) return res.status(400).json(fail("Insufficient bulk stock"));
-  await prisma.stock.update({ where: { id: from.id }, data: { quantity: from.quantity - qty } });
-  if (to) {
-    await prisma.stock.update({ where: { id: to.id }, data: { quantity: to.quantity + qty * factor } });
-  } else {
-    await prisma.stock.create({ data: { variantId: toId, quantity: qty * factor } });
+  if (!fromId || !toId || !(qty > 0) || !(factor > 0)) {
+    return res.status(400).json(fail("fromVariantId, toVariantId, qty and factor required"));
   }
+  if (fromId === toId) return res.status(400).json(fail("Source and destination must differ"));
+  const from = await getShopStock(prisma, fromId);
+  if (from.quantity < qty) return res.status(400).json(fail("Insufficient bulk stock"));
+  await prisma.stock.update({ where: { id: from.id }, data: { quantity: from.quantity - qty } });
+  const to = await getShopStock(prisma, toId);
+  await prisma.stock.update({ where: { id: to.id }, data: { quantity: to.quantity + qty * factor } });
   res.json(ok(null, "Converted"));
 });
 
@@ -1537,6 +1567,13 @@ router.get("/accounts/sessions", requireAuth, async (_req, res) => {
 });
 
 router.post("/accounts/sessions", requireAuth, async (req, res) => {
+  const existing = await prisma.posSession.findFirst({
+    where: { userId: req.user!.id, closedAt: null },
+    orderBy: { id: "desc" },
+  });
+  if (existing) {
+    return res.json(ok(existing, "Resumed open cash session"));
+  }
   const row = await prisma.posSession.create({
     data: {
       userId: req.user!.id,
@@ -1544,7 +1581,7 @@ router.post("/accounts/sessions", requireAuth, async (req, res) => {
       openingBalance: Number(req.body?.openingBalance || 0),
     },
   });
-  res.json(ok(row));
+  res.json(ok(row, "Cash session started"));
 });
 
 router.post("/accounts/sessions/:id/close", requireAuth, async (req, res) => {

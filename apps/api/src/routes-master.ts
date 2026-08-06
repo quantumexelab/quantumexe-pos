@@ -150,35 +150,36 @@ router.get("/master/shops", requireAuth, requireRoles("MasterAdmin"), async (_re
 router.post("/master/shops/:shopId/firebase", requireAuth, requireRoles("MasterAdmin"), async (req, res) => {
   try {
     const shopId = String(req.params.shopId);
-    const firebaseProjectId = String(req.body?.firebaseProjectId || "").trim();
-    const firebaseClientEmail = String(req.body?.firebaseClientEmail || "").trim();
+    let firebaseProjectId = String(req.body?.firebaseProjectId || "").trim();
+    let firebaseClientEmail = String(req.body?.firebaseClientEmail || "").trim();
     let firebasePrivateKey = String(req.body?.firebasePrivateKey || "").trim();
-    if (!firebaseProjectId || !firebaseClientEmail || !firebasePrivateKey) {
-      return res.status(400).json(fail("Project ID, client email, and private key are required"));
+    if (!firebasePrivateKey) {
+      return res.status(400).json(fail("Paste the service account private key or full JSON file"));
     }
+
     // Allow pasting full service-account JSON into the private-key field
-    if (firebasePrivateKey.startsWith("{")) {
+    const looksLikeJson =
+      firebasePrivateKey.startsWith("{") ||
+      firebasePrivateKey.includes('"private_key"') ||
+      firebasePrivateKey.includes('"type"');
+    if (looksLikeJson) {
       try {
-        const sa = JSON.parse(firebasePrivateKey) as {
-          project_id?: string;
-          client_email?: string;
-          private_key?: string;
-        };
-        if (sa.project_id) {
-          /* prefer explicit form fields if already set */
-        }
-        if (sa.private_key) firebasePrivateKey = sa.private_key;
-        const shop = await setShopFirebase(shopId, {
-          firebaseProjectId: firebaseProjectId || sa.project_id || "",
-          firebaseClientEmail: firebaseClientEmail || sa.client_email || "",
-          firebasePrivateKey,
-          provision: req.body?.provision !== false,
-        });
-        return res.json(ok(toPublicShop(shop), "Shop Firebase connected & provisioned"));
-      } catch {
-        return res.status(400).json(fail("Invalid service account JSON"));
+        const { parseServiceAccountJson } = await import("./master/shopFirebase.js");
+        const sa = parseServiceAccountJson(firebasePrivateKey);
+        firebasePrivateKey = sa.privateKey || firebasePrivateKey;
+        if (!firebaseProjectId && sa.projectId) firebaseProjectId = sa.projectId;
+        if (!firebaseClientEmail && sa.clientEmail) firebaseClientEmail = sa.clientEmail;
+      } catch (e) {
+        return res.status(400).json(fail(e instanceof Error ? e.message : "Invalid service account JSON"));
       }
     }
+
+    if (!firebaseProjectId || !firebaseClientEmail || !firebasePrivateKey) {
+      return res.status(400).json(
+        fail("Project ID, client email, and private key are required (or paste the full JSON file)")
+      );
+    }
+
     const shop = await setShopFirebase(shopId, {
       firebaseProjectId,
       firebaseClientEmail,

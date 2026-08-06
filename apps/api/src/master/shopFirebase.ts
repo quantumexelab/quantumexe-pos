@@ -1,4 +1,5 @@
 import admin from "firebase-admin";
+import crypto from "crypto";
 import type { Firestore } from "firebase-admin/firestore";
 import type { ShopRecord } from "./shopRegistry.js";
 
@@ -24,8 +25,101 @@ function appName(shopId: string) {
 }
 
 function normalizePrivateKey(key: string) {
-  return key.replace(/\\n/g, "\n").trim();
+  let k = String(key || "")
+    .replace(/^\uFEFF/, "")
+    .trim();
+
+  // Strip wrapping quotes if user pasted "-----BEGIN..."
+  if ((k.startsWith('"') && k.endsWith('"')) || (k.startsWith("'") && k.endsWith("'"))) {
+    k = k.slice(1, -1).trim();
+  }
+
+  // JSON-escaped newlines → real newlines (may need multiple passes)
+  for (let i = 0; i < 3; i++) {
+    if (k.includes("\\n")) k = k.replace(/\\n/g, "\n");
+    if (k.includes("\\r")) k = k.replace(/\\r/g, "\r");
+  }
+  k = k.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+
+  // Soft line-wraps / spaces mangled into the PEM body
+  if (k.includes("BEGIN") && k.includes("PRIVATE KEY")) {
+    const beginMatch = k.match(/-----BEGIN ([A-Z0-9 ]+)-----/);
+    const endMatch = k.match(/-----END ([A-Z0-9 ]+)-----/);
+    if (beginMatch && endMatch) {
+      const label = beginMatch[1];
+      const beginTag = `-----BEGIN ${label}-----`;
+      const endTag = `-----END ${label}-----`;
+      const start = k.indexOf(beginTag) + beginTag.length;
+      const end = k.indexOf(endTag);
+      if (end > start) {
+        const body = k
+          .slice(start, end)
+          .replace(/[^A-Za-z0-9+/=]/g, "");
+        const lines: string[] = [];
+        for (let i = 0; i < body.length; i += 64) lines.push(body.slice(i, i + 64));
+        k = `${beginTag}\n${lines.join("\n")}\n${endTag}\n`;
+      }
+    }
+  }
+
+  // Re-export via Node crypto so OpenSSL 3 accepts the key (PKCS#8 PEM)
+  try {
+    const parsed = crypto.createPrivateKey(k);
+    k = parsed.export({ type: "pkcs8", format: "pem" }).toString();
+  } catch (e) {
+    throw new Error(
+      `Failed to parse private key: ${e instanceof Error ? e.message : String(e)}. Paste the full service-account JSON file (Ctrl+A / Ctrl+C), not a partial key.`
+    );
+  }
+
+  return k.trim().endsWith("END PRIVATE KEY-----") ? `${k.trim()}\n` : `${k.trim()}\n`;
 }
+
+/** Parse pasted service-account JSON (full file or messy copy/paste). */
+export function parseServiceAccountJson(raw: string): {
+  projectId?: string;
+  clientEmail?: string;
+  privateKey?: string;
+} {
+  let text = String(raw || "")
+    .replace(/^\uFEFF/, "")
+    .trim();
+  if (!text) throw new Error("Empty service account JSON");
+
+  // Smart quotes / Word paste
+  text = text
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'");
+
+  // If user pasted extra text around the JSON, extract the object
+  if (!text.startsWith("{")) {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start >= 0 && end > start) text = text.slice(start, end + 1);
+  }
+
+  let sa: Record<string, unknown>;
+  try {
+    sa = JSON.parse(text) as Record<string, unknown>;
+  } catch (e) {
+    throw new Error(
+      `Invalid service account JSON — paste the full downloaded .json file (must start with { ). ${
+        e instanceof Error ? e.message : ""
+      }`.trim()
+    );
+  }
+
+  const projectId = String(sa.project_id || sa.projectId || "").trim() || undefined;
+  const clientEmail = String(sa.client_email || sa.clientEmail || "").trim() || undefined;
+  let privateKey = String(sa.private_key || sa.privateKey || "").trim() || undefined;
+  if (privateKey) privateKey = normalizePrivateKey(privateKey);
+
+  if (!privateKey) {
+    throw new Error("JSON is missing private_key — download a new service account key from Firebase");
+  }
+  return { projectId, clientEmail, privateKey };
+}
+
 
 /** Init (or reuse) Admin SDK app for a shop's dedicated Firebase project. */
 export function getShopFirestoreFromCreds(shopId: string, creds: ShopFirebaseCreds): Firestore {

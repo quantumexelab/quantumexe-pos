@@ -15,6 +15,7 @@ import {
 import api, { auth } from "../api";
 import { BrandLogo } from "../components/BrandLogo";
 import { ErrorBox } from "../components/ui";
+import { buildFirebaseConnectPayload, parseServiceAccountPaste } from "../lib/serviceAccount";
 import { SHOP_TYPE_LABELS, SHOP_TYPE_OPTIONS } from "../shopFeatures";
 
 type Shop = {
@@ -526,7 +527,11 @@ export default function MasterAdmin() {
                             </li>
                             <li>Build → Firestore Database → Create database</li>
                             <li>Project settings → Service accounts → Generate new private key (JSON)</li>
-                            <li>Paste Project ID, client email, and private key (or full JSON) below</li>
+                            <li>
+                              Easiest: paste the <strong>entire</strong> downloaded JSON into “Private key or full JSON”
+                              (Project ID + email fill automatically)
+                            </li>
+                            <li>Or paste Project ID, client email, and only the private_key block</li>
                             <li>Save &amp; provision → then open Payment tab and Approve</li>
                           </ol>
                         )}
@@ -550,30 +555,55 @@ export default function MasterAdmin() {
                             Private key or full JSON
                           </label>
                           <textarea
-                            className="input w-full text-xs min-h-[100px] font-mono"
-                            placeholder="-----BEGIN PRIVATE KEY----- … or paste entire service-account JSON"
+                            className="input w-full text-xs min-h-[120px] font-mono"
+                            placeholder='Paste entire JSON file here, e.g. {"type":"service_account","project_id":"…",…}'
                             value={fbForm.firebasePrivateKey}
-                            onChange={(e) => setFbForm((p) => ({ ...p, firebasePrivateKey: e.target.value }))}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setFbForm((p) => {
+                                const next = { ...p, firebasePrivateKey: v };
+                                const trimmed = v.trim();
+                                if (trimmed.length > 40 && (trimmed.startsWith("{") || trimmed.includes('"private_key"'))) {
+                                  try {
+                                    const sa = parseServiceAccountPaste(trimmed);
+                                    next.firebaseProjectId = sa.projectId;
+                                    next.firebaseClientEmail = sa.clientEmail;
+                                  } catch {
+                                    /* still typing */
+                                  }
+                                }
+                                return next;
+                              });
+                            }}
                           />
+                          <p className="text-[11px] text-slate-500">
+                            Tip: open <code className="text-[10px]">diva-…-firebase-adminsdk-….json</code> in Notepad →
+                            Ctrl+A → Ctrl+C → paste here (whole file). Project ID &amp; email fill automatically.
+                          </p>
                         </div>
 
                         <div className="flex flex-wrap gap-2 pt-1">
                           <button
                             type="button"
-                            disabled={
-                              busy ||
-                              !fbForm.firebaseProjectId.trim() ||
-                              !fbForm.firebaseClientEmail.trim() ||
-                              !fbForm.firebasePrivateKey.trim()
-                            }
+                            disabled={busy || !fbForm.firebasePrivateKey.trim()}
                             className="btn btn-primary"
-                            onClick={() =>
-                              void act(
-                                `/master/shops/${selected.shopId}/firebase`,
-                                fbForm,
-                                "Firebase connected — shop database ready"
-                              ).then(() => setTab("access"))
-                            }
+                            onClick={() => {
+                              try {
+                                const payload = buildFirebaseConnectPayload(fbForm);
+                                setFbForm({
+                                  firebaseProjectId: payload.firebaseProjectId,
+                                  firebaseClientEmail: payload.firebaseClientEmail,
+                                  firebasePrivateKey: payload.firebasePrivateKey,
+                                });
+                                void act(
+                                  `/master/shops/${selected.shopId}/firebase`,
+                                  payload,
+                                  "Firebase connected — shop database ready"
+                                ).then(() => setTab("access"));
+                              } catch (e) {
+                                setError(e instanceof Error ? e.message : "Invalid service account JSON");
+                              }
+                            }}
                           >
                             <Cloud size={16} /> Save &amp; provision DB
                           </button>
