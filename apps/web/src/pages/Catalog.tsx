@@ -444,6 +444,7 @@ export function CreateProduct() {
   >([{ name: "", barcode: "", price: "", cost: "", size: "", color: "" }]);
   const [structureModalOpen, setStructureModalOpen] = useState(false);
   const [productStructure, setProductStructure] = useState<"simple" | "variable" | null>(null);
+  const [codeLoading, setCodeLoading] = useState(false);
 
   async function loadLookups() {
     const [c, b, u, t] = await Promise.all([
@@ -461,6 +462,44 @@ export function CreateProduct() {
   useEffect(() => {
     loadLookups();
   }, []);
+
+  // Auto-generate product code when Category + Brand + Unit + Type are set (create only)
+  useEffect(() => {
+    if (isEdit) return;
+    const { categoryId, brandId, unitId, productTypeId } = basic;
+    if (!categoryId || !brandId || !unitId || !productTypeId) {
+      setBasic((prev) => (prev.code ? { ...prev, code: "" } : prev));
+      return;
+    }
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void (async () => {
+        setCodeLoading(true);
+        try {
+          const { data } = await api.get("/products/next-code", {
+            params: { categoryId, brandId, unitId, productTypeId },
+          });
+          if (cancelled) return;
+          if (data?.success && data.data?.code) {
+            setBasic((prev) => ({ ...prev, code: String(data.data.code) }));
+            setError("");
+          }
+        } catch (err) {
+          if (!cancelled) {
+            const ax = err as { response?: { data?: { message?: string } }; message?: string };
+            setError(ax.response?.data?.message || ax.message || "Failed to generate product code");
+          }
+        } finally {
+          if (!cancelled) setCodeLoading(false);
+        }
+      })();
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when lookup ids change
+  }, [isEdit, basic.categoryId, basic.brandId, basic.unitId, basic.productTypeId]);
 
   useEffect(() => {
     if (!isEdit || !editId) return;
@@ -566,10 +605,11 @@ export function CreateProduct() {
 
   function validateStep() {
     if (step === 0) {
-      if (!basic.name.trim() || !basic.code.trim()) return "Product name and code are required";
+      if (!basic.name.trim()) return "Product name is required";
       if (!basic.categoryId || !basic.brandId || !basic.unitId || !basic.productTypeId) {
         return "Category, Brand, Unit and Product Type are required";
       }
+      if (!basic.code.trim()) return "Product code is generating — wait a moment or re-select lookups";
     }
     if (step === 1) {
       const price = Number(inventory.price);
@@ -952,11 +992,17 @@ export function CreateProduct() {
               <div>
                 <FieldLabel text="Product Code" required />
                 <input
-                  className="input"
-                  placeholder="e.g. IP15P-128"
+                  className="input bg-gray-50"
+                  placeholder={codeLoading ? "Generating…" : "Auto-generated from Category / Brand / Unit / Type"}
                   value={basic.code}
-                  onChange={(e) => setBasic({ ...basic, code: e.target.value })}
+                  readOnly={!isEdit}
+                  onChange={(e) => isEdit && setBasic({ ...basic, code: e.target.value })}
                 />
+                {!isEdit ? (
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    Auto-generated when Category, Brand, Unit and Product Type are selected
+                  </div>
+                ) : null}
               </div>
               <div>
                 <FieldLabel text="Barcode" />
@@ -972,7 +1018,7 @@ export function CreateProduct() {
                 <SearchableSelect
                   options={categories}
                   value={basic.categoryId}
-                  onChange={(id) => setBasic({ ...basic, categoryId: id })}
+                  onChange={(id) => setBasic((prev) => ({ ...prev, categoryId: id }))}
                   placeholder="Search category..."
                   emptyText="No categories found"
                 />
@@ -982,7 +1028,7 @@ export function CreateProduct() {
                 <SearchableSelect
                   options={brands}
                   value={basic.brandId}
-                  onChange={(id) => setBasic({ ...basic, brandId: id })}
+                  onChange={(id) => setBasic((prev) => ({ ...prev, brandId: id }))}
                   placeholder="Search brand..."
                   emptyText="No brands found"
                 />
@@ -992,7 +1038,7 @@ export function CreateProduct() {
                 <SearchableSelect
                   options={units}
                   value={basic.unitId}
-                  onChange={(id) => setBasic({ ...basic, unitId: id })}
+                  onChange={(id) => setBasic((prev) => ({ ...prev, unitId: id }))}
                   placeholder="Search unit..."
                   emptyText="No units found"
                 />
@@ -1002,7 +1048,7 @@ export function CreateProduct() {
                 <SearchableSelect
                   options={types}
                   value={basic.productTypeId}
-                  onChange={(id) => setBasic({ ...basic, productTypeId: id })}
+                  onChange={(id) => setBasic((prev) => ({ ...prev, productTypeId: id }))}
                   placeholder="Search product type..."
                   emptyText="No product types found"
                 />
