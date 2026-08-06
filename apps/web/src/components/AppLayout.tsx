@@ -28,6 +28,7 @@ import {
   Menu,
   X,
   Plus,
+  PanelLeft,
   type LucideIcon,
 } from "lucide-react";
 
@@ -227,8 +228,31 @@ export default function AppLayout() {
   const [searchCursor, setSearchCursor] = useState(0);
   const [showBell, setShowBell] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [navExpanded, setNavExpanded] = useState(() => {
+    try {
+      const v = localStorage.getItem("qx_nav_expanded");
+      if (v === "0") return false;
+      if (v === "1") return true;
+    } catch {
+      /* ignore */
+    }
+    return true; // Reox-style labeled sidebar by default
+  });
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [railFlyout, setRailFlyout] = useState<string | null>(null);
+
+  function toggleNavExpanded() {
+    setNavExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("qx_nav_expanded", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      if (next) setRailFlyout(null);
+      return next;
+    });
+  }
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [features, setFeatures] = useState<ShopFeatures | null>(() => readCachedFeatures());
@@ -556,7 +580,7 @@ export default function AppLayout() {
           onClick={() => setMobileNavOpen(false)}
         />
       )}
-      {railFlyout && (
+      {railFlyout && !navExpanded && (
         <button
           type="button"
           className="fixed inset-0 z-[55] hidden lg:block cursor-default bg-transparent"
@@ -565,33 +589,79 @@ export default function AppLayout() {
         />
       )}
 
-      <aside className="hidden lg:flex w-[72px] shrink-0 bg-white border-r border-gray-200 flex-col h-full relative z-[56]">
-        <div className="h-14 flex flex-col items-center justify-center gap-0.5 border-b shrink-0">
-          <div className="font-black text-sm leading-none tracking-tight">
-            <span className="text-slate-900">Q</span>
-            <span className="text-sky-500">X</span>
-          </div>
-          <div className="text-[9px] text-gray-400 leading-none">v{APP_VERSION}</div>
-        </div>
-        <nav className="flex-1 overflow-y-auto overscroll-contain py-3 px-2 space-y-1.5 min-h-0">
-          {renderNavItems("rail")}
-        </nav>
-        <div className="shrink-0 border-t border-gray-100 py-3 flex flex-col items-center gap-2 safe-pb">
-          <div
-            className="h-10 w-10 rounded-full bg-emerald-50 text-emerald-700 text-sm font-bold grid place-items-center"
-            title={user?.name || ""}
-          >
-            {(user?.name || "A")[0]}
-          </div>
-          <button
-            type="button"
-            className="h-10 w-10 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 grid place-items-center transition"
-            title={t("common.logout")}
-            onClick={logout}
-          >
-            <LogOut size={18} />
-          </button>
-        </div>
+      <aside
+        className={`hidden lg:flex shrink-0 bg-white border-r border-gray-200 flex-col h-full relative z-[56] transition-[width] duration-200 ease-out ${
+          navExpanded ? "w-[272px]" : "w-[72px]"
+        }`}
+      >
+        {navExpanded ? (
+          <>
+            <div className="h-14 flex items-center px-4 gap-2 border-b shrink-0">
+              <div className="min-w-0 flex-1">
+                <BrandLogo size="sm" />
+                <div className="text-[10px] text-gray-400 mt-0.5 truncate">
+                  {t("common.version")} {APP_VERSION}
+                  {shopType ? ` · ${SHOP_TYPE_LABELS[shopType] || shopType}` : ""}
+                </div>
+              </div>
+            </div>
+            <nav className="flex-1 overflow-y-auto overscroll-contain py-3 px-2 space-y-1 min-h-0">
+              {renderNavItems("drawer")}
+            </nav>
+            <div className="border-t border-gray-100 shrink-0 safe-pb">
+              <div className="px-3 pt-3 pb-2 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-gray-500 shrink-0">{t("lang.label")}</span>
+                <LanguageSelect />
+              </div>
+              <div className="px-3 pb-3 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-green-100 text-green-700 flex items-center justify-center font-bold shrink-0">
+                  {(user?.name || "A")[0]}
+                </div>
+                <div className="flex-1 min-w-0 leading-tight">
+                  <div className="text-sm font-semibold truncate">{user?.name}</div>
+                  <div className="text-xs text-gray-500 truncate">{user?.role}</div>
+                </div>
+                <button
+                  type="button"
+                  className="h-10 w-10 shrink-0 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 grid place-items-center"
+                  title={t("common.logout")}
+                  onClick={logout}
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="h-14 flex flex-col items-center justify-center gap-0.5 border-b shrink-0">
+              <div className="font-black text-sm leading-none tracking-tight">
+                <span className="text-slate-900">Q</span>
+                <span className="text-sky-500">X</span>
+              </div>
+              <div className="text-[9px] text-gray-400 leading-none">v{APP_VERSION}</div>
+            </div>
+            <nav className="flex-1 overflow-y-auto overscroll-contain py-3 px-2 space-y-1.5 min-h-0">
+              {renderNavItems("rail")}
+            </nav>
+            <div className="shrink-0 border-t border-gray-100 py-3 flex flex-col items-center gap-2 safe-pb">
+              <div
+                className="h-10 w-10 rounded-full bg-emerald-50 text-emerald-700 text-sm font-bold grid place-items-center"
+                title={user?.name || ""}
+              >
+                {(user?.name || "A")[0]}
+              </div>
+              <button
+                type="button"
+                className="h-10 w-10 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100 grid place-items-center transition"
+                title={t("common.logout")}
+                onClick={logout}
+              >
+                <LogOut size={18} />
+              </button>
+            </div>
+          </>
+        )}
       </aside>
 
       <aside
@@ -653,6 +723,15 @@ export default function AppLayout() {
             onClick={() => setMobileNavOpen(true)}
           >
             <Menu size={20} />
+          </button>
+          <button
+            type="button"
+            className="hidden lg:inline-flex p-2 rounded-lg hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition"
+            aria-label={navExpanded ? "Collapse navigation" : "Expand navigation"}
+            title={navExpanded ? "Collapse sidebar" : "Expand sidebar"}
+            onClick={toggleNavExpanded}
+          >
+            <PanelLeft size={20} strokeWidth={1.75} />
           </button>
           <div className="lg:hidden text-sm font-bold text-gray-900 truncate max-w-[28vw]">
             Q<span className="text-sky-500">EXE</span>
