@@ -182,54 +182,75 @@ export default function SignIn() {
 
   return (
     <div className="h-[100dvh] max-h-[100dvh] grid lg:grid-cols-2 overflow-hidden auth-fade bg-black text-white">
-      {/* LEFT — text overlay + full-bleed hero (no boxed photo) */}
-      <aside className="hidden lg:flex relative flex-col min-h-0 overflow-hidden bg-black">
-        {/* Full-bleed hero on right half of left panel */}
-        <div className="absolute inset-y-0 right-0 w-[58%] xl:w-[55%] pointer-events-none">
-          <div
-            className="absolute inset-0 z-[1]"
-            style={{
-              background:
-                "linear-gradient(90deg, #000 0%, rgba(0,0,0,0.55) 18%, transparent 42%), radial-gradient(circle at 55% 40%, rgba(43,140,255,0.35), transparent 50%)",
-            }}
-          />
-          <img
-            src="/signin-hero.png"
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover object-[center_20%] scale-110 origin-center select-none"
-            draggable={false}
-          />
-        </div>
-
-        <div className="absolute top-14 left-6 text-[120px] font-black text-white/[0.035] leading-none select-none pointer-events-none z-[2]">
+      {/* LEFT — mockup: copy left | hero right */}
+      <aside className="hidden lg:flex relative flex-col min-h-0 overflow-hidden">
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(circle at 72% 42%, rgba(43,140,255,0.32), transparent 40%), #000000",
+          }}
+        />
+        <div className="absolute top-16 left-8 text-[140px] font-black text-white/[0.03] leading-none select-none pointer-events-none">
           QE
         </div>
 
-        <div className="relative z-10 flex flex-col h-full px-8 xl:px-12 pt-8 pb-6 max-w-[52%]">
+        <div className="relative z-10 flex flex-col h-full px-8 xl:px-12 pt-8 pb-6">
           <BrandLogo variant="dark" size="md" showTagline />
 
-          <div className="auth-slide flex-1 flex flex-col justify-center min-h-0 py-8">
-            <p className="text-[#3b9eff] text-sm font-semibold mb-2">Welcome to</p>
-            <h1 className="text-[1.7rem] xl:text-[2.15rem] font-bold leading-[1.15] tracking-tight">
-              <span className="text-[#3b9eff]">{BRAND.name}</span>
-              <span className="text-white"> point of sale system</span>
-            </h1>
-            <p className="mt-3 text-slate-400 text-[13px] xl:text-sm leading-relaxed max-w-[300px]">
-              Advanced software solutions for a smarter tomorrow.
-            </p>
-            <ul className="mt-8 space-y-4">
-              {features.map((f) => (
-                <li key={f.title} className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0d1524] text-[#3b9eff] border border-[#1c2f4a]">
-                    <f.icon size={16} />
-                  </span>
-                  <div>
-                    <div className="text-[13px] font-semibold text-white leading-none">{f.title}</div>
-                    <div className="text-[11px] text-slate-400 mt-1">{f.desc}</div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+          <div className="auth-slide flex-1 grid grid-cols-[minmax(0,1fr)_minmax(240px,48%)] gap-4 xl:gap-8 items-center min-h-0 py-6">
+            {/* Copy column */}
+            <div className="min-w-0 self-center">
+              <p className="text-[#3b9eff] text-sm font-semibold mb-2">Welcome to</p>
+              <h1 className="text-[1.65rem] xl:text-[2.05rem] font-bold leading-[1.15] tracking-tight">
+                <span className="text-[#3b9eff]">{BRAND.name}</span>
+                <span className="text-white"> point of sale system</span>
+              </h1>
+              <p className="mt-3 text-slate-400 text-[13px] xl:text-sm leading-relaxed max-w-[280px]">
+                Advanced software solutions for a smarter tomorrow.
+              </p>
+              <ul className="mt-7 space-y-4">
+                {features.map((f) => (
+                  <li key={f.title} className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0d1524] text-[#3b9eff] border border-[#1c2f4a]">
+                      <f.icon size={16} />
+                    </span>
+                    <div>
+                      <div className="text-[13px] font-semibold text-white leading-none">{f.title}</div>
+                      <div className="text-[11px] text-slate-400 mt-1">{f.desc}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Single composite hero — soft-fade edges so PNG box corners don't show */}
+            <div className="relative h-full min-h-[360px] max-h-[min(72vh,560px)] flex items-end justify-center">
+              <div
+                className="relative h-full w-full flex items-end justify-center"
+                style={{
+                  WebkitMaskImage:
+                    "radial-gradient(ellipse 78% 82% at 50% 48%, #000 42%, transparent 78%)",
+                  maskImage:
+                    "radial-gradient(ellipse 78% 82% at 50% 48%, #000 42%, transparent 78%)",
+                }}
+              >
+                <img
+                  src="/signin-hero.png"
+                  alt=""
+                  className="relative z-[1] h-full w-auto max-w-full object-contain object-bottom select-none pointer-events-none"
+                  draggable={false}
+                />
+              </div>
+              {/* Extra soft edge blend into page black */}
+              <div
+                className="pointer-events-none absolute inset-0 z-[2]"
+                style={{
+                  background:
+                    "radial-gradient(ellipse 70% 75% at 50% 45%, transparent 48%, #000 88%)",
+                }}
+              />
+            </div>
           </div>
 
           <footer className="space-y-1 text-[11px] text-slate-500">
