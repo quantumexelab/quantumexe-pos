@@ -129,8 +129,8 @@ export default function SignIn() {
   ] as const;
 
   return (
-    <div className="min-h-screen grid md:grid-cols-2 auth-fade">
-      <div className="hidden md:flex flex-col justify-between p-10 bg-slate-950 text-white">
+    <div className="h-full min-h-0 grid md:grid-cols-2 auth-fade overflow-hidden">
+      <div className="hidden md:flex h-full min-h-0 flex-col justify-between p-10 bg-slate-950 text-white overflow-hidden">
         <div>
           <BrandLogo variant="dark" size="lg" showTagline />
           <div className="mt-3 text-slate-400 text-sm">{t("signin.developed")}</div>
@@ -144,8 +144,9 @@ export default function SignIn() {
         </div>
       </div>
 
-      <div className="flex items-center justify-center p-8 bg-white overflow-y-auto">
-        <div className="w-full max-w-md auth-slide">
+      <div className="h-full min-h-0 overflow-y-auto overscroll-contain bg-white">
+        <div className="min-h-full flex items-center justify-center p-6 sm:p-8">
+          <div className="w-full max-w-md py-2 auth-slide">
           <div className="md:hidden mb-6">
             <BrandLogo size="md" showTagline />
           </div>
@@ -176,7 +177,7 @@ export default function SignIn() {
               </button>
             </form>
           ) : step === "register" ? (
-            <form onSubmit={submitRegister} className="space-y-3">
+            <form onSubmit={submitRegister} className="space-y-3 pb-6">
               {regFields.map(([key, labelKey, type]) => (
                 <div key={key}>
                   <label className="text-xs font-semibold text-gray-600">{t(labelKey)}</label>
@@ -247,6 +248,7 @@ export default function SignIn() {
               </button>
             </form>
           )}
+          </div>
         </div>
       </div>
     </div>
