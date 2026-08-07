@@ -161,8 +161,8 @@ export default function SignIn() {
       </div>
 
       <div className="min-h-0 h-[100dvh] md:h-auto overflow-y-auto overscroll-contain bg-white">
-        <div className="min-h-full flex items-start justify-center p-6 sm:p-8 safe-pb">
-          <div className="w-full max-w-md auth-slide py-2">
+        <div className="min-h-full flex justify-center px-6 sm:px-8 py-10 sm:py-14 safe-pb">
+          <div className="w-full max-w-md auth-slide my-auto">
           <div className="md:hidden mb-6">
             <BrandLogo size="md" showTagline />
           </div>
@@ -274,10 +274,6 @@ export default function SignIn() {
               <button className={`btn btn-primary w-full ${loading ? "btn-busy" : ""}`} disabled={loading}>
                 {loading ? t("signin.signingIn") : t("signin.signIn")}
               </button>
-              <p className="text-[11px] text-center text-gray-500">
-                Demo login: <span className="font-semibold text-gray-700">0771234567</span> /{" "}
-                <span className="font-semibold text-gray-700">123456</span>
-              </p>
               <button
                 type="button"
                 className="w-full text-sm font-semibold text-emerald-700 hover:underline"
