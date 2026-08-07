@@ -178,76 +178,71 @@ export default function SignIn() {
   ];
 
   const fieldClass =
-    "w-full h-12 rounded-xl bg-[#0c121c] border border-[#243044] text-white placeholder:text-slate-500 pl-11 pr-4 text-sm outline-none focus:border-[#2b8cff] focus:ring-1 focus:ring-[#2b8cff]/35 transition";
+    "w-full h-12 rounded-xl bg-[#101826] border border-[#2a3648] text-white placeholder:text-slate-500 pl-11 pr-4 text-sm outline-none focus:border-[#2b8cff] focus:ring-1 focus:ring-[#2b8cff]/40 transition";
 
   return (
-    <div className="h-[100dvh] max-h-[100dvh] grid lg:grid-cols-2 overflow-hidden auth-fade bg-[#05070b] text-white">
-      {/* —— Left brand panel (mockup layout) —— */}
+    <div className="h-[100dvh] max-h-[100dvh] grid lg:grid-cols-2 overflow-hidden auth-fade bg-black text-white">
+      {/* LEFT — mockup: copy left | hero right */}
       <aside className="hidden lg:flex relative flex-col min-h-0 overflow-hidden">
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(circle at 48% 38%, rgba(37,99,235,0.35), transparent 42%), radial-gradient(ellipse 70% 50% at 50% 100%, rgba(14,165,233,0.12), transparent 45%), #05070b",
+              "radial-gradient(circle at 72% 42%, rgba(43,140,255,0.32), transparent 40%), #000000",
           }}
         />
-        {/* faint QE watermark */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04]">
-          <div className="text-[18rem] font-black tracking-tighter leading-none select-none">QE</div>
+        <div className="absolute top-16 left-8 text-[140px] font-black text-white/[0.03] leading-none select-none pointer-events-none">
+          QE
         </div>
 
-        <div className="relative z-10 flex flex-col h-full px-10 xl:px-14 pt-9 pb-7">
+        <div className="relative z-10 flex flex-col h-full px-8 xl:px-12 pt-8 pb-6">
           <BrandLogo variant="dark" size="md" showTagline />
 
-          <div className="auth-slide flex-1 flex flex-col justify-center min-h-0 py-4">
-            {/* Hero composite: neon ring + woman + phone */}
-            <div className="relative mx-auto w-full max-w-[420px] h-[min(46vh,420px)] mb-5">
-              <div className="absolute left-1/2 top-[8%] -translate-x-1/2 w-[78%] aspect-square rounded-full border-[3px] border-sky-400/70 shadow-[0_0_40px_rgba(56,189,248,0.55),inset_0_0_40px_rgba(56,189,248,0.15)] pointer-events-none" />
-              <div className="absolute left-1/2 top-[14%] -translate-x-1/2 w-[68%] aspect-square rounded-full bg-sky-500/20 blur-3xl pointer-events-none" />
+          <div className="auth-slide flex-1 grid grid-cols-[minmax(0,1fr)_minmax(240px,48%)] gap-4 xl:gap-8 items-center min-h-0 py-6">
+            {/* Copy column */}
+            <div className="min-w-0 self-center">
+              <p className="text-[#3b9eff] text-sm font-semibold mb-2">Welcome to</p>
+              <h1 className="text-[1.65rem] xl:text-[2.05rem] font-bold leading-[1.15] tracking-tight">
+                <span className="text-[#3b9eff]">{BRAND.name}</span>
+                <span className="text-white"> point of sale system</span>
+              </h1>
+              <p className="mt-3 text-slate-400 text-[13px] xl:text-sm leading-relaxed max-w-[280px]">
+                Advanced software solutions for a smarter tomorrow.
+              </p>
+              <ul className="mt-7 space-y-4">
+                {features.map((f) => (
+                  <li key={f.title} className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0d1524] text-[#3b9eff] border border-[#1c2f4a]">
+                      <f.icon size={16} />
+                    </span>
+                    <div>
+                      <div className="text-[13px] font-semibold text-white leading-none">{f.title}</div>
+                      <div className="text-[11px] text-slate-400 mt-1">{f.desc}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Single composite hero (woman + neon + phone) */}
+            <div className="relative h-full min-h-[360px] max-h-[min(72vh,560px)] flex items-end justify-center">
               <img
                 src="/signin-hero.png"
                 alt=""
-                className="absolute inset-0 z-[1] m-auto h-[88%] w-auto object-contain object-bottom drop-shadow-[0_24px_48px_rgba(0,0,0,0.7)] select-none pointer-events-none"
-                draggable={false}
-              />
-              <img
-                src="/signin-phone.png"
-                alt=""
-                className="absolute z-[2] left-1/2 -translate-x-1/2 bottom-0 w-[32%] max-w-[128px] drop-shadow-[0_16px_36px_rgba(37,99,235,0.55)] select-none pointer-events-none"
+                className="relative z-[1] h-full w-auto max-w-full object-contain object-bottom select-none pointer-events-none drop-shadow-[0_20px_60px_rgba(0,0,0,0.8)]"
                 draggable={false}
               />
             </div>
-
-            <h1 className="text-[1.75rem] xl:text-[2.15rem] font-bold leading-[1.2] tracking-tight max-w-xl">
-              Welcome to <span className="text-[#3b9eff]">{BRAND.name}</span> point of sale system
-            </h1>
-            <p className="mt-3 text-slate-400 text-sm xl:text-[15px] max-w-md">
-              Advanced software solutions for a smarter tomorrow.
-            </p>
-
-            <ul className="mt-6 space-y-3.5">
-              {features.map((f) => (
-                <li key={f.title} className="flex items-center gap-3.5">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0e1a2e] text-[#3b9eff] border border-[#1e3a5f]">
-                    <f.icon size={18} />
-                  </span>
-                  <div>
-                    <div className="text-sm font-semibold text-white leading-none">{f.title}</div>
-                    <div className="text-xs text-slate-400 mt-1">{f.desc}</div>
-                  </div>
-                </li>
-              ))}
-            </ul>
           </div>
 
-          <footer className="space-y-1.5 text-[11px] text-slate-500">
+          <footer className="space-y-1 text-[11px] text-slate-500">
             <a
               href={BRAND.siteUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 text-[#3b9eff] hover:text-sky-300 font-medium"
+              className="inline-flex items-center gap-2 text-white/80 hover:text-[#3b9eff] font-medium"
             >
-              <Globe size={13} />
+              <Globe size={12} className="text-[#3b9eff]" />
               www.{BRAND.site}
             </a>
             <div>© 2025 {BRAND.name} Pvt.Ltd. All rights reserved.</div>
@@ -255,34 +250,36 @@ export default function SignIn() {
         </div>
       </aside>
 
-      {/* —— Right login card —— */}
+      {/* RIGHT — login card */}
       <div className="min-h-0 h-[100dvh] lg:h-auto overflow-y-auto overscroll-contain relative">
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse 90% 55% at 50% 0%, rgba(37,99,235,0.28), transparent 55%), #05070b",
+              "radial-gradient(ellipse 85% 50% at 50% -5%, rgba(43,140,255,0.3), transparent 55%), #000000",
           }}
         />
-        <div className="relative z-10 min-h-full flex justify-center px-5 sm:px-8 py-10 sm:py-14 safe-pb">
+        <div className="relative z-10 min-h-full flex justify-center px-5 sm:px-8 py-10 safe-pb">
           <div className="w-full max-w-[400px] auth-slide my-auto">
             <div className="lg:hidden mb-8">
               <BrandLogo variant="dark" size="md" showTagline />
             </div>
 
-            <div className="rounded-2xl border border-white/[0.07] bg-[#0a0f18]/95 backdrop-blur-md px-6 sm:px-8 py-8 shadow-[0_0_80px_rgba(37,99,235,0.18)]">
+            <div className="rounded-2xl border border-white/[0.08] bg-[#0c121c] px-6 sm:px-8 py-8 shadow-[0_0_90px_rgba(43,140,255,0.2)]">
               {step === "login" ? (
-                <div className="text-center mb-8">
-                  <div className="mx-auto mb-5 relative w-[68px] h-[68px]">
-                    <div className="absolute inset-0 rounded-full bg-[#2b8cff]/40 blur-2xl" />
-                    <div className="relative h-full w-full rounded-full bg-[#0d1520] border-2 border-[#2b8cff]/60 grid place-items-center text-[#7ec8ff] shadow-[0_0_28px_rgba(43,140,255,0.4)]">
-                      <User size={30} strokeWidth={1.6} />
+                <div className="flex items-center gap-4 mb-7">
+                  <div className="relative shrink-0 w-14 h-14">
+                    <div className="absolute inset-0 rounded-full bg-[#2b8cff]/35 blur-xl" />
+                    <div className="relative h-full w-full rounded-full bg-[#0d1520] border-2 border-[#2b8cff]/55 grid place-items-center text-[#7ec8ff] shadow-[0_0_24px_rgba(43,140,255,0.35)]">
+                      <User size={26} strokeWidth={1.6} />
                     </div>
                   </div>
-                  <h2 className="text-[1.65rem] font-bold tracking-tight">
-                    Welcome <span className="text-[#3b9eff]">back!</span>
-                  </h2>
-                  <p className="mt-2 text-sm text-slate-400">Please log in to continue</p>
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight leading-tight">
+                      Welcome <span className="text-[#3b9eff]">back!</span>
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-400">Please log in to continue</p>
+                  </div>
                 </div>
               ) : (
                 <div className="mb-6">
@@ -381,7 +378,7 @@ export default function SignIn() {
                     <div className="relative mt-1.5">
                       <User
                         size={16}
-                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#3b9eff] pointer-events-none"
                       />
                       <input
                         id="username"
@@ -400,7 +397,7 @@ export default function SignIn() {
                     <div className="relative mt-1.5">
                       <Lock
                         size={16}
-                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#3b9eff] pointer-events-none"
                       />
                       <input
                         id="password"
@@ -422,13 +419,13 @@ export default function SignIn() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-sm pt-0.5">
+                  <div className="flex items-center justify-between text-sm">
                     <label className="inline-flex items-center gap-2 text-slate-400 cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={remember}
                         onChange={(e) => setRemember(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-600 bg-[#0c121c] text-[#2b8cff] focus:ring-[#2b8cff]/40"
+                        className="h-4 w-4 rounded border-slate-600 bg-[#101826] text-[#2b8cff] focus:ring-[#2b8cff]/40"
                       />
                       Remember me
                     </label>
@@ -445,13 +442,13 @@ export default function SignIn() {
 
                   <button
                     type="submit"
-                    className="w-full h-12 rounded-xl font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] active:bg-[#1a7aef] transition disabled:opacity-60 shadow-[0_10px_28px_rgba(43,140,255,0.45)]"
+                    className="w-full h-12 rounded-xl font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] transition disabled:opacity-60 shadow-[0_10px_28px_rgba(43,140,255,0.4)]"
                     disabled={loading}
                   >
                     {loading ? t("signin.signingIn") : "Log in"}
                   </button>
 
-                  <p className="text-center text-sm text-slate-400 pt-2">
+                  <p className="text-center text-sm text-slate-400 pt-1">
                     Don&apos;t have an account?{" "}
                     <button
                       type="button"
