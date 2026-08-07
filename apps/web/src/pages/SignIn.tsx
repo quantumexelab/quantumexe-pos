@@ -89,7 +89,7 @@ export default function SignIn() {
     setError("");
     setMsg("");
     try {
-      const { data } = await api.post("/auth/register", reg);
+      const { data } = await api.post("/auth/register", reg, { timeout: 120000 });
       if (!data.success) throw new Error(data.message || "Registration failed");
       setMsg(t("signin.registeredMsg"));
       setUsername(reg.phone);
@@ -129,8 +129,8 @@ export default function SignIn() {
   ] as const;
 
   return (
-    <div className="h-full min-h-0 grid md:grid-cols-2 auth-fade overflow-hidden">
-      <div className="hidden md:flex h-full min-h-0 flex-col justify-between p-10 bg-slate-950 text-white overflow-hidden">
+    <div className="h-[100dvh] max-h-[100dvh] grid md:grid-cols-2 overflow-hidden auth-fade">
+      <div className="hidden md:flex flex-col justify-between p-10 bg-slate-950 text-white min-h-0 overflow-hidden">
         <div>
           <BrandLogo variant="dark" size="lg" showTagline />
           <div className="mt-3 text-slate-400 text-sm">{t("signin.developed")}</div>
@@ -144,9 +144,9 @@ export default function SignIn() {
         </div>
       </div>
 
-      <div className="h-full min-h-0 overflow-y-auto overscroll-contain bg-white">
-        <div className="min-h-full flex items-center justify-center p-6 sm:p-8">
-          <div className="w-full max-w-md py-2 auth-slide">
+      <div className="min-h-0 h-[100dvh] md:h-auto overflow-y-auto overscroll-contain bg-white">
+        <div className="min-h-full flex items-start justify-center p-6 sm:p-8 safe-pb">
+          <div className="w-full max-w-md auth-slide py-2">
           <div className="md:hidden mb-6">
             <BrandLogo size="md" showTagline />
           </div>
@@ -177,7 +177,7 @@ export default function SignIn() {
               </button>
             </form>
           ) : step === "register" ? (
-            <form onSubmit={submitRegister} className="space-y-3 pb-6">
+            <form onSubmit={submitRegister} className="space-y-3 pb-8">
               {regFields.map(([key, labelKey, type]) => (
                 <div key={key}>
                   <label className="text-xs font-semibold text-gray-600">{t(labelKey)}</label>
