@@ -177,96 +177,108 @@ export default function SignIn() {
   ];
 
   const fieldClass =
-    "w-full h-12 rounded-xl bg-[#0d1118] border border-white/10 text-white placeholder:text-slate-500 pl-11 pr-4 text-sm outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/30 transition";
+    "w-full h-12 rounded-xl bg-[#0b1220] border border-[#1e2a3a] text-white placeholder:text-slate-500 pl-11 pr-4 text-sm outline-none focus:border-sky-500/70 focus:ring-1 focus:ring-sky-500/40 transition";
 
   return (
-    <div className="h-[100dvh] max-h-[100dvh] grid md:grid-cols-2 overflow-hidden auth-fade bg-black text-white">
-      {/* —— Left brand panel —— */}
-      <div className="hidden md:flex relative flex-col min-h-0 overflow-hidden border-r border-white/5">
+    <div className="h-[100dvh] max-h-[100dvh] grid lg:grid-cols-2 overflow-hidden auth-fade bg-black text-white">
+      {/* —— Left: brand panel (matches design mockup) —— */}
+      <aside className="hidden lg:flex relative flex-col min-h-0 overflow-hidden">
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse 80% 60% at 30% 40%, rgba(14,165,233,0.22), transparent 55%), radial-gradient(ellipse 50% 40% at 80% 80%, rgba(56,189,248,0.12), transparent 50%), #000",
+              "radial-gradient(ellipse 55% 50% at 72% 42%, rgba(14,165,233,0.28), transparent 58%), radial-gradient(ellipse 40% 35% at 20% 70%, rgba(56,189,248,0.08), transparent 50%), #000000",
           }}
         />
-        <div className="relative z-10 flex flex-col justify-between h-full p-8 lg:p-10">
+        <div className="relative z-10 flex flex-col h-full px-10 xl:px-14 pt-10 pb-8">
           <BrandLogo variant="dark" size="md" showTagline />
 
-          <div className="auth-slide flex-1 flex flex-col justify-center py-6 min-h-0">
-            <div className="relative mb-6 max-w-sm">
-              <div className="absolute -inset-4 rounded-full bg-sky-500/20 blur-3xl pointer-events-none" />
+          <div className="auth-slide flex-1 grid grid-cols-[1fr_minmax(220px,46%)] gap-6 xl:gap-10 items-center min-h-0 py-8">
+            <div className="min-w-0">
+              <h1 className="text-[1.85rem] xl:text-[2.35rem] font-bold leading-[1.15] tracking-tight">
+                Welcome to{" "}
+                <span className="text-sky-400">{BRAND.name}</span> PVT.LTD.
+              </h1>
+              <p className="mt-4 text-slate-400 text-sm xl:text-[15px] leading-relaxed max-w-sm">
+                Advanced software solutions for a smarter tomorrow.
+              </p>
+              <ul className="mt-8 space-y-4">
+                {features.map((f) => (
+                  <li key={f.title} className="flex items-center gap-3.5">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/25">
+                      <f.icon size={18} />
+                    </span>
+                    <div>
+                      <div className="text-sm font-semibold text-white leading-none">{f.title}</div>
+                      <div className="text-xs text-slate-400 mt-1">{f.desc}</div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Hero + phone composite */}
+            <div className="relative h-full min-h-[320px] max-h-[min(58vh,520px)] flex items-end justify-center">
+              <div className="absolute left-1/2 top-[18%] -translate-x-1/2 w-[85%] h-[70%] rounded-full bg-sky-500/25 blur-[70px] pointer-events-none" />
               <img
                 src="/signin-hero.png"
                 alt=""
-                className="relative w-full max-h-[42vh] object-contain object-bottom drop-shadow-2xl"
+                className="relative z-[1] h-[92%] w-auto max-w-none object-contain object-bottom drop-shadow-[0_20px_50px_rgba(0,0,0,0.65)] select-none pointer-events-none"
+                draggable={false}
+              />
+              <img
+                src="/signin-phone.png"
+                alt=""
+                className="absolute z-[2] right-[2%] bottom-[4%] w-[38%] max-w-[150px] drop-shadow-[0_18px_40px_rgba(14,165,233,0.45)] select-none pointer-events-none"
+                draggable={false}
               />
             </div>
-            <h1 className="text-3xl lg:text-4xl font-bold leading-tight tracking-tight">
-              Welcome to {BRAND.name} PVT.LTD.
-            </h1>
-            <p className="mt-3 text-slate-400 text-sm lg:text-base max-w-md">
-              Advanced software solutions for a smarter tomorrow.
-            </p>
-            <ul className="mt-6 space-y-3">
-              {features.map((f) => (
-                <li key={f.title} className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-400 border border-sky-500/20">
-                    <f.icon size={18} />
-                  </span>
-                  <div>
-                    <div className="text-sm font-semibold text-white">{f.title}</div>
-                    <div className="text-xs text-slate-400">{f.desc}</div>
-                  </div>
-                </li>
-              ))}
-            </ul>
           </div>
 
-          <div className="text-xs text-slate-500 space-y-1">
+          <footer className="text-[11px] text-slate-500 space-y-1">
             <a
               href={BRAND.siteUrl}
               target="_blank"
               rel="noreferrer"
-              className="text-sky-400/90 hover:text-sky-300 font-medium"
+              className="text-sky-400 hover:text-sky-300 font-medium"
             >
               www.{BRAND.site}
             </a>
             <div>
-              © {new Date().getFullYear()} {BRAND.developer}. All rights reserved. · v{APP_VERSION}
+              © 2025 {BRAND.name} Pvt.Ltd. All rights reserved.
             </div>
-          </div>
+          </footer>
         </div>
-      </div>
+      </aside>
 
-      {/* —— Right form panel —— */}
-      <div className="min-h-0 h-[100dvh] md:h-auto overflow-y-auto overscroll-contain relative">
+      {/* —— Right: login card —— */}
+      <div className="min-h-0 h-[100dvh] lg:h-auto overflow-y-auto overscroll-contain relative">
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse 70% 50% at 50% 0%, rgba(14,165,233,0.18), transparent 55%), #05070c",
+              "radial-gradient(ellipse 80% 55% at 50% -10%, rgba(14,165,233,0.22), transparent 55%), #020617",
           }}
         />
         <div className="relative z-10 min-h-full flex justify-center px-5 sm:px-8 py-10 sm:py-14 safe-pb">
-          <div className="w-full max-w-[420px] auth-slide my-auto">
-            <div className="md:hidden mb-8">
+          <div className="w-full max-w-[400px] auth-slide my-auto">
+            <div className="lg:hidden mb-8">
               <BrandLogo variant="dark" size="md" showTagline />
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-[#0a0e14]/90 backdrop-blur-md p-6 sm:p-8 shadow-[0_0_60px_rgba(14,165,233,0.12)]">
+            <div className="rounded-2xl border border-white/[0.08] bg-[#0a1018]/95 backdrop-blur-md px-6 sm:px-8 py-8 shadow-[0_0_80px_rgba(14,165,233,0.14)]">
               {step === "login" ? (
-                <div className="text-center mb-7">
-                  <div className="mx-auto mb-4 relative w-16 h-16">
-                    <div className="absolute inset-0 rounded-full bg-sky-500/30 blur-xl" />
-                    <div className="relative h-16 w-16 rounded-full bg-gradient-to-b from-sky-400/20 to-slate-900 border border-sky-500/30 grid place-items-center text-sky-300">
-                      <User size={28} strokeWidth={1.75} />
+                <div className="text-center mb-8">
+                  <div className="mx-auto mb-5 relative w-[68px] h-[68px]">
+                    <div className="absolute inset-0 rounded-full bg-sky-500/35 blur-2xl" />
+                    <div className="relative h-full w-full rounded-full bg-[#0d1520] border-2 border-sky-500/50 grid place-items-center text-sky-300 shadow-[0_0_24px_rgba(14,165,233,0.35)]">
+                      <User size={30} strokeWidth={1.6} />
                     </div>
                   </div>
-                  <h2 className="text-2xl font-bold tracking-tight">
+                  <h2 className="text-[1.65rem] font-bold tracking-tight">
                     Welcome <span className="text-sky-400">back!</span>
                   </h2>
-                  <p className="mt-1.5 text-sm text-slate-400">Please log in to continue</p>
+                  <p className="mt-2 text-sm text-slate-400">Please log in to continue</p>
                 </div>
               ) : (
                 <div className="mb-6">
@@ -298,7 +310,7 @@ export default function SignIn() {
                     />
                   </div>
                   <button
-                    className={`w-full h-12 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-400 transition disabled:opacity-60 ${loading ? "opacity-80" : ""}`}
+                    className="w-full h-12 rounded-xl font-bold text-white bg-[#0ea5e9] hover:bg-sky-400 transition disabled:opacity-60"
                     disabled={loading}
                   >
                     {loading ? t("signin.validating") : t("signin.next")}
@@ -340,7 +352,7 @@ export default function SignIn() {
                     </div>
                   ))}
                   <button
-                    className="w-full h-12 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-400 transition disabled:opacity-60 mt-2"
+                    className="w-full h-12 rounded-xl font-bold text-white bg-[#0ea5e9] hover:bg-sky-400 transition disabled:opacity-60 mt-2"
                     disabled={loading}
                   >
                     {loading ? t("signin.registering") : t("signin.createAccount")}
@@ -412,21 +424,32 @@ export default function SignIn() {
                         type="checkbox"
                         checked={remember}
                         onChange={(e) => setRemember(e.target.checked)}
-                        className="rounded border-slate-600 bg-[#0d1118] text-sky-500 focus:ring-sky-500/40"
+                        className="h-4 w-4 rounded border-slate-600 bg-[#0b1220] text-sky-500 focus:ring-sky-500/40"
                       />
                       Remember me
                     </label>
+                    <button
+                      type="button"
+                      className="text-sky-400 hover:text-sky-300 font-medium"
+                      onClick={() =>
+                        notify.info("Contact your administrator to reset your password.")
+                      }
+                    >
+                      Forgot password?
+                    </button>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full h-12 rounded-xl font-bold text-white bg-sky-500 hover:bg-sky-400 active:bg-sky-600 transition disabled:opacity-60 shadow-[0_8px_24px_rgba(14,165,233,0.35)]"
+                    className="w-full h-12 rounded-xl font-bold text-white bg-[#0ea5e9] hover:bg-sky-400 active:bg-sky-600 transition disabled:opacity-60 shadow-[0_10px_28px_rgba(14,165,233,0.4)]"
                     disabled={loading}
                   >
                     {loading ? t("signin.signingIn") : "Log in"}
                   </button>
 
-                  <p className="text-center text-sm text-slate-400 pt-1">
+                  {/* No Google / social login — design without Continue with Google */}
+
+                  <p className="text-center text-sm text-slate-400 pt-2">
                     Don&apos;t have an account?{" "}
                     <button
                       type="button"
@@ -445,8 +468,9 @@ export default function SignIn() {
             </div>
 
             <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500">
-              <Shield size={14} className="text-sky-500/70" />
+              <Shield size={14} className="text-sky-500" />
               <span>Secure. Reliable. Scalable.</span>
+              <span className="text-slate-600">· v{APP_VERSION}</span>
             </div>
           </div>
         </div>
