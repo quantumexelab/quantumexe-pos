@@ -5,6 +5,8 @@ import api, { auth } from "../api";
 import { BrandLogo } from "../components/BrandLogo";
 import { APP_VERSION } from "../version";
 import { useI18n } from "../i18n";
+import { notify, useBusyOverlay } from "../notify";
+import { ErrorBox, SuccessBox } from "../components/ui";
 
 type Step = "license" | "login" | "register";
 
@@ -33,6 +35,10 @@ export default function SignIn() {
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  useBusyOverlay(
+    loading,
+    step === "register" ? "Creating account…" : step === "license" ? "Validating…" : "Signing in…"
+  );
 
   useEffect(() => {
     api
@@ -70,6 +76,7 @@ export default function SignIn() {
       const role = data.user?.role;
       const shopStatus = data.user?.shop_status || "active";
       if (role === "MasterAdmin") {
+        notify.success("Welcome, Master Admin");
         navigate("/master", { replace: true });
         return;
       }
@@ -77,6 +84,7 @@ export default function SignIn() {
         navigate("/pending-access", { replace: true });
         return;
       }
+      notify.success("Signed in");
       navigate("/dashboard", { replace: true });
     } catch (err) {
       const ax = err as { response?: { data?: { message?: string } }; code?: string; message?: string };
@@ -85,6 +93,7 @@ export default function SignIn() {
         ax.message ||
         (ax.code === "ECONNABORTED" ? "Login timed out — check internet / try again" : "Login failed");
       setError(msg);
+      notify.error(msg);
     } finally {
       setLoading(false);
     }
@@ -160,16 +169,8 @@ export default function SignIn() {
           <h2 className="text-2xl font-bold text-gray-800 mb-2">{title}</h2>
           <p className="text-sm text-gray-500 mb-6">{subtitle}</p>
 
-          {error && (
-            <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              {error}
-            </div>
-          )}
-          {msg && (
-            <div className="mb-4 text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
-              {msg}
-            </div>
-          )}
+          {error && <ErrorBox text={error} toast={false} />}
+          {msg && <SuccessBox text={msg} />}
 
           {step === "license" ? (
             <form onSubmit={submitLicense} className="space-y-4">
@@ -179,7 +180,7 @@ export default function SignIn() {
                 value={licenseKey}
                 onChange={(e) => setLicenseKey(e.target.value)}
               />
-              <button className="btn btn-primary w-full" disabled={loading}>
+              <button className={`btn btn-primary w-full ${loading ? "btn-busy" : ""}`} disabled={loading}>
                 {loading ? t("signin.validating") : t("signin.next")}
               </button>
             </form>
@@ -218,7 +219,7 @@ export default function SignIn() {
                   )}
                 </div>
               ))}
-              <button className="btn btn-primary w-full" disabled={loading}>
+              <button className={`btn btn-primary w-full ${loading ? "btn-busy" : ""}`} disabled={loading}>
                 {loading ? t("signin.registering") : t("signin.createAccount")}
               </button>
               <button
@@ -270,7 +271,7 @@ export default function SignIn() {
                   </button>
                 </div>
               </div>
-              <button className="btn btn-primary w-full" disabled={loading}>
+              <button className={`btn btn-primary w-full ${loading ? "btn-busy" : ""}`} disabled={loading}>
                 {loading ? t("signin.signingIn") : t("signin.signIn")}
               </button>
               <p className="text-[11px] text-center text-gray-500">
