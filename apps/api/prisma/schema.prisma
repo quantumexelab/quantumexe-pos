@@ -107,10 +107,31 @@ model ProductVariant {
   color       String?
   product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   stocks      Stock[]
+  stockUnits  StockUnit[]
   invoiceItems InvoiceItem[]
   quotationItems QuotationItem[]
   grnItems          GrnItem[]
   stockReleaseItems StockReleaseItem[]
+}
+
+/** One physical piece with a unique scan code (sticker). */
+model StockUnit {
+  id            Int             @id @default(autoincrement())
+  unitCode      String          @unique
+  variantId     Int
+  location      String          // "store" | "shop"
+  status        String          @default("available") // available | sold | damaged
+  releaseItemId Int?
+  invoiceItemId Int?
+  createdAt     DateTime        @default(now())
+  soldAt        DateTime?
+  variant       ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  releaseItem   StockReleaseItem? @relation(fields: [releaseItemId], references: [id])
+  invoiceItem   InvoiceItem?    @relation(fields: [invoiceItemId], references: [id])
+
+  @@index([variantId, location, status])
+  @@index([releaseItemId])
+  @@index([invoiceItemId])
 }
 
 model Stock {
@@ -143,6 +164,7 @@ model StockReleaseItem {
   qty       Float
   release   StockRelease   @relation(fields: [releaseId], references: [id], onDelete: Cascade)
   variant   ProductVariant @relation(fields: [variantId], references: [id])
+  units     StockUnit[]
 }
 
 model DamagedStock {
@@ -276,8 +298,10 @@ model InvoiceItem {
   qty        Float
   price      Float
   discount   Float          @default(0)
+  stockUnitId Int?
   invoice    Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   variant    ProductVariant @relation(fields: [variantId], references: [id])
+  units      StockUnit[]
 }
 
 model Return {

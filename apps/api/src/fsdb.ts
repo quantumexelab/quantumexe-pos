@@ -38,6 +38,7 @@ type ModelName =
   | "Setting"
   | "StockRelease"
   | "StockReleaseItem"
+  | "StockUnit"
   | "License";
 
 type RelationDef =
@@ -54,6 +55,7 @@ const MODEL_DEFAULTS: Partial<Record<ModelName, Record<string, unknown>>> = {
   ProductVariant: { price: 0, cost: 0 },
   Stock: { quantity: 0, lowThreshold: 5, location: "store" },
   StockRelease: { createdAt: () => new Date() },
+  StockUnit: { status: "available", location: "store", createdAt: () => new Date() },
   Company: { createdAt: () => new Date() },
   Supplier: { createdAt: () => new Date() },
   Customer: { createdAt: () => new Date() },
@@ -93,6 +95,7 @@ const UNIQUE_FIELDS: Partial<Record<ModelName, string[]>> = {
   // Category / Brand / Unit / ProductType uniqueness is enforced in routes (case-insensitive, per-shop)
   Product: ["code"],
   ProductVariant: ["barcode"],
+  StockUnit: ["unitCode"],
   DamageReason: ["name"],
   ReturnStatus: ["name"],
   Company: ["name"],
@@ -139,11 +142,17 @@ const RELATIONS: Partial<Record<ModelName, Record<string, RelationDef>>> = {
   ProductVariant: {
     product: { kind: "many-to-one", model: "Product", fk: "productId" },
     stocks: { kind: "one-to-many", model: "Stock", fk: "variantId" },
+    stockUnits: { kind: "one-to-many", model: "StockUnit", fk: "variantId" },
     stockReleaseItems: { kind: "one-to-many", model: "StockReleaseItem", fk: "variantId" },
   },
   Stock: {
     variant: { kind: "many-to-one", model: "ProductVariant", fk: "variantId" },
     damaged: { kind: "one-to-many", model: "DamagedStock", fk: "stockId" },
+  },
+  StockUnit: {
+    variant: { kind: "many-to-one", model: "ProductVariant", fk: "variantId" },
+    releaseItem: { kind: "many-to-one", model: "StockReleaseItem", fk: "releaseItemId" },
+    invoiceItem: { kind: "many-to-one", model: "InvoiceItem", fk: "invoiceItemId" },
   },
   DamagedStock: {
     stock: { kind: "many-to-one", model: "Stock", fk: "stockId" },
@@ -172,6 +181,7 @@ const RELATIONS: Partial<Record<ModelName, Record<string, RelationDef>>> = {
   InvoiceItem: {
     invoice: { kind: "many-to-one", model: "Invoice", fk: "invoiceId" },
     variant: { kind: "many-to-one", model: "ProductVariant", fk: "variantId" },
+    units: { kind: "one-to-many", model: "StockUnit", fk: "invoiceItemId" },
   },
   Return: {
     invoice: { kind: "many-to-one", model: "Invoice", fk: "invoiceId" },
@@ -212,12 +222,13 @@ const RELATIONS: Partial<Record<ModelName, Record<string, RelationDef>>> = {
   StockReleaseItem: {
     release: { kind: "many-to-one", model: "StockRelease", fk: "releaseId" },
     variant: { kind: "many-to-one", model: "ProductVariant", fk: "variantId" },
+    units: { kind: "one-to-many", model: "StockUnit", fk: "releaseItemId" },
   },
 };
 
 const CASCADE_DELETE: Partial<Record<ModelName, ModelName[]>> = {
   Product: ["ProductVariant"],
-  ProductVariant: ["Stock"],
+  ProductVariant: ["Stock", "StockUnit"],
   Invoice: ["InvoiceItem"],
   Quotation: ["QuotationItem"],
   Grn: ["GrnItem"],
@@ -890,6 +901,7 @@ class FirestoreClient {
   license = new ModelDelegate("License", this);
   stockRelease = new ModelDelegate("StockRelease", this);
   stockReleaseItem = new ModelDelegate("StockReleaseItem", this);
+  stockUnit = new ModelDelegate("StockUnit", this);
 
   getContext() {
     return this.context;
@@ -932,6 +944,7 @@ class FirestoreClient {
       License: this.license,
       StockRelease: this.stockRelease,
       StockReleaseItem: this.stockReleaseItem,
+      StockUnit: this.stockUnit,
     };
     return map[model];
   }
@@ -979,6 +992,7 @@ const ALL_MODELS: ModelName[] = [
   "PosSession",
   "StockReleaseItem",
   "StockRelease",
+  "StockUnit",
   "Customer",
   "Supplier",
   "Bank",

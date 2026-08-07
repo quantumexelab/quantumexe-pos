@@ -47,12 +47,14 @@ type Product = {
   quantity: number;
   barcode?: string;
   stockId?: number;
+  stockUnitId?: number;
+  unitCode?: string;
   size?: string | null;
   color?: string | null;
   code?: string;
 };
 
-type CartItem = Product & { qty: number; discount: number };
+type CartItem = Product & { qty: number; discount: number; cartKey: string };
 
 type Customer = { id: number; name: string; phone?: string | null };
 
@@ -365,14 +367,43 @@ export default function POS() {
 
   function addToCart(p: Product) {
     const unit = sellPrice(p);
+    const stockUnitId = p.stockUnitId ? Number(p.stockUnitId) : undefined;
+    // Unique unit lines stay separate (qty 1); SKU without unit may merge
+    if (stockUnitId) {
+      const cartKey = `u-${stockUnitId}`;
+      setCart((prev) => {
+        if (prev.some((x) => x.cartKey === cartKey || x.stockUnitId === stockUnitId)) {
+          setError("This unit is already in the cart");
+          return prev;
+        }
+        return [
+          ...prev,
+          {
+            ...p,
+            price: unit,
+            qty: 1,
+            discount: 0,
+            stockUnitId,
+            barcode: p.unitCode || p.barcode,
+            cartKey,
+          },
+        ];
+      });
+      setProductQuery("");
+      setShowProductList(false);
+      setError("");
+      return;
+    }
+
+    const cartKey = `v-${p.id}-${unit}`;
     setCart((prev) => {
-      const existing = prev.find((x) => x.id === p.id && x.price === unit);
+      const existing = prev.find((x) => x.cartKey === cartKey || (!x.stockUnitId && x.id === p.id && x.price === unit));
       if (existing) {
         return prev.map((x) =>
-          x.id === p.id && x.price === unit ? { ...x, qty: Math.min(x.qty + 1, p.quantity) } : x
+          x.cartKey === existing.cartKey ? { ...x, qty: Math.min(x.qty + 1, p.quantity) } : x
         );
       }
-      return [...prev, { ...p, price: unit, qty: 1, discount: 0 }];
+      return [...prev, { ...p, price: unit, qty: 1, discount: 0, cartKey }];
     });
     setProductQuery("");
     setShowProductList(false);
@@ -435,7 +466,12 @@ export default function POS() {
   }
 
   function restoreHeld(bill: HeldBill) {
-    setCart(bill.cart);
+    setCart(
+      bill.cart.map((c, idx) => ({
+        ...c,
+        cartKey: c.cartKey || (c.stockUnitId ? `u-${c.stockUnitId}` : `v-${c.id}-${c.price}-${idx}`),
+      }))
+    );
     setCustomerId(bill.customerId);
     setCustomerQuery(bill.customerQuery);
     setCashPay(bill.cash || "");
@@ -519,6 +555,7 @@ export default function POS() {
         items: cart.map((i) => ({
           id: i.id,
           stock_id: i.stockId,
+          stockUnitId: i.stockUnitId,
           qty: i.qty,
           price: i.price,
           discount: i.discount,
@@ -911,17 +948,27 @@ export default function POS() {
                   </thead>
                   <tbody>
                     {cart.map((item) => (
-                      <tr key={item.id} className="border-b border-gray-100">
-                        <td className="px-3 py-2.5 font-medium">{item.displayName}</td>
+                      <tr key={item.cartKey || `${item.id}-${item.stockUnitId || 0}`} className="border-b border-gray-100">
+                        <td className="px-3 py-2.5 font-medium">
+                          <div>{item.displayName}</div>
+                          {item.unitCode || item.stockUnitId ? (
+                            <div className="text-[11px] font-mono text-gray-400">{item.unitCode || item.barcode}</div>
+                          ) : null}
+                        </td>
                         <td className="px-3 py-2.5">{money(item.price, currency)}</td>
                         <td className="px-3 py-2.5">
                           <div className="inline-flex items-center gap-1">
                             <button
                               type="button"
-                              className="h-7 w-7 rounded border border-gray-200"
+                              className="h-7 w-7 rounded border border-gray-200 disabled:opacity-40"
+                              disabled={!!item.stockUnitId}
                               onClick={() =>
                                 setCart((prev) =>
-                                  prev.map((x) => (x.id === item.id ? { ...x, qty: Math.max(1, x.qty - 1) } : x))
+                                  prev.map((x) =>
+                                    (x.cartKey || x.id) === (item.cartKey || item.id)
+                                      ? { ...x, qty: Math.max(1, x.qty - 1) }
+                                      : x
+                                  )
                                 )
                               }
                             >
@@ -930,11 +977,14 @@ export default function POS() {
                             <span className="w-8 text-center font-semibold">{item.qty}</span>
                             <button
                               type="button"
-                              className="h-7 w-7 rounded border border-gray-200"
+                              className="h-7 w-7 rounded border border-gray-200 disabled:opacity-40"
+                              disabled={!!item.stockUnitId}
                               onClick={() =>
                                 setCart((prev) =>
                                   prev.map((x) =>
-                                    x.id === item.id ? { ...x, qty: Math.min(item.quantity, x.qty + 1) } : x
+                                    (x.cartKey || x.id) === (item.cartKey || item.id)
+                                      ? { ...x, qty: Math.min(item.quantity, x.qty + 1) }
+                                      : x
                                   )
                                 )
                               }
@@ -950,7 +1000,11 @@ export default function POS() {
                           <button
                             type="button"
                             className="text-gray-400 hover:text-red-600"
-                            onClick={() => setCart((prev) => prev.filter((x) => x.id !== item.id))}
+                            onClick={() =>
+                              setCart((prev) =>
+                                prev.filter((x) => (x.cartKey || x.id) !== (item.cartKey || item.id))
+                              )
+                            }
                           >
                             <X size={16} />
                           </button>

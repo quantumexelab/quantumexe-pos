@@ -15,6 +15,16 @@ import {
   getStoreStock,
   variantDisplayName,
 } from "./stockLocations.js";
+import {
+  UNIT_AVAILABLE,
+  allocateShopUnit,
+  createStockUnits,
+  ensureAvailableUnits,
+  findUnitByCode,
+  moveStockUnits,
+  restoreSoldUnits,
+  sellShopUnits,
+} from "./stockUnits.js";
 
 const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -360,9 +370,12 @@ router.post("/grn/add", requireAuth, async (req, res) => {
     include: { items: true },
   });
   for (const item of items) {
-    await addToStoreStock(prisma, Number(item.variantId), Number(item.qty));
+    const variantId = Number(item.variantId);
+    const qty = Number(item.qty);
+    await addToStoreStock(prisma, variantId, qty);
+    await createStockUnits(prisma, variantId, Math.floor(qty), LOC_STORE);
     await prisma.productVariant.update({
-      where: { id: Number(item.variantId) },
+      where: { id: variantId },
       data: {
         cost: Number(item.cost),
         price: Number(item.price || item.cost),
@@ -428,36 +441,86 @@ router.get("/suppliers/:id/payments", requireAuth, async (req, res) => {
   res.json(ok(rows));
 });
 
-// ---------- POS / Sales / Returns ----------
-router.get("/pos/products/barcode/:code", requireAuth, async (req, res) => {
-  const variant = await prisma.productVariant.findFirst({
-    where: { barcode: param(req.params.code) },
-    include: { product: true, stocks: true },
-  });
-  if (!variant) return res.status(404).json(fail("Product not found", 404));
-  const { shop } = await ensureStockPair(prisma, variant.id);
-  const qty = shop.quantity;
-  const size = (variant as { size?: string | null; color?: string | null }).size;
-  const color = (variant as { size?: string | null; color?: string | null }).color;
+function posVariantPayload(
+  variant: {
+    id: number;
+    name: string;
+    barcode?: string | null;
+    price: number;
+    cost: number;
+    size?: string | null;
+    color?: string | null;
+    product: { name: string; code: string };
+  },
+  qty: number,
+  extra?: { stockUnitId?: number; unitCode?: string; barcode?: string }
+) {
+  const size = variant.size;
+  const color = variant.color;
   const vname = variant.name;
   const displayParts = [variant.product.name];
   if (size) displayParts.push(`Size ${size}`);
   if (color) displayParts.push(color);
   if (!size && !color && vname && vname.toLowerCase() !== "default") displayParts.push(vname);
+  return {
+    id: variant.id,
+    displayName: displayParts.join(" · "),
+    productName: variant.product.name,
+    productID: variant.product.code,
+    barcode: extra?.barcode ?? variant.barcode,
+    size: size || null,
+    color: color || null,
+    variantName: vname,
+    price: variant.price,
+    cost: variant.cost,
+    quantity: qty,
+    stockUnitId: extra?.stockUnitId,
+    unitCode: extra?.unitCode,
+  };
+}
+
+// ---------- POS / Sales / Returns ----------
+router.get("/pos/products/barcode/:code", requireAuth, async (req, res) => {
+  const code = param(req.params.code);
+
+  const unit = await findUnitByCode(prisma, code);
+  if (unit) {
+    if (unit.status !== UNIT_AVAILABLE || unit.location !== LOC_SHOP) {
+      return res.status(400).json(fail("This unit is not available in shop stock", 400));
+    }
+    const variant = await prisma.productVariant.findUnique({
+      where: { id: unit.variantId },
+      include: { product: true },
+    });
+    if (!variant) return res.status(404).json(fail("Product not found", 404));
+    const { shop } = await ensureStockPair(prisma, variant.id);
+    return res.json(
+      ok(
+        posVariantPayload(variant, shop.quantity, {
+          stockUnitId: unit.id,
+          unitCode: unit.unitCode,
+          barcode: unit.unitCode,
+        })
+      )
+    );
+  }
+
+  const variant = await prisma.productVariant.findFirst({
+    where: { barcode: code },
+    include: { product: true, stocks: true },
+  });
+  if (!variant) return res.status(404).json(fail("Product not found", 404));
+  const { shop } = await ensureStockPair(prisma, variant.id);
+  if (shop.quantity <= 0) return res.status(400).json(fail("No shop stock for this product", 400));
+
+  await ensureAvailableUnits(prisma, variant.id, LOC_SHOP, 1);
+  const fifo = await allocateShopUnit(prisma, variant.id);
   res.json(
-    ok({
-      id: variant.id,
-      displayName: displayParts.join(" · "),
-      productName: variant.product.name,
-      productID: variant.product.code,
-      barcode: variant.barcode,
-      size: size || null,
-      color: color || null,
-      variantName: vname,
-      price: variant.price,
-      cost: variant.cost,
-      quantity: qty,
-    })
+    ok(
+      posVariantPayload(variant, shop.quantity, fifo
+        ? { stockUnitId: fifo.id, unitCode: fifo.unitCode, barcode: fifo.unitCode }
+        : undefined)
+    )
   );
 });
 
@@ -470,10 +533,18 @@ router.post("/pos/invoice", requireAuth, async (req, res) => {
     price: number;
     discount?: number;
     discountAmount?: number;
+    stockUnitId?: number;
+    stock_unit_id?: number;
   }>;
   if (!items.length) return res.status(400).json(fail("Items required"));
 
-  const normalized: Array<{ variantId: number; qty: number; price: number; discount: number }> = [];
+  const normalized: Array<{
+    variantId: number;
+    qty: number;
+    price: number;
+    discount: number;
+    stockUnitId?: number;
+  }> = [];
   for (const item of items) {
     let variantId = Number(item.variantId || item.id || 0);
     if (item.stock_id) {
@@ -481,11 +552,13 @@ router.post("/pos/invoice", requireAuth, async (req, res) => {
       if (st) variantId = st.variantId;
     }
     if (!variantId) return res.status(400).json(fail("Invalid item"));
+    const stockUnitId = Number(item.stockUnitId || item.stock_unit_id || 0) || undefined;
     normalized.push({
       variantId,
       qty: Number(item.qty),
       price: Number(item.price),
       discount: Number(item.discount || item.discountAmount || 0),
+      stockUnitId,
     });
   }
 
@@ -502,42 +575,56 @@ router.post("/pos/invoice", requireAuth, async (req, res) => {
   const count = await prisma.invoice.count();
   const invoiceNo = await nextNo("INV", count);
 
-  const invoice = await prisma.$transaction(async (tx) => {
-    for (const item of normalized) {
-      const shop = await getShopStock(tx, item.variantId);
-      await tx.stock.update({
-        where: { id: shop.id },
-        data: { quantity: shop.quantity - item.qty },
-      });
-    }
-    return tx.invoice.create({
-      data: {
-        invoiceNo,
-        customerId: req.body?.customerId ? Number(req.body.customerId) : undefined,
-        userId: req.user!.id,
-        subtotal,
-        discount,
-        total,
-        paymentType: String(req.body?.paymentType || req.body?.payment_type || "Cash"),
-        paidAmount: Number(req.body?.paidAmount || total),
-        items: {
-          create: normalized.map((i) => ({
-            variantId: i.variantId,
-            qty: i.qty,
-            price: i.price,
-            discount: i.discount,
-          })),
-        },
-      },
-      include: {
-        items: { include: { variant: { include: { product: true } } } },
-        customer: true,
-        user: true,
-      },
-    });
-  });
+  try {
+    const invoice = await prisma.$transaction(async (tx) => {
+      for (const item of normalized) {
+        const shop = await getShopStock(tx, item.variantId);
+        await tx.stock.update({
+          where: { id: shop.id },
+          data: { quantity: shop.quantity - item.qty },
+        });
+      }
 
-  res.json(ok(invoice, "Invoice created"));
+      const created = await tx.invoice.create({
+        data: {
+          invoiceNo,
+          customerId: req.body?.customerId ? Number(req.body.customerId) : undefined,
+          userId: req.user!.id,
+          subtotal,
+          discount,
+          total,
+          paymentType: String(req.body?.paymentType || req.body?.payment_type || "Cash"),
+          paidAmount: Number(req.body?.paidAmount || total),
+          items: {
+            create: normalized.map((i) => ({
+              variantId: i.variantId,
+              qty: i.qty,
+              price: i.price,
+              discount: i.discount,
+              stockUnitId: i.stockUnitId || null,
+            })),
+          },
+        },
+        include: {
+          items: { include: { variant: { include: { product: true } } } },
+          customer: true,
+          user: true,
+        },
+      });
+
+      for (let i = 0; i < created.items.length; i++) {
+        const invItem = created.items[i];
+        const src = normalized[i];
+        await sellShopUnits(tx, invItem.variantId, invItem.qty, invItem.id, src?.stockUnitId);
+      }
+
+      return created;
+    });
+
+    res.json(ok(invoice, "Invoice created"));
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Invoice failed"));
+  }
 });
 
 router.get("/pos/invoice/:no", requireAuth, async (req, res) => {
@@ -631,6 +718,7 @@ router.post("/pos/return", requireAuth, async (req, res) => {
     alreadyByVariant.set(invItem.variantId, already + qty);
     const shop = await getShopStock(prisma, invItem.variantId);
     await prisma.stock.update({ where: { id: shop.id }, data: { quantity: shop.quantity + qty } });
+    await restoreSoldUnits(prisma, [invItem.id], qty);
   }
 
   const ret = await prisma.return.create({
@@ -772,18 +860,6 @@ router.post("/quotations/:id/convert", requireAuth, async (req, res) => {
     include: { items: true },
   });
   if (!quote) return res.status(404).json(fail("Not found", 404));
-  // reuse POS invoice logic inline
-  req.body = {
-    customerId: quote.customerId,
-    paymentType: "Cash",
-    items: quote.items.map((i) => ({
-      variantId: i.variantId,
-      qty: i.qty,
-      price: i.price,
-      discount: i.discount,
-    })),
-  };
-  // Call by creating invoice directly
   const items = quote.items;
   for (const item of items) {
     const shop = await getShopStock(prisma, item.variantId);
@@ -791,34 +867,43 @@ router.post("/quotations/:id/convert", requireAuth, async (req, res) => {
   }
   const count = await prisma.invoice.count();
   const invoiceNo = await nextNo("INV", count);
-  const invoice = await prisma.$transaction(async (tx) => {
-    for (const item of items) {
-      const shop = await getShopStock(tx, item.variantId);
-      await tx.stock.update({ where: { id: shop.id }, data: { quantity: shop.quantity - item.qty } });
-    }
-    await tx.quotation.update({ where: { id: quote.id }, data: { status: "Converted" } });
-    return tx.invoice.create({
-      data: {
-        invoiceNo,
-        customerId: quote.customerId || undefined,
-        userId: req.user!.id,
-        subtotal: quote.subtotal,
-        discount: quote.discount,
-        total: quote.total,
-        paymentType: "Cash",
-        paidAmount: quote.total,
-        items: {
-          create: items.map((i) => ({
-            variantId: i.variantId,
-            qty: i.qty,
-            price: i.price,
-            discount: i.discount,
-          })),
+  try {
+    const invoice = await prisma.$transaction(async (tx) => {
+      for (const item of items) {
+        const shop = await getShopStock(tx, item.variantId);
+        await tx.stock.update({ where: { id: shop.id }, data: { quantity: shop.quantity - item.qty } });
+      }
+      await tx.quotation.update({ where: { id: quote.id }, data: { status: "Converted" } });
+      const created = await tx.invoice.create({
+        data: {
+          invoiceNo,
+          customerId: quote.customerId || undefined,
+          userId: req.user!.id,
+          subtotal: quote.subtotal,
+          discount: quote.discount,
+          total: quote.total,
+          paymentType: "Cash",
+          paidAmount: quote.total,
+          items: {
+            create: items.map((i) => ({
+              variantId: i.variantId,
+              qty: i.qty,
+              price: i.price,
+              discount: i.discount,
+            })),
+          },
         },
-      },
+        include: { items: true },
+      });
+      for (const invItem of created.items) {
+        await sellShopUnits(tx, invItem.variantId, invItem.qty, invItem.id);
+      }
+      return created;
     });
-  });
-  res.json(ok(invoice, "Converted to invoice"));
+    res.json(ok(invoice, "Converted to invoice"));
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Convert failed"));
+  }
 });
 
 // ---------- Analytics / Dashboard ----------
@@ -972,7 +1057,12 @@ router.get("/store-release/list", requireAuth, async (req, res) => {
     take: limit,
     include: {
       user: true,
-      items: { include: { variant: { include: { product: true } } } },
+      items: {
+        include: {
+          variant: { include: { product: true } },
+          units: { orderBy: { id: "asc" } },
+        },
+      },
     },
   });
   res.json(ok(rows));
@@ -1041,38 +1131,59 @@ router.post("/store-release/add", requireAuth, async (req, res) => {
   const count = await prisma.stockRelease.count();
   const releaseNo = await nextNo("REL", count);
 
-  const release = await prisma.$transaction(async (tx) => {
-    const row = await tx.stockRelease.create({
-      data: {
-        releaseNo,
-        userId: req.user!.id,
-        note,
-        items: {
-          create: normalized.map((i) => ({ variantId: i.variantId, qty: i.qty })),
+  try {
+    const release = await prisma.$transaction(async (tx) => {
+      const row = await tx.stockRelease.create({
+        data: {
+          releaseNo,
+          userId: req.user!.id,
+          note,
+          items: {
+            create: normalized.map((i) => ({
+              variantId: i.variantId,
+              qty: Math.floor(i.qty),
+            })),
+          },
         },
-      },
-      include: {
-        user: true,
-        items: { include: { variant: { include: { product: true } } } },
-      },
+        include: {
+          user: true,
+          items: { include: { variant: { include: { product: true } } } },
+        },
+      });
+
+      for (const item of normalized) {
+        const moveQty = Math.floor(item.qty);
+        const releaseItem = row.items.find((ri: { variantId: number }) => ri.variantId === item.variantId);
+        const { store, shop } = await ensureStockPair(tx, item.variantId);
+        await tx.stock.update({
+          where: { id: store.id },
+          data: { quantity: store.quantity - item.qty },
+        });
+        await tx.stock.update({
+          where: { id: shop.id },
+          data: { quantity: shop.quantity + item.qty },
+        });
+        await moveStockUnits(tx, item.variantId, moveQty, LOC_STORE, LOC_SHOP, releaseItem?.id);
+      }
+
+      return tx.stockRelease.findUnique({
+        where: { id: row.id },
+        include: {
+          user: true,
+          items: {
+            include: {
+              variant: { include: { product: true } },
+              units: { orderBy: { id: "asc" } },
+            },
+          },
+        },
+      });
     });
 
-    for (const item of normalized) {
-      const { store, shop } = await ensureStockPair(tx, item.variantId);
-      await tx.stock.update({
-        where: { id: store.id },
-        data: { quantity: store.quantity - item.qty },
-      });
-      await tx.stock.update({
-        where: { id: shop.id },
-        data: { quantity: shop.quantity + item.qty },
-      });
-    }
-
-    return row;
-  });
-
-  res.json(ok(release, "Stock released to shop"));
+    res.json(ok(release, "Stock released to shop"));
+  } catch (e) {
+    res.status(400).json(fail(e instanceof Error ? e.message : "Release failed"));
+  }
 });
 
 router.get("/store-release/get-by-id/:id", requireAuth, async (req, res) => {
@@ -1080,7 +1191,12 @@ router.get("/store-release/get-by-id/:id", requireAuth, async (req, res) => {
     where: { id: parseId(req.params.id) },
     include: {
       user: true,
-      items: { include: { variant: { include: { product: true } } } },
+      items: {
+        include: {
+          variant: { include: { product: true } },
+          units: { orderBy: { id: "asc" } },
+        },
+      },
     },
   });
   if (!row) return res.status(404).json(fail("Release not found", 404));

@@ -11,6 +11,7 @@ import {
   setStoreStock,
   variantDisplayName,
 } from "./stockLocations.js";
+import { createStockUnits } from "./stockUnits.js";
 import os from "os";
 import fs from "fs";
 import path from "path";
@@ -955,6 +956,9 @@ router.post("/products/create", requireAuth, async (req, res) => {
     include: { variants: true },
   });
   await setStoreStock(prisma, product.variants[0].id, parsed.data.quantity);
+  if (Math.floor(parsed.data.quantity) > 0) {
+    await createStockUnits(prisma, product.variants[0].id, Math.floor(parsed.data.quantity), LOC_STORE);
+  }
   res.json(ok(product, "Product created"));
 });
 

@@ -22,23 +22,40 @@ type StoreStockRow = {
 type ReleaseLine = StoreStockRow & { qty: string };
 
 function labelsFromReleaseItems(items: any[]): LabelItem[] {
-  return (items || []).map((i: any) => {
+  const labels: LabelItem[] = [];
+  for (const i of items || []) {
     const v = i.variant || {};
     const product = v.product || {};
-    return {
+    const units = Array.isArray(i.units) ? i.units : [];
+    const base = {
       productName: product.name || "Item",
       size: v.size,
       color: v.color,
       variantName: v.name,
-      barcode: v.barcode || product.code || `V${v.id || i.variantId}`,
       price: Number(v.price || 0),
       code: product.code,
-      copies: Math.max(1, Math.floor(Number(i.qty) || 1)),
     };
-  });
+    if (units.length) {
+      for (const u of units) {
+        labels.push({
+          ...base,
+          barcode: String(u.unitCode || ""),
+          copies: 1,
+        });
+      }
+    } else {
+      labels.push({
+        ...base,
+        barcode: v.barcode || product.code || `V${v.id || i.variantId}`,
+        copies: Math.max(1, Math.floor(Number(i.qty) || 1)),
+      });
+    }
+  }
+  return labels;
 }
 
 function labelsFromLines(lines: ReleaseLine[]): LabelItem[] {
+  // Fallback only — prefer API unit codes after release
   return lines.map((l) => ({
     productName: l.productName || l.displayName,
     size: l.size,
@@ -245,7 +262,7 @@ export function CreateStoreRelease() {
               className="rounded border-gray-300"
             />
             <span>
-              Print barcode stickers (barcode + price)
+              Print unique unit stickers (one barcode per piece)
               {stickerCount > 0 ? ` — ${stickerCount} sticker${stickerCount === 1 ? "" : "s"}` : ""}
             </span>
           </label>
@@ -366,8 +383,19 @@ export function StoreReleaseList() {
                 <tbody>
                   {(selected.items || []).map((i: any) => (
                     <tr key={i.id}>
-                      <td>{i.variant?.product?.name || "-"}</td>
-                      <td>{i.variant?.barcode || "-"}</td>
+                      <td>
+                        <div>{i.variant?.product?.name || "-"}</div>
+                        {Array.isArray(i.units) && i.units.length > 0 ? (
+                          <div className="text-[10px] font-mono text-gray-400 mt-0.5">
+                            {i.units.map((u: any) => u.unitCode).join(", ")}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="font-mono text-xs">
+                        {Array.isArray(i.units) && i.units.length
+                          ? `${i.units.length} unit IDs`
+                          : i.variant?.barcode || "-"}
+                      </td>
                       <td>Rs. {Number(i.variant?.price || 0).toFixed(2)}</td>
                       <td>{i.qty}</td>
                     </tr>
