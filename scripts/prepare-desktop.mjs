@@ -33,7 +33,7 @@ cp(path.join(root, "apps", "api", "prisma", "schema.prisma"), path.join(out, "pr
 
 // Seed SQLite for first launch
 const seedUrl = "file:./demo.sqlite";
-execSync(`npx prisma db push --schema prisma/schema.prisma --skip-generate`, {
+execSync(`npx prisma db push --schema prisma/schema.prisma --skip-generate --accept-data-loss`, {
   cwd: path.join(root, "apps", "api"),
   stdio: "inherit",
   env: { ...process.env, DATABASE_URL: seedUrl },
