@@ -1,6 +1,6 @@
 {
   "name": "quantumexe-pos-desktop",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "private": true,
   "description": "QUANTUMEXE POS Windows desktop shell",
   "main": "main.cjs",

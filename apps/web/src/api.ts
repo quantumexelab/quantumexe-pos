@@ -91,7 +91,7 @@ type Shop = {
 export const auth = {
   async login(username: string, password: string) {
     try {
-      const { data } = await api.post("/auth/login", { username, password });
+      const { data } = await api.post("/auth/login", { username, password }, { timeout: 20000 });
       if (data.success && data.token) {
         sessionStorage.setItem("token", data.token);
         sessionStorage.setItem("user", JSON.stringify(data.user));

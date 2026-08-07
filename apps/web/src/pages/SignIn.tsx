@@ -76,8 +76,12 @@ export default function SignIn() {
       }
       navigate("/dashboard", { replace: true });
     } catch (err) {
-      const ax = err as { response?: { data?: { message?: string } }; message?: string };
-      setError(ax.response?.data?.message || ax.message || "Login failed");
+      const ax = err as { response?: { data?: { message?: string } }; code?: string; message?: string };
+      const msg =
+        ax.response?.data?.message ||
+        ax.message ||
+        (ax.code === "ECONNABORTED" ? "Login timed out — check internet / try again" : "Login failed");
+      setError(msg);
     } finally {
       setLoading(false);
     }

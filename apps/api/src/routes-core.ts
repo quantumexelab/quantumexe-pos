@@ -20,6 +20,30 @@ const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ---------- Auth / License / Setup ----------
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return;
+      done = true;
+      resolve(fallback);
+    }, ms);
+    promise
+      .then((v) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(v);
+      })
+      .catch(() => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(fallback);
+      });
+  });
+}
+
 router.post("/auth/login", async (req, res) => {
   const schema = z.object({
     username: z.string().min(1),
@@ -28,10 +52,90 @@ router.post("/auth/login", async (req, res) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(fail("Invalid credentials payload"));
 
+  const login = parsed.data.username.trim();
+  const cloudMs = process.env.ELECTRON === "1" ? 6000 : 12000;
+  const useLocalDb = process.env.USE_FIRESTORE !== "1";
+
+  // Desktop / SQLite: try local users first so login works offline and never hangs on Firestore
+  if (useLocalDb) {
+    try {
+      const localUser = await prisma.user.findFirst({
+        where: { OR: [{ username: login }, { contact: login }] },
+        include: { role: true, status: true },
+      });
+      if (localUser) {
+        const passwordOk = await bcrypt.compare(parsed.data.password, localUser.passwordHash);
+        if (passwordOk) {
+          const statusName = localUser.status?.name || "Active";
+          if (statusName !== "Active") return res.status(403).json(fail("User inactive", 403));
+          const localShopId =
+            (localUser as { shopId?: string | null }).shopId ||
+            (await prisma.setting.findUnique({ where: { key: "shop_id" } }))?.value ||
+            null;
+          let shop_status = "active";
+          let shopType: string | null = null;
+          let features: unknown = null;
+          try {
+            const { refreshLocalAccessFromRegistry } = await import("./master/shopRegistry.js");
+            const access = await withTimeout(
+              refreshLocalAccessFromRegistry(localShopId),
+              cloudMs,
+              { status: "active" } as { status: string }
+            );
+            shop_status = access.status || "active";
+          } catch {
+            shop_status = "active";
+          }
+          try {
+            const typeRow = await prisma.setting.findUnique({ where: { key: "shop_type" } });
+            shopType = typeRow?.value || null;
+            const featRow = await prisma.setting.findUnique({ where: { key: "features_json" } });
+            if (featRow?.value) features = JSON.parse(featRow.value);
+          } catch {
+            /* ignore */
+          }
+          const token = signToken({
+            ...localUser,
+            role: localUser.role?.name || "Admin",
+            contact: localUser.contact,
+            shopId: localShopId,
+          });
+          return res.json({
+            success: true,
+            message: "Login successful",
+            token,
+            user: {
+              id: localUser.id,
+              name: localUser.name,
+              username: (localUser as { username?: string | null }).username || localUser.contact,
+              contact: localUser.contact,
+              email: localUser.email,
+              role_id: localUser.roleId,
+              status_id: localUser.statusId,
+              role: localUser.role?.name || "Admin",
+              ststus: localUser.status?.name || "Active",
+              shop_status,
+              shopId: localShopId,
+              shopType,
+              features,
+              firebaseDedicated: false,
+            },
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("[auth] local login failed:", e instanceof Error ? e.message : e);
+    }
+  }
+
   // Master Admin (cloud registry) — same Sign in screen
   try {
     const { tryMasterLogin } = await import("./routes-master.js");
-    const master = await tryMasterLogin(parsed.data.username, parsed.data.password);
+    const master = await withTimeout(
+      tryMasterLogin(parsed.data.username, parsed.data.password),
+      cloudMs,
+      null
+    );
     if (master) return res.json(master);
   } catch (e) {
     console.warn("[auth] master login check failed:", e instanceof Error ? e.message : e);
@@ -43,10 +147,10 @@ router.post("/auth/login", async (req, res) => {
   );
   const { warmShopFirestore, shopHasFirebase } = await import("./master/shopFirebase.js");
 
-  const remoteShop = await findShopByPhone(parsed.data.username);
+  const remoteShop = await withTimeout(findShopByPhone(parsed.data.username), cloudMs, null);
   let shopId = remoteShop?.shopId || null;
   if (remoteShop && shopHasFirebase(remoteShop)) {
-    await warmShopFirestore(shopId);
+    await withTimeout(warmShopFirestore(shopId).then(() => true), cloudMs, false);
   } else if (tenancyEnabled() && !shopId) {
     shopId = DEMO_SHOP_ID;
   }
@@ -54,7 +158,6 @@ router.post("/auth/login", async (req, res) => {
   const { invalidateFsCache } = await import("./fsdb.js");
   invalidateFsCache();
 
-  const login = parsed.data.username.trim();
   const findUser = () =>
     prisma.user.findFirst({
       where: {
@@ -64,10 +167,18 @@ router.post("/auth/login", async (req, res) => {
     });
 
   // Dedicated shop DB first, then control/shared (pre-provision registration)
-  let user = await runWithShop(shopId, findUser, { useShopFirebase: true });
+  let user = await withTimeout(
+    runWithShop(shopId, findUser, { useShopFirebase: true }),
+    cloudMs,
+    null
+  );
   let usedDedicated = Boolean(user && remoteShop && shopHasFirebase(remoteShop));
   if (!user) {
-    user = await runWithShop(shopId, findUser, { useShopFirebase: false });
+    user = await withTimeout(
+      runWithShop(shopId, findUser, { useShopFirebase: false }),
+      cloudMs,
+      null
+    );
     usedDedicated = false;
   }
 
@@ -119,8 +230,12 @@ router.post("/auth/login", async (req, res) => {
         });
       }
     }
-    const access = await refreshLocalAccessFromRegistry(shopId);
-    shop_status = access.status;
+    const access = await withTimeout(
+      refreshLocalAccessFromRegistry(shopId),
+      cloudMs,
+      { status: "active" } as { status: string }
+    );
+    shop_status = access.status || "active";
   } catch {
     if (tenancyEnabled() && !shopId) shopId = DEMO_SHOP_ID;
     shop_status = "active";

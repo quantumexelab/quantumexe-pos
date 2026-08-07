@@ -86,12 +86,18 @@ const envCandidates = [
   path.join(root, "apps", "desktop", "desktop.env"),
   path.join(process.env.LOCALAPPDATA || "", "Programs", "QUANTUMEXE POS", "resources", "app-bundle", "desktop.env"),
 ];
-for (const cand of envCandidates) {
-  if (cand && fs.existsSync(cand)) {
-    fs.copyFileSync(cand, path.join(out, "desktop.env"));
-    console.log("Restored desktop.env from", cand);
-    break;
+// Only bake desktop.env into the installer when explicitly requested.
+// Default shop installs should stay local-SQLite-first (cloud creds can hang login).
+if (process.env.DESKTOP_INCLUDE_ENV === "1") {
+  for (const cand of envCandidates) {
+    if (cand && fs.existsSync(cand)) {
+      fs.copyFileSync(cand, path.join(out, "desktop.env"));
+      console.log("Restored desktop.env from", cand);
+      break;
+    }
   }
+} else {
+  console.log("Skipping desktop.env bake (set DESKTOP_INCLUDE_ENV=1 to include)");
 }
 
 console.log("Desktop resources ready:", out);
