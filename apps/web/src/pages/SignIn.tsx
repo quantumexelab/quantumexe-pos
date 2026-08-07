@@ -224,32 +224,41 @@ export default function SignIn() {
               </ul>
             </div>
 
-            {/* Single composite hero — soft-fade edges so PNG box corners don't show */}
-            <div className="relative h-full min-h-[360px] max-h-[min(72vh,560px)] flex items-end justify-center">
+            {/* Hero: restored girl + phone; hard-fade every edge so no box corners */}
+            <div className="relative h-full min-h-[360px] max-h-[min(72vh,560px)] flex items-end justify-center overflow-hidden">
               <div
-                className="relative h-full w-full flex items-end justify-center"
+                className="relative h-full w-full max-w-[420px] mx-auto"
                 style={{
                   WebkitMaskImage:
-                    "radial-gradient(ellipse 78% 82% at 50% 48%, #000 42%, transparent 78%)",
+                    "linear-gradient(to right, transparent 0%, #000 12%, #000 88%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 10%, #000 90%, transparent 100%)",
+                  WebkitMaskComposite: "source-in",
                   maskImage:
-                    "radial-gradient(ellipse 78% 82% at 50% 48%, #000 42%, transparent 78%)",
+                    "linear-gradient(to right, transparent 0%, #000 12%, #000 88%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 10%, #000 90%, transparent 100%)",
+                  maskComposite: "intersect",
                 }}
               >
                 <img
                   src="/signin-hero.png"
                   alt=""
-                  className="relative z-[1] h-full w-auto max-w-full object-contain object-bottom select-none pointer-events-none"
+                  className="absolute inset-0 z-[1] h-full w-full object-contain object-bottom select-none pointer-events-none"
+                  draggable={false}
+                />
+                <img
+                  src="/signin-phone.png"
+                  alt=""
+                  className="absolute z-[2] left-1/2 -translate-x-1/2 bottom-[2%] w-[34%] max-w-[130px] select-none pointer-events-none drop-shadow-[0_12px_28px_rgba(43,140,255,0.45)]"
+                  style={{
+                    WebkitMaskImage:
+                      "radial-gradient(ellipse 90% 90% at 50% 50%, #000 55%, transparent 85%)",
+                    maskImage:
+                      "radial-gradient(ellipse 90% 90% at 50% 50%, #000 55%, transparent 85%)",
+                  }}
                   draggable={false}
                 />
               </div>
-              {/* Extra soft edge blend into page black */}
-              <div
-                className="pointer-events-none absolute inset-0 z-[2]"
-                style={{
-                  background:
-                    "radial-gradient(ellipse 70% 75% at 50% 45%, transparent 48%, #000 88%)",
-                }}
-              />
+              {/* Corner killers — solid black fades on all 4 sides */}
+              <div className="pointer-events-none absolute inset-0 z-[3]" style={{ background: "linear-gradient(to right, #000 0%, transparent 14%, transparent 86%, #000 100%)" }} />
+              <div className="pointer-events-none absolute inset-0 z-[3]" style={{ background: "linear-gradient(to bottom, #000 0%, transparent 12%, transparent 88%, #000 100%)" }} />
             </div>
           </div>
 
