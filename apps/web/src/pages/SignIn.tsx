@@ -182,30 +182,28 @@ export default function SignIn() {
 
   return (
     <div className="relative h-[100dvh] max-h-[100dvh] overflow-hidden bg-black text-white auth-fade">
-      {/* Full-screen hero — framed toward subject (girl + phone + POS) */}
+      {/* Full-screen hero — show girl + phone + POS counter */}
       <img
         src={`/signin-hero.png?v=${APP_VERSION}`}
         alt=""
-        className="absolute inset-0 z-0 h-full w-full object-cover object-[48%_42%] select-none pointer-events-none scale-[1.02]"
+        className="absolute inset-0 z-0 h-full w-full object-cover object-[50%_75%] select-none pointer-events-none"
         draggable={false}
       />
 
-      {/* Mockup-style blue neon ring behind subject */}
+      {/* Soft blue glow only (no thick ring) */}
       <div
-        className="pointer-events-none absolute z-[1] left-[42%] top-[28%] -translate-x-1/2 -translate-y-1/2 w-[min(52vw,520px)] aspect-square rounded-full"
+        className="pointer-events-none absolute z-[1] left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 w-[min(55vw,560px)] aspect-square rounded-full"
         style={{
-          background:
-            "radial-gradient(circle, transparent 54%, rgba(43,140,255,0.35) 62%, rgba(43,140,255,0.55) 68%, transparent 74%)",
-          boxShadow: "0 0 80px 20px rgba(43,140,255,0.25)",
+          background: "radial-gradient(circle, rgba(43,140,255,0.22) 0%, rgba(43,140,255,0.08) 40%, transparent 68%)",
         }}
       />
 
-      {/* Soft vignette: keep center bright (girl), darken only UI strips */}
+      {/* Soft vignette: UI readable, center subject clear */}
       <div
         className="absolute inset-0 z-[2] pointer-events-none"
         style={{
           background:
-            "linear-gradient(90deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.35) 26%, transparent 42%, transparent 58%, rgba(0,0,0,0.55) 78%, rgba(0,0,0,0.88) 100%), linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 18%, transparent 78%, rgba(0,0,0,0.55) 100%)",
+            "linear-gradient(90deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.28) 24%, transparent 40%, transparent 60%, rgba(0,0,0,0.45) 80%, rgba(0,0,0,0.85) 100%), linear-gradient(180deg, rgba(0,0,0,0.3) 0%, transparent 16%, transparent 82%, rgba(0,0,0,0.4) 100%)",
         }}
       />
 
