@@ -401,7 +401,7 @@ export default function SignIn() {
           <img
             src={`/signin-hero.png?v=${APP_VERSION}`}
             alt=""
-            className="absolute inset-0 z-0 h-full w-full object-cover object-[62%_42%] select-none pointer-events-none scale-[1.08] origin-[55%_40%]"
+            className="absolute inset-0 z-0 h-full w-full object-cover object-[38%_42%] select-none pointer-events-none scale-[1.05] origin-center"
             draggable={false}
           />
           {/* Light left shade for copy; soft fade into login column */}
