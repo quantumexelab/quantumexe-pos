@@ -404,35 +404,6 @@ export default function SignIn() {
             className="absolute inset-0 z-0 h-full w-full object-cover object-[62%_42%] select-none pointer-events-none scale-[1.08] origin-[55%_40%]"
             draggable={false}
           />
-          {/* Soft neon ring behind head/shoulders (mockup glow) */}
-          <div
-            className="absolute z-[1] pointer-events-none rounded-full"
-            style={{
-              left: "58%",
-              top: "34%",
-              width: "min(46vw, 460px)",
-              height: "min(46vw, 460px)",
-              transform: "translate(-50%, -45%)",
-              background:
-                "radial-gradient(circle, rgba(43,140,255,0.22) 0%, rgba(43,140,255,0.1) 38%, transparent 62%)",
-              boxShadow:
-                "0 0 0 2px rgba(43,140,255,0.35), 0 0 48px 8px rgba(43,140,255,0.28), inset 0 0 60px rgba(43,140,255,0.12)",
-            }}
-          />
-          {/* Faint QE watermark like mockup */}
-          <div
-            className="absolute z-[1] pointer-events-none select-none font-black tracking-tighter text-white/[0.04]"
-            style={{
-              left: "48%",
-              top: "38%",
-              fontSize: "clamp(8rem, 22vw, 16rem)",
-              transform: "translate(-40%, -55%)",
-              lineHeight: 1,
-            }}
-            aria-hidden
-          >
-            QE
-          </div>
           {/* Light left shade for copy; soft fade into login column */}
           <div
             className="absolute inset-0 z-[2] pointer-events-none"
