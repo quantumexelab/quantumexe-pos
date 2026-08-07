@@ -8,6 +8,7 @@ import {
   Shield,
   Zap,
   BarChart3,
+  Globe,
 } from "lucide-react";
 import api, { auth } from "../api";
 import { BrandLogo, BRAND } from "../components/BrandLogo";
@@ -177,87 +178,90 @@ export default function SignIn() {
   ];
 
   const fieldClass =
-    "w-full h-12 rounded-xl bg-[#0b1220] border border-[#1e2a3a] text-white placeholder:text-slate-500 pl-11 pr-4 text-sm outline-none focus:border-sky-500/70 focus:ring-1 focus:ring-sky-500/40 transition";
+    "w-full h-12 rounded-xl bg-[#0c121c] border border-[#243044] text-white placeholder:text-slate-500 pl-11 pr-4 text-sm outline-none focus:border-[#2b8cff] focus:ring-1 focus:ring-[#2b8cff]/35 transition";
 
   return (
-    <div className="h-[100dvh] max-h-[100dvh] grid lg:grid-cols-2 overflow-hidden auth-fade bg-black text-white">
-      {/* —— Left: brand panel (matches design mockup) —— */}
+    <div className="h-[100dvh] max-h-[100dvh] grid lg:grid-cols-2 overflow-hidden auth-fade bg-[#05070b] text-white">
+      {/* —— Left brand panel (mockup layout) —— */}
       <aside className="hidden lg:flex relative flex-col min-h-0 overflow-hidden">
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse 55% 50% at 72% 42%, rgba(14,165,233,0.28), transparent 58%), radial-gradient(ellipse 40% 35% at 20% 70%, rgba(56,189,248,0.08), transparent 50%), #000000",
+              "radial-gradient(circle at 48% 38%, rgba(37,99,235,0.35), transparent 42%), radial-gradient(ellipse 70% 50% at 50% 100%, rgba(14,165,233,0.12), transparent 45%), #05070b",
           }}
         />
-        <div className="relative z-10 flex flex-col h-full px-10 xl:px-14 pt-10 pb-8">
+        {/* faint QE watermark */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04]">
+          <div className="text-[18rem] font-black tracking-tighter leading-none select-none">QE</div>
+        </div>
+
+        <div className="relative z-10 flex flex-col h-full px-10 xl:px-14 pt-9 pb-7">
           <BrandLogo variant="dark" size="md" showTagline />
 
-          <div className="auth-slide flex-1 grid grid-cols-[1fr_minmax(220px,46%)] gap-6 xl:gap-10 items-center min-h-0 py-8">
-            <div className="min-w-0">
-              <h1 className="text-[1.85rem] xl:text-[2.35rem] font-bold leading-[1.15] tracking-tight">
-                Welcome to{" "}
-                <span className="text-sky-400">{BRAND.name}</span> PVT.LTD.
-              </h1>
-              <p className="mt-4 text-slate-400 text-sm xl:text-[15px] leading-relaxed max-w-sm">
-                Advanced software solutions for a smarter tomorrow.
-              </p>
-              <ul className="mt-8 space-y-4">
-                {features.map((f) => (
-                  <li key={f.title} className="flex items-center gap-3.5">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/25">
-                      <f.icon size={18} />
-                    </span>
-                    <div>
-                      <div className="text-sm font-semibold text-white leading-none">{f.title}</div>
-                      <div className="text-xs text-slate-400 mt-1">{f.desc}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Hero + phone composite */}
-            <div className="relative h-full min-h-[320px] max-h-[min(58vh,520px)] flex items-end justify-center">
-              <div className="absolute left-1/2 top-[18%] -translate-x-1/2 w-[85%] h-[70%] rounded-full bg-sky-500/25 blur-[70px] pointer-events-none" />
+          <div className="auth-slide flex-1 flex flex-col justify-center min-h-0 py-4">
+            {/* Hero composite: neon ring + woman + phone */}
+            <div className="relative mx-auto w-full max-w-[420px] h-[min(46vh,420px)] mb-5">
+              <div className="absolute left-1/2 top-[8%] -translate-x-1/2 w-[78%] aspect-square rounded-full border-[3px] border-sky-400/70 shadow-[0_0_40px_rgba(56,189,248,0.55),inset_0_0_40px_rgba(56,189,248,0.15)] pointer-events-none" />
+              <div className="absolute left-1/2 top-[14%] -translate-x-1/2 w-[68%] aspect-square rounded-full bg-sky-500/20 blur-3xl pointer-events-none" />
               <img
                 src="/signin-hero.png"
                 alt=""
-                className="relative z-[1] h-[92%] w-auto max-w-none object-contain object-bottom drop-shadow-[0_20px_50px_rgba(0,0,0,0.65)] select-none pointer-events-none"
+                className="absolute inset-0 z-[1] m-auto h-[88%] w-auto object-contain object-bottom drop-shadow-[0_24px_48px_rgba(0,0,0,0.7)] select-none pointer-events-none"
                 draggable={false}
               />
               <img
                 src="/signin-phone.png"
                 alt=""
-                className="absolute z-[2] right-[2%] bottom-[4%] w-[38%] max-w-[150px] drop-shadow-[0_18px_40px_rgba(14,165,233,0.45)] select-none pointer-events-none"
+                className="absolute z-[2] left-1/2 -translate-x-1/2 bottom-0 w-[32%] max-w-[128px] drop-shadow-[0_16px_36px_rgba(37,99,235,0.55)] select-none pointer-events-none"
                 draggable={false}
               />
             </div>
+
+            <h1 className="text-[1.75rem] xl:text-[2.15rem] font-bold leading-[1.2] tracking-tight max-w-xl">
+              Welcome to <span className="text-[#3b9eff]">{BRAND.name}</span> point of sale system
+            </h1>
+            <p className="mt-3 text-slate-400 text-sm xl:text-[15px] max-w-md">
+              Advanced software solutions for a smarter tomorrow.
+            </p>
+
+            <ul className="mt-6 space-y-3.5">
+              {features.map((f) => (
+                <li key={f.title} className="flex items-center gap-3.5">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0e1a2e] text-[#3b9eff] border border-[#1e3a5f]">
+                    <f.icon size={18} />
+                  </span>
+                  <div>
+                    <div className="text-sm font-semibold text-white leading-none">{f.title}</div>
+                    <div className="text-xs text-slate-400 mt-1">{f.desc}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
 
-          <footer className="text-[11px] text-slate-500 space-y-1">
+          <footer className="space-y-1.5 text-[11px] text-slate-500">
             <a
               href={BRAND.siteUrl}
               target="_blank"
               rel="noreferrer"
-              className="text-sky-400 hover:text-sky-300 font-medium"
+              className="inline-flex items-center gap-2 text-[#3b9eff] hover:text-sky-300 font-medium"
             >
+              <Globe size={13} />
               www.{BRAND.site}
             </a>
-            <div>
-              © 2025 {BRAND.name} Pvt.Ltd. All rights reserved.
-            </div>
+            <div>© 2025 {BRAND.name} Pvt.Ltd. All rights reserved.</div>
           </footer>
         </div>
       </aside>
 
-      {/* —— Right: login card —— */}
+      {/* —— Right login card —— */}
       <div className="min-h-0 h-[100dvh] lg:h-auto overflow-y-auto overscroll-contain relative">
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse 80% 55% at 50% -10%, rgba(14,165,233,0.22), transparent 55%), #020617",
+              "radial-gradient(ellipse 90% 55% at 50% 0%, rgba(37,99,235,0.28), transparent 55%), #05070b",
           }}
         />
         <div className="relative z-10 min-h-full flex justify-center px-5 sm:px-8 py-10 sm:py-14 safe-pb">
@@ -266,17 +270,17 @@ export default function SignIn() {
               <BrandLogo variant="dark" size="md" showTagline />
             </div>
 
-            <div className="rounded-2xl border border-white/[0.08] bg-[#0a1018]/95 backdrop-blur-md px-6 sm:px-8 py-8 shadow-[0_0_80px_rgba(14,165,233,0.14)]">
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0a0f18]/95 backdrop-blur-md px-6 sm:px-8 py-8 shadow-[0_0_80px_rgba(37,99,235,0.18)]">
               {step === "login" ? (
                 <div className="text-center mb-8">
                   <div className="mx-auto mb-5 relative w-[68px] h-[68px]">
-                    <div className="absolute inset-0 rounded-full bg-sky-500/35 blur-2xl" />
-                    <div className="relative h-full w-full rounded-full bg-[#0d1520] border-2 border-sky-500/50 grid place-items-center text-sky-300 shadow-[0_0_24px_rgba(14,165,233,0.35)]">
+                    <div className="absolute inset-0 rounded-full bg-[#2b8cff]/40 blur-2xl" />
+                    <div className="relative h-full w-full rounded-full bg-[#0d1520] border-2 border-[#2b8cff]/60 grid place-items-center text-[#7ec8ff] shadow-[0_0_28px_rgba(43,140,255,0.4)]">
                       <User size={30} strokeWidth={1.6} />
                     </div>
                   </div>
                   <h2 className="text-[1.65rem] font-bold tracking-tight">
-                    Welcome <span className="text-sky-400">back!</span>
+                    Welcome <span className="text-[#3b9eff]">back!</span>
                   </h2>
                   <p className="mt-2 text-sm text-slate-400">Please log in to continue</p>
                 </div>
@@ -310,7 +314,7 @@ export default function SignIn() {
                     />
                   </div>
                   <button
-                    className="w-full h-12 rounded-xl font-bold text-white bg-[#0ea5e9] hover:bg-sky-400 transition disabled:opacity-60"
+                    className="w-full h-12 rounded-xl font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] transition disabled:opacity-60"
                     disabled={loading}
                   >
                     {loading ? t("signin.validating") : t("signin.next")}
@@ -352,7 +356,7 @@ export default function SignIn() {
                     </div>
                   ))}
                   <button
-                    className="w-full h-12 rounded-xl font-bold text-white bg-[#0ea5e9] hover:bg-sky-400 transition disabled:opacity-60 mt-2"
+                    className="w-full h-12 rounded-xl font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] transition disabled:opacity-60 mt-2"
                     disabled={loading}
                   >
                     {loading ? t("signin.registering") : t("signin.createAccount")}
@@ -424,13 +428,13 @@ export default function SignIn() {
                         type="checkbox"
                         checked={remember}
                         onChange={(e) => setRemember(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-600 bg-[#0b1220] text-sky-500 focus:ring-sky-500/40"
+                        className="h-4 w-4 rounded border-slate-600 bg-[#0c121c] text-[#2b8cff] focus:ring-[#2b8cff]/40"
                       />
                       Remember me
                     </label>
                     <button
                       type="button"
-                      className="text-sky-400 hover:text-sky-300 font-medium"
+                      className="text-[#3b9eff] hover:text-sky-300 font-medium"
                       onClick={() =>
                         notify.info("Contact your administrator to reset your password.")
                       }
@@ -441,19 +445,17 @@ export default function SignIn() {
 
                   <button
                     type="submit"
-                    className="w-full h-12 rounded-xl font-bold text-white bg-[#0ea5e9] hover:bg-sky-400 active:bg-sky-600 transition disabled:opacity-60 shadow-[0_10px_28px_rgba(14,165,233,0.4)]"
+                    className="w-full h-12 rounded-xl font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] active:bg-[#1a7aef] transition disabled:opacity-60 shadow-[0_10px_28px_rgba(43,140,255,0.45)]"
                     disabled={loading}
                   >
                     {loading ? t("signin.signingIn") : "Log in"}
                   </button>
 
-                  {/* No Google / social login — design without Continue with Google */}
-
                   <p className="text-center text-sm text-slate-400 pt-2">
                     Don&apos;t have an account?{" "}
                     <button
                       type="button"
-                      className="font-semibold text-sky-400 hover:text-sky-300"
+                      className="font-semibold text-[#3b9eff] hover:text-sky-300"
                       onClick={() => {
                         setError("");
                         setMsg("");
@@ -468,7 +470,7 @@ export default function SignIn() {
             </div>
 
             <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500">
-              <Shield size={14} className="text-sky-500" />
+              <Shield size={14} className="text-[#2b8cff]" />
               <span>Secure. Reliable. Scalable.</span>
               <span className="text-slate-600">· v{APP_VERSION}</span>
             </div>
