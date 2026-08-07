@@ -233,7 +233,7 @@ export default function SignIn() {
           <img
             src={`/signin-hero.png?v=${APP_VERSION}`}
             alt=""
-            className="absolute inset-0 z-0 h-full w-full object-cover object-[22%_52%] select-none pointer-events-none"
+            className="absolute inset-0 z-0 h-full w-full object-cover object-[8%_52%] select-none pointer-events-none"
             draggable={false}
           />
           {/* Fade into left black panel + darken for form readability */}
@@ -246,8 +246,8 @@ export default function SignIn() {
           />
 
           <div className="relative z-10 h-full min-h-0 overflow-y-auto overscroll-contain">
-            <div className="min-h-full flex justify-center lg:justify-end items-center px-5 sm:px-8 lg:pr-10 xl:pr-14 py-10 safe-pb">
-              <div className="w-full max-w-[400px] auth-slide">
+            <div className="min-h-full flex justify-center lg:justify-end items-center px-5 sm:px-8 lg:pr-28 xl:pr-36 py-10 safe-pb">
+              <div className="w-full max-w-[400px] auth-slide lg:-translate-x-4">
                 <div className="lg:hidden mb-8">
                   <BrandLogo variant="dark" size="md" showTagline />
                 </div>
