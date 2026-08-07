@@ -114,8 +114,14 @@ function startApi() {
     BACKUP_DIR: path.join(app.getPath("userData"), "backups"),
   };
 
-  const envFile = path.join(root, "desktop.env");
-  if (fs.existsSync(envFile)) {
+  // Prefer userData desktop.env (editable), then packaged app-bundle desktop.env
+  const envCandidates = [
+    path.join(app.getPath("userData"), "desktop.env"),
+    path.join(root, "desktop.env"),
+  ];
+  for (const envFile of envCandidates) {
+    if (!fs.existsSync(envFile)) continue;
+    appendApiLog(`[boot] loading env ${envFile}\n`);
     for (const line of fs.readFileSync(envFile, "utf8").split(/\r?\n/)) {
       const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
       if (!m) continue;
@@ -126,6 +132,7 @@ function startApi() {
       v = v.replace(/\\n/g, "\n");
       env[m[1]] = v;
     }
+    break;
   }
 
   const node = findNodeBinary(root);

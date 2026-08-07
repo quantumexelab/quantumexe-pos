@@ -86,18 +86,19 @@ const envCandidates = [
   path.join(root, "apps", "desktop", "desktop.env"),
   path.join(process.env.LOCALAPPDATA || "", "Programs", "QUANTUMEXE POS", "resources", "app-bundle", "desktop.env"),
 ];
-// Only bake desktop.env into the installer when explicitly requested.
-// Default shop installs should stay local-SQLite-first (cloud creds can hang login).
-if (process.env.DESKTOP_INCLUDE_ENV === "1") {
-  for (const cand of envCandidates) {
-    if (cand && fs.existsSync(cand)) {
-      fs.copyFileSync(cand, path.join(out, "desktop.env"));
-      console.log("Restored desktop.env from", cand);
-      break;
-    }
+// Bake control-plane Firebase creds so Master Admin / shop registry work offline-online.
+// Login stays local-first with cloud timeouts (see routes-core auth/login).
+let baked = false;
+for (const cand of envCandidates) {
+  if (cand && fs.existsSync(cand)) {
+    fs.copyFileSync(cand, path.join(out, "desktop.env"));
+    console.log("Restored desktop.env from", cand);
+    baked = true;
+    break;
   }
-} else {
-  console.log("Skipping desktop.env bake (set DESKTOP_INCLUDE_ENV=1 to include)");
+}
+if (!baked) {
+  console.log("No desktop.env found — Master Admin cloud registry will be unavailable until configured");
 }
 
 console.log("Desktop resources ready:", out);
