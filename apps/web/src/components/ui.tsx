@@ -1,5 +1,7 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
+import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { notify } from "../notify";
 
 export function PageHeader({
   title,
@@ -37,6 +39,54 @@ export function Empty({ text }: { text: string }) {
   return <div className="card text-sm text-gray-500">{text}</div>;
 }
 
-export function ErrorBox({ text }: { text: string }) {
-  return <div className="mb-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{text}</div>;
+export function ErrorBox({ text, toast = true }: { text: string; toast?: boolean }) {
+  const last = useRef("");
+  useEffect(() => {
+    if (!toast || !text || text === last.current) return;
+    last.current = text;
+    notify.error(text);
+  }, [text, toast]);
+
+  if (!text) return null;
+  return (
+    <div className="qx-inline-alert qx-inline-alert-error mb-3" role="alert">
+      <XCircle size={16} className="shrink-0 mt-0.5" />
+      <span>{text}</span>
+    </div>
+  );
 }
+
+export function WarningBox({ text, toast = true }: { text: string; toast?: boolean }) {
+  const last = useRef("");
+  useEffect(() => {
+    if (!toast || !text || text === last.current) return;
+    last.current = text;
+    notify.warning(text);
+  }, [text, toast]);
+
+  if (!text) return null;
+  return (
+    <div className="qx-inline-alert qx-inline-alert-warning mb-3" role="status">
+      <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+      <span>{text}</span>
+    </div>
+  );
+}
+
+export function SuccessBox({ text, toast = true }: { text: string; toast?: boolean }) {
+  const last = useRef("");
+  useEffect(() => {
+    if (!toast || !text || text === last.current) return;
+    last.current = text;
+    notify.success(text);
+  }, [text, toast]);
+
+  if (!text) return null;
+  return (
+    <div className="qx-inline-alert qx-inline-alert-success mb-3" role="status">
+      <CheckCircle2 size={16} className="shrink-0 mt-0.5" />
+      <span>{text}</span>
+    </div>
+  );
+}
+

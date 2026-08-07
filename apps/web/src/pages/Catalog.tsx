@@ -2,7 +2,8 @@ import { FormEvent, KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, use
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Search, ShoppingCart, X, RefreshCw, MoreVertical, Package, Eye, Printer, Pencil, Trash2, Tag, ArrowRightLeft, Banknote, Plus, ChevronRight, UserPlus, Phone, Mail } from "lucide-react";
 import api from "../api";
-import { ErrorBox, PageHeader, SubNav } from "../components/ui";
+import { ErrorBox, PageHeader, SubNav, SuccessBox } from "../components/ui";
+import { notify, useBusyOverlay } from "../notify";
 import { IncludeArchivesSearch } from "../components/IncludeArchivesSearch";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { printProductLabels } from "../print/label";
@@ -130,7 +131,7 @@ export function ProductList() {
   function printLabelsForProduct(p: any) {
     const variants = p.variants || [];
     if (!variants.length) {
-      alert("No variants / barcodes for this product");
+      notify.warning("No variants / barcodes for this product");
       return;
     }
     void printProductLabels(
@@ -190,7 +191,7 @@ export function ProductList() {
       p.unit?.name || "",
     ]);
     if (!body.length) {
-      alert("No products to export");
+      notify.warning("No products to export");
       return;
     }
     exportTable(type, "product-list", "QUANTUMEXE — Product List", header, body);
@@ -445,6 +446,7 @@ export function CreateProduct() {
   const [structureModalOpen, setStructureModalOpen] = useState(false);
   const [productStructure, setProductStructure] = useState<"simple" | "variable" | null>(null);
   const [codeLoading, setCodeLoading] = useState(false);
+  useBusyOverlay(saving || loadingProduct || importing, saving ? "Saving product…" : importing ? "Importing…" : "Loading…");
 
   async function loadLookups() {
     const [c, b, u, t] = await Promise.all([
@@ -587,7 +589,7 @@ export function CreateProduct() {
         existing.name !== trimmed
           ? `Warning: ${kind} "${trimmed}" already exists as "${existing.name}". Duplicate names are not allowed.`
           : `Warning: ${kind} "${existing.name}" already exists. Duplicate names are not allowed.`;
-      alert(msg);
+      notify.warning(msg);
       setError(msg);
       return;
     }
@@ -598,7 +600,7 @@ export function CreateProduct() {
       await loadLookups();
     } catch (err: any) {
       const msg = err?.response?.data?.message || err.message || `Failed to add ${kind}`;
-      alert(/already exists|duplicate/i.test(msg) ? `Warning: ${msg}` : msg);
+      notify.warning(/already exists|duplicate/i.test(msg) ? `Warning: ${msg}` : msg);
       setError(msg);
     }
   }
@@ -882,6 +884,7 @@ export function CreateProduct() {
           }
         }
       }
+      notify.success(isEdit ? "Product updated" : "Product created");
       navigate("/products/product-list");
     } catch (err) {
       const ax = err as { response?: { data?: { message?: string } }; message?: string };
@@ -941,9 +944,7 @@ export function CreateProduct() {
         <div className="text-sm text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">Loading product…</div>
       )}
       {error && <ErrorBox text={error} />}
-      {msg && (
-        <div className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">{msg}</div>
-      )}
+      {msg && <SuccessBox text={msg} />}
 
       <div className="bg-white border border-gray-200 rounded-xl p-3">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1816,7 +1817,7 @@ function NamedCatalogManage({
           : `Warning: ${kind} "${existing.name}" already exists. Duplicate names are not allowed.`;
       setError(msg);
       setOkMsg("");
-      alert(msg);
+      notify.warning(msg);
       return;
     }
     setError("");
@@ -1850,7 +1851,7 @@ function NamedCatalogManage({
       const msg = err?.response?.data?.message || err.message || "Failed to save";
       setError(msg);
       if (/already exists|duplicate/i.test(msg)) {
-        alert(`Warning: ${msg}`);
+        notify.warning(`Warning: ${msg}`);
       }
     }
   }
@@ -1878,7 +1879,7 @@ function NamedCatalogManage({
         err?.response?.data?.message || err.message || `Failed to delete ${entityLabel}`;
       setError(msg);
       // Popup so Store Keeper / Admin clearly sees why delete was blocked
-      alert(msg);
+      notify.warning(msg);
       void load();
     }
   }
@@ -2418,7 +2419,7 @@ export function StockList() {
       r.shopQty ?? 0,
     ]);
     if (!body.length) {
-      alert("No stock records to export");
+      notify.warning("No stock records to export");
       return;
     }
     exportTable(type, "stock-list", "QUANTUMEXE — Stock List", header, body);
@@ -2909,7 +2910,7 @@ export function OutOfStock() {
       r.quantity,
     ]);
     if (!body.length) {
-      alert("No out-of-stock records to export");
+      notify.warning("No out-of-stock records to export");
       return;
     }
     exportTable(type, "out-of-stock", "QUANTUMEXE — Out of Stock", header, body);
@@ -3194,7 +3195,7 @@ export function LowStock() {
       `${r.quantity} Units - Critical`,
     ]);
     if (!body.length) {
-      alert("No low-stock records to export");
+      notify.warning("No low-stock records to export");
       return;
     }
     exportTable(type, "low-stock", "QUANTUMEXE — Low Stock", header, body);
@@ -3779,7 +3780,7 @@ export function DamagedStock() {
       new Date(r.createdAt).toISOString(),
     ]);
     if (!body.length) {
-      alert("No damaged-stock records to export");
+      notify.warning("No damaged-stock records to export");
       return;
     }
     exportTable(type, "damaged-stock", "QUANTUMEXE — Damaged Stock", header, body);

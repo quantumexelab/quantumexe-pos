@@ -38,6 +38,7 @@ import { BrandLogo } from "./BrandLogo";
 import { APP_VERSION } from "../version";
 import { useI18n } from "../i18n";
 import { LanguageSelect } from "../i18n/LanguageSelect";
+import { notify, useBusyOverlay } from "../notify";
 import {
   modulesForShop,
   parseFeatures,
@@ -255,6 +256,7 @@ export default function AppLayout() {
   }
   const [sync, setSync] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
+  useBusyOverlay(syncing, "Syncing to cloud…");
   const [features, setFeatures] = useState<ShopFeatures | null>(() => readCachedFeatures());
   const [shopType, setShopType] = useState<string | null>(() => readCachedShopType());
 
@@ -373,8 +375,10 @@ export default function AppLayout() {
     try {
       await syncApi.push();
       await refreshSync();
+      notify.success("Cloud sync complete");
     } catch (e) {
       console.error(e);
+      notify.error(e instanceof Error ? e.message : "Cloud sync failed");
       await refreshSync();
     } finally {
       setSyncing(false);

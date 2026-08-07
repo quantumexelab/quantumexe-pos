@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import api, { auth } from "../api";
 import { ErrorBox } from "../components/ui";
+import { notify, useBusyOverlay } from "../notify";
 import { printReceipt } from "../print/receipt";
 import { loadPrintSettings } from "../print/settings";
 import { openCashDrawer, shouldOpenCashDrawerOnSale } from "../print/cashDrawer";
@@ -142,6 +143,7 @@ export default function POS() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  useBusyOverlay(loading, "Processing sale…");
   const [autoPrint, setAutoPrint] = useState(true);
   const [shopName, setShopName] = useState("QUANTUMEXE POS");
   const [currency, setCurrency] = useState("Rs.");
@@ -541,6 +543,7 @@ export default function POS() {
         await showPoleThankYou(Number(inv.total || total), currency).catch(() => undefined);
       }
       setMessage(`Invoice ${inv.invoiceNo} created — ${money(inv.total, currency)}`);
+      notify.success(`Invoice ${inv.invoiceNo} created`);
       clearCart();
       setCustomerId("");
       setCustomerQuery("");
