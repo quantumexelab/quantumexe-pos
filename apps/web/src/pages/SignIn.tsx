@@ -182,42 +182,42 @@ export default function SignIn() {
 
   return (
     <div className="relative h-[100dvh] max-h-[100dvh] overflow-hidden bg-black text-white auth-fade">
-      {/* Full-bleed girl background — no photo box */}
+      {/* Full-screen hero background */}
       <img
-        src="/signin-hero.png"
+        src={`/signin-hero.png?v=${APP_VERSION}`}
         alt=""
-        className="absolute inset-0 z-0 h-full w-full object-cover object-[center_20%] select-none pointer-events-none"
+        className="absolute inset-0 z-0 h-full w-full object-cover object-[58%_center] select-none pointer-events-none"
         draggable={false}
       />
-      {/* Readability gradients (vignette, not image crop) */}
+      {/* Readability gradients — no photo box, just soft darken */}
       <div
         className="absolute inset-0 z-[1] pointer-events-none"
         style={{
           background:
-            "linear-gradient(90deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 28%, rgba(0,0,0,0.15) 48%, rgba(0,0,0,0.35) 70%, rgba(0,0,0,0.75) 100%), linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 25%, transparent 70%, rgba(0,0,0,0.55) 100%)",
+            "linear-gradient(90deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.55) 32%, rgba(0,0,0,0.25) 55%, rgba(0,0,0,0.55) 78%, rgba(0,0,0,0.78) 100%), linear-gradient(180deg, rgba(0,0,0,0.45) 0%, transparent 22%, transparent 70%, rgba(0,0,0,0.65) 100%)",
         }}
       />
 
-      {/* Overlay UI */}
+      {/* Overlay content */}
       <div className="relative z-10 h-full grid lg:grid-cols-2 min-h-0">
         {/* Left copy */}
-        <aside className="hidden lg:flex flex-col justify-between px-10 xl:px-14 py-9 min-h-0">
+        <aside className="hidden lg:flex flex-col px-10 xl:px-14 pt-9 pb-7 min-h-0">
           <BrandLogo variant="dark" size="md" showTagline />
 
-          <div className="auth-slide max-w-md my-auto py-6">
+          <div className="auth-slide flex-1 flex flex-col justify-center max-w-md py-8">
             <p className="text-[#3b9eff] text-sm font-semibold mb-2">Welcome to</p>
-            <h1 className="text-[1.75rem] xl:text-[2.2rem] font-bold leading-[1.15] tracking-tight drop-shadow-lg">
+            <h1 className="text-[1.85rem] xl:text-[2.25rem] font-bold leading-[1.15] tracking-tight">
               <span className="text-[#3b9eff]">{BRAND.name}</span>
               <span className="text-white"> point of sale system</span>
             </h1>
-            <p className="mt-3 text-slate-300 text-sm xl:text-[15px] leading-relaxed drop-shadow">
+            <p className="mt-3 text-slate-300 text-sm xl:text-[15px] leading-relaxed">
               Advanced software solutions for a smarter tomorrow.
             </p>
             <ul className="mt-8 space-y-4">
               {features.map((f) => (
-                <li key={f.title} className="flex items-center gap-3">
+                <li key={f.title} className="flex items-center gap-3.5">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black/40 text-[#3b9eff] border border-white/10 backdrop-blur-sm">
-                    <f.icon size={17} />
+                    <f.icon size={18} />
                   </span>
                   <div>
                     <div className="text-sm font-semibold text-white leading-none">{f.title}</div>
@@ -228,12 +228,12 @@ export default function SignIn() {
             </ul>
           </div>
 
-          <footer className="space-y-1 text-[11px] text-slate-400">
+          <footer className="space-y-1.5 text-[11px] text-slate-400">
             <a
               href={BRAND.siteUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 text-white/85 hover:text-[#3b9eff] font-medium"
+              className="inline-flex items-center gap-2 text-white/90 hover:text-[#3b9eff] font-medium"
             >
               <Globe size={12} className="text-[#3b9eff]" />
               www.{BRAND.site}
@@ -243,7 +243,7 @@ export default function SignIn() {
         </aside>
 
         {/* Right login */}
-        <div className="min-h-0 h-[100dvh] lg:h-auto overflow-y-auto overscroll-contain">
+        <div className="min-h-0 overflow-y-auto overscroll-contain">
           <div className="min-h-full flex justify-center px-5 sm:px-8 py-10 safe-pb">
             <div className="w-full max-w-[400px] auth-slide my-auto">
               <div className="lg:hidden mb-8">
