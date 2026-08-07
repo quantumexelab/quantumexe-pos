@@ -392,48 +392,64 @@ export default function SignIn() {
   return (
     <div className="relative h-[100dvh] max-h-[100dvh] overflow-hidden bg-black text-white auth-fade">
       {/*
-        Mockup match: LEFT ≈58% = girl hero + text overlay | RIGHT ≈42% = solid dark login
-        Form never sits on top of the girl.
+        Match mockup: ~55/45 split — girl centered in LEFT with neon halo + copy;
+        login on solid RIGHT (never over girl). No Google.
       */}
-      <div className="relative z-10 h-full grid lg:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.95fr)] min-h-0">
-        {/* LEFT — hero fills this column; copy overlays on top */}
-        <section className="relative hidden lg:flex flex-col min-h-0 overflow-hidden">
+      <div className="relative z-10 h-full grid lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.95fr)] min-h-0">
+        {/* LEFT — hero + overlays */}
+        <section className="relative hidden lg:flex flex-col min-h-0 overflow-hidden bg-black">
           <img
             src={`/signin-hero.png?v=${APP_VERSION}`}
             alt=""
-            className="absolute inset-0 z-0 h-full w-full object-cover object-[52%_48%] select-none pointer-events-none"
+            className="absolute inset-0 z-0 h-full w-full object-cover object-[62%_42%] select-none pointer-events-none scale-[1.08] origin-[55%_40%]"
             draggable={false}
           />
-          {/* Soft neon halo behind subject (mockup ring — not a thick CSS border) */}
+          {/* Soft neon ring behind head/shoulders (mockup glow) */}
           <div
-            className="absolute z-[1] pointer-events-none"
+            className="absolute z-[1] pointer-events-none rounded-full"
             style={{
-              left: "42%",
-              top: "28%",
-              width: "min(52vw, 520px)",
-              height: "min(52vw, 520px)",
-              transform: "translate(-50%, -40%)",
+              left: "58%",
+              top: "34%",
+              width: "min(46vw, 460px)",
+              height: "min(46vw, 460px)",
+              transform: "translate(-50%, -45%)",
               background:
-                "radial-gradient(circle, rgba(43,140,255,0.28) 0%, rgba(43,140,255,0.12) 32%, rgba(43,140,255,0.04) 52%, transparent 68%)",
+                "radial-gradient(circle, rgba(43,140,255,0.22) 0%, rgba(43,140,255,0.1) 38%, transparent 62%)",
+              boxShadow:
+                "0 0 0 2px rgba(43,140,255,0.35), 0 0 48px 8px rgba(43,140,255,0.28), inset 0 0 60px rgba(43,140,255,0.12)",
             }}
           />
-          {/* Readable text on left + soft blend into login column */}
+          {/* Faint QE watermark like mockup */}
+          <div
+            className="absolute z-[1] pointer-events-none select-none font-black tracking-tighter text-white/[0.04]"
+            style={{
+              left: "48%",
+              top: "38%",
+              fontSize: "clamp(8rem, 22vw, 16rem)",
+              transform: "translate(-40%, -55%)",
+              lineHeight: 1,
+            }}
+            aria-hidden
+          >
+            QE
+          </div>
+          {/* Light left shade for copy; soft fade into login column */}
           <div
             className="absolute inset-0 z-[2] pointer-events-none"
             style={{
               background:
-                "linear-gradient(90deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.35) 28%, rgba(0,0,0,0.08) 48%, transparent 62%), linear-gradient(90deg, transparent 70%, rgba(0,0,0,0.55) 88%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 16%, transparent 82%, rgba(0,0,0,0.55) 100%)",
+                "linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 22%, transparent 42%), linear-gradient(90deg, transparent 78%, rgba(0,0,0,0.65) 94%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.25) 0%, transparent 14%, transparent 86%, rgba(0,0,0,0.45) 100%)",
             }}
           />
 
-          <div className="relative z-10 flex h-full flex-col px-8 xl:px-12 pt-8 pb-6">
+          <div className="relative z-10 flex h-full flex-col px-8 xl:px-11 pt-8 pb-6">
             <BrandLogo variant="dark" size="md" showTagline />
 
-            <div className="auth-slide flex-1 flex flex-col justify-center max-w-[380px] py-6">
+            <div className="auth-slide flex-1 flex flex-col justify-center max-w-[320px] xl:max-w-[340px] py-6">
               <p className="text-white/90 text-sm font-medium mb-2">Welcome to</p>
-              <h1 className="text-[1.9rem] xl:text-[2.35rem] font-bold leading-[1.12] tracking-tight">
+              <h1 className="text-[1.75rem] xl:text-[2.15rem] font-bold leading-[1.12] tracking-tight">
                 <span className="text-[#3b9eff] block">{BRAND.name}</span>
-                <span className="text-white text-[1.25rem] xl:text-[1.45rem] font-semibold">
+                <span className="text-white text-[1.15rem] xl:text-[1.35rem] font-semibold">
                   point of sale system
                 </span>
               </h1>
@@ -470,9 +486,9 @@ export default function SignIn() {
           </div>
         </section>
 
-        {/* RIGHT — solid dark login column (mockup); form centered, not over girl */}
-        <section className="relative min-h-0 bg-[#05070b] overflow-y-auto overscroll-contain">
-          <div className="min-h-full flex justify-center items-center px-5 sm:px-8 lg:px-10 xl:px-14 py-10 safe-pb">
+        {/* RIGHT — solid dark login column */}
+        <section className="relative min-h-0 bg-[#070a10] overflow-y-auto overscroll-contain">
+          <div className="min-h-full flex justify-center items-center px-5 sm:px-8 lg:px-8 xl:px-12 py-10 safe-pb">
             <div className="w-full max-w-[400px]">
               <div className="lg:hidden mb-8">
                 <BrandLogo variant="dark" size="md" showTagline />
