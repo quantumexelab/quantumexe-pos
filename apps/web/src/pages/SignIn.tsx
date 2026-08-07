@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 import api, { auth } from "../api";
 import { BrandLogo } from "../components/BrandLogo";
 import { APP_VERSION } from "../version";
@@ -26,6 +27,8 @@ export default function SignIn() {
   const [licenseKey, setLicenseKey] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRegPassword, setShowRegPassword] = useState(false);
   const [reg, setReg] = useState(emptyReg);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
@@ -185,13 +188,34 @@ export default function SignIn() {
               {regFields.map(([key, labelKey, type]) => (
                 <div key={key}>
                   <label className="text-xs font-semibold text-gray-600">{t(labelKey)}</label>
-                  <input
-                    className="input mt-1"
-                    type={type}
-                    required={!["address", "city", "nic", "businessRegNo"].includes(key)}
-                    value={reg[key]}
-                    onChange={(e) => setReg((r) => ({ ...r, [key]: e.target.value }))}
-                  />
+                  {key === "password" ? (
+                    <div className="relative mt-1">
+                      <input
+                        className="input pr-11"
+                        type={showRegPassword ? "text" : "password"}
+                        required
+                        value={reg.password}
+                        onChange={(e) => setReg((r) => ({ ...r, password: e.target.value }))}
+                        autoComplete="new-password"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                        aria-label={showRegPassword ? "Hide password" : "Show password"}
+                        onClick={() => setShowRegPassword((v) => !v)}
+                      >
+                        {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                  ) : (
+                    <input
+                      className="input mt-1"
+                      type={type}
+                      required={!["address", "city", "nic", "businessRegNo"].includes(key)}
+                      value={reg[key]}
+                      onChange={(e) => setReg((r) => ({ ...r, [key]: e.target.value }))}
+                    />
+                  )}
                 </div>
               ))}
               <button className="btn btn-primary w-full" disabled={loading}>
@@ -227,18 +251,32 @@ export default function SignIn() {
                 <label htmlFor="password" className="text-xs font-semibold text-gray-600">
                   {t("signin.password")}
                 </label>
-                <input
-                  id="password"
-                  type="password"
-                  className="input mt-1"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                />
+                <div className="relative mt-1">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    className="input pr-11"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    onClick={() => setShowPassword((v) => !v)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
               <button className="btn btn-primary w-full" disabled={loading}>
                 {loading ? t("signin.signingIn") : t("signin.signIn")}
               </button>
+              <p className="text-[11px] text-center text-gray-500">
+                Demo login: <span className="font-semibold text-gray-700">0771234567</span> /{" "}
+                <span className="font-semibold text-gray-700">123456</span>
+              </p>
               <button
                 type="button"
                 className="w-full text-sm font-semibold text-emerald-700 hover:underline"
