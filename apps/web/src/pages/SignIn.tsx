@@ -182,10 +182,25 @@ export default function SignIn() {
 
   return (
     <div className="relative h-[100dvh] max-h-[100dvh] overflow-hidden bg-black text-white auth-fade">
-      {/* Desktop: left solid brand panel | right photo + login (girl not under text) */}
-      <div className="relative z-10 h-full grid lg:grid-cols-[minmax(300px,38%)_minmax(0,62%)] min-h-0">
-        {/* Left — clean black, mockup copy */}
-        <aside className="hidden lg:flex flex-col bg-black px-9 xl:px-12 pt-8 pb-6 min-h-0 border-r border-white/[0.04]">
+      {/* Full-bleed hero — entire photo visible, no side panel cut */}
+      <img
+        src={`/signin-hero.png?v=${APP_VERSION}`}
+        alt=""
+        className="absolute inset-0 z-0 h-full w-full object-contain object-center select-none pointer-events-none"
+        draggable={false}
+      />
+      {/* Light edge darken only for text/form contrast — center subject stays clear */}
+      <div
+        className="absolute inset-0 z-[1] pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 18%, transparent 34%, transparent 66%, rgba(0,0,0,0.5) 84%, rgba(0,0,0,0.88) 100%)",
+        }}
+      />
+
+      <div className="relative z-10 h-full grid lg:grid-cols-2 min-h-0">
+        {/* Left copy over dark side of photo */}
+        <aside className="hidden lg:flex flex-col px-10 xl:px-14 pt-8 pb-6 min-h-0">
           <BrandLogo variant="dark" size="md" showTagline />
 
           <div className="auth-slide flex-1 flex flex-col justify-center max-w-[360px] py-6">
@@ -196,30 +211,30 @@ export default function SignIn() {
                 point of sale system
               </span>
             </h1>
-            <p className="mt-3 text-slate-400 text-sm leading-relaxed">
+            <p className="mt-3 text-slate-300 text-sm leading-relaxed">
               Advanced software solutions for a smarter tomorrow.
             </p>
             <ul className="mt-8 space-y-4">
               {features.map((f) => (
                 <li key={f.title} className="flex items-center gap-3.5">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0d1524] text-[#3b9eff] border border-[#1e3a5f]">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black/50 text-[#3b9eff] border border-[#2b8cff]/30 backdrop-blur-sm">
                     <f.icon size={18} />
                   </span>
                   <div>
                     <div className="text-sm font-semibold text-white leading-none">{f.title}</div>
-                    <div className="text-xs text-slate-400 mt-1">{f.desc}</div>
+                    <div className="text-xs text-slate-300 mt-1">{f.desc}</div>
                   </div>
                 </li>
               ))}
             </ul>
           </div>
 
-          <footer className="space-y-1.5 text-[11px] text-slate-500">
+          <footer className="space-y-1.5 text-[11px] text-slate-400">
             <a
               href={BRAND.siteUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 text-white/80 hover:text-[#3b9eff] font-medium"
+              className="inline-flex items-center gap-2 text-white/85 hover:text-[#3b9eff] font-medium"
             >
               <Globe size={12} className="text-[#3b9eff]" />
               www.{BRAND.site}
@@ -228,36 +243,20 @@ export default function SignIn() {
           </footer>
         </aside>
 
-        {/* Right — your girl image full panel + login card */}
-        <div className="relative min-h-0 overflow-hidden">
-          <img
-            src={`/signin-hero.png?v=${APP_VERSION}`}
-            alt=""
-            className="absolute inset-0 z-0 h-full w-full object-cover object-[42%_55%] select-none pointer-events-none"
-            draggable={false}
-          />
-          {/* Fade into left black panel + darken for form readability */}
-          <div
-            className="absolute inset-0 z-[1] pointer-events-none"
-            style={{
-              background:
-                "linear-gradient(90deg, #000 0%, rgba(0,0,0,0.55) 8%, transparent 28%, transparent 55%, rgba(0,0,0,0.45) 82%, rgba(0,0,0,0.75) 100%), linear-gradient(180deg, rgba(0,0,0,0.25) 0%, transparent 20%, transparent 75%, rgba(0,0,0,0.35) 100%)",
-            }}
-          />
+        {/* Right login */}
+        <div className="min-h-0 overflow-y-auto overscroll-contain">
+          <div className="min-h-full flex justify-center lg:justify-end items-center px-5 sm:px-8 lg:pr-10 xl:pr-14 py-10 safe-pb">
+            <div className="w-full max-w-[400px] auth-slide">
+              <div className="lg:hidden mb-8">
+                <BrandLogo variant="dark" size="md" showTagline />
+              </div>
 
-          <div className="relative z-10 h-full min-h-0 overflow-y-auto overscroll-contain">
-            <div className="min-h-full flex justify-center lg:justify-end items-center px-5 sm:px-8 lg:pr-10 xl:pr-14 py-10 safe-pb">
-              <div className="w-full max-w-[400px] auth-slide">
-                <div className="lg:hidden mb-8">
-                  <BrandLogo variant="dark" size="md" showTagline />
-                </div>
-
-                <div className="rounded-2xl border border-white/[0.1] bg-[#0c121c]/92 backdrop-blur-md px-6 sm:px-8 py-8 shadow-[0_0_90px_rgba(43,140,255,0.25)]">
+              <div className="rounded-2xl border border-white/[0.1] bg-[#0c121c]/92 backdrop-blur-md px-6 sm:px-8 py-8 shadow-[0_0_90px_rgba(43,140,255,0.25)]">
                 {step === "login" ? (
                   <div className="flex items-center gap-4 mb-7">
                     <div className="relative shrink-0 w-14 h-14">
                       <div className="absolute inset-0 rounded-full bg-[#2b8cff]/35 blur-xl" />
-                      <div className="relative h-full w-full rounded-full bg-[#0d1520] border-2 border-[#2b8cff]/55 grid place-items-center text-[#7ec8ff] shadow-[0_0_24px_rgba(43,140,255,0.35)]">
+                      <div className="relative h-full w-full rounded-full bg-[#0d1520] border-2 border-[#2b8cff]/55 grid place-items-center text-[#7ec8ff]">
                         <User size={26} strokeWidth={1.6} />
                       </div>
                     </div>
@@ -451,13 +450,12 @@ export default function SignIn() {
                     </p>
                   </form>
                 )}
-                </div>
+              </div>
 
-                <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-400">
-                  <Shield size={14} className="text-[#2b8cff]" />
-                  <span>Secure. Reliable. Scalable.</span>
-                  <span className="text-slate-500">· v{APP_VERSION}</span>
-                </div>
+              <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-400">
+                <Shield size={14} className="text-[#2b8cff]" />
+                <span>Secure. Reliable. Scalable.</span>
+                <span className="text-slate-500">· v{APP_VERSION}</span>
               </div>
             </div>
           </div>
