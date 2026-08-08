@@ -480,7 +480,7 @@ export default function SignIn() {
                 <Globe size={12} className="text-[#3b9eff]" />
                 www.{BRAND.site}
               </a>
-              <div>© 2025 {BRAND.name} Pvt.Ltd. All rights reserved.</div>
+              <div>© 2026 {BRAND.name} Pvt.Ltd. All rights reserved.</div>
             </footer>
           </div>
         </section>
@@ -512,7 +512,7 @@ export default function SignIn() {
                   <Globe size={12} className="text-[#3b9eff]" />
                   www.{BRAND.site}
                 </a>
-                <div>© 2025 {BRAND.name} Pvt.Ltd. All rights reserved.</div>
+                <div>© 2026 {BRAND.name} Pvt.Ltd. All rights reserved.</div>
               </footer>
             </div>
           </div>
