@@ -390,7 +390,7 @@ export default function SignIn() {
   );
 
   return (
-    <div className="relative min-h-[100dvh] bg-black text-white auth-fade lg:h-[100dvh] lg:max-h-[100dvh] lg:overflow-hidden">
+    <div className="relative min-h-[100dvh] bg-black text-white auth-fade overflow-x-hidden lg:h-[100dvh] lg:max-h-[100dvh] lg:overflow-hidden">
       {/*
         Desktop: ~55/45 split — hero left, login right.
         Mobile: stacked scroll — compact hero band, then login.
@@ -398,10 +398,18 @@ export default function SignIn() {
       <div className="relative z-10 min-h-[100dvh] grid lg:h-full lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.95fr)] lg:min-h-0">
         {/* LEFT — desktop hero; mobile shows compact band */}
         <section className="relative flex flex-col min-h-0 overflow-hidden bg-black lg:h-full">
+          {/* Mobile hero image — simple cover, no wide crop */}
           <img
             src={`/signin-hero.png?v=${APP_VERSION}`}
             alt=""
-            className="absolute top-0 z-0 h-full max-w-none select-none pointer-events-none object-cover object-[center_35%] lg:object-[center_42%]"
+            className="absolute inset-0 z-0 h-full w-full object-cover object-[58%_35%] select-none pointer-events-none lg:hidden"
+            draggable={false}
+          />
+          {/* Desktop hero image — framed toward login */}
+          <img
+            src={`/signin-hero.png?v=${APP_VERSION}`}
+            alt=""
+            className="absolute top-0 z-0 hidden h-full max-w-none select-none pointer-events-none object-cover object-[center_42%] lg:block"
             style={{
               width: "145%",
               left: "-8%",
@@ -413,14 +421,14 @@ export default function SignIn() {
             className="absolute inset-0 z-[2] pointer-events-none"
             style={{
               background:
-                "linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 22%, transparent 42%), linear-gradient(90deg, transparent 78%, rgba(0,0,0,0.65) 94%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 14%, transparent 70%, rgba(0,0,0,0.85) 100%)",
+                "linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 22%, transparent 42%), linear-gradient(90deg, transparent 78%, rgba(0,0,0,0.65) 94%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.45) 0%, transparent 18%, transparent 62%, rgba(0,0,0,0.9) 100%)",
             }}
           />
 
           {/* Mobile compact hero */}
-          <div className="relative z-10 flex flex-col px-5 pt-6 pb-8 min-h-[42vh] sm:min-h-[46vh] lg:hidden">
+          <div className="relative z-10 flex flex-col px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-6 min-h-[38vh] sm:min-h-[42vh] lg:hidden">
             <BrandLogo variant="dark" size="md" showTagline />
-            <div className="mt-auto max-w-[22rem] pb-2">
+            <div className="mt-auto max-w-[22rem] pb-1">
               <p className="text-white/90 text-sm font-medium mb-1.5">Welcome to</p>
               <h1 className="font-bold leading-[1.08] tracking-tight">
                 <span className="block text-[1.85rem] sm:text-[2.15rem]">
@@ -485,12 +493,11 @@ export default function SignIn() {
           </div>
         </section>
 
-        {/* RIGHT / mobile form — scrollable */}
         <section className="relative min-h-0 bg-[#070a10] lg:overflow-y-auto lg:overscroll-contain">
-          <div className="min-h-0 flex justify-center items-start lg:items-center px-4 sm:px-6 lg:px-8 xl:px-12 pt-2 pb-8 sm:py-8 lg:py-10 safe-pb lg:min-h-full">
+          <div className="min-h-0 flex justify-center items-start lg:items-center px-4 sm:px-6 lg:px-8 xl:px-12 pt-3 pb-[max(2rem,env(safe-area-inset-bottom))] sm:py-8 lg:py-10 lg:min-h-full">
             <div className="w-full max-w-[480px] lg:max-w-[520px]">
               {/* Mobile feature chips */}
-              <ul className="lg:hidden flex flex-wrap gap-2 mb-5">
+              <ul className="lg:hidden flex flex-wrap gap-2 mb-4">
                 {features.map((f) => (
                   <li
                     key={f.title}
@@ -502,7 +509,7 @@ export default function SignIn() {
                 ))}
               </ul>
               {formCard}
-              <footer className="lg:hidden mt-6 space-y-1.5 text-center text-[11px] text-slate-500">
+              <footer className="lg:hidden mt-6 space-y-1.5 text-center text-[11px] text-slate-500 pb-2">
                 <a
                   href={BRAND.siteUrl}
                   target="_blank"
