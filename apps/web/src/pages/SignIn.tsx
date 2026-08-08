@@ -419,28 +419,28 @@ export default function SignIn() {
           />
 
           <div className="relative z-10 flex h-full flex-col px-8 xl:px-11 pt-8 pb-6">
-            <BrandLogo variant="dark" size="md" showTagline />
+            <BrandLogo variant="dark" size="lg" showTagline />
 
-            <div className="auth-slide flex-1 flex flex-col justify-center max-w-[320px] xl:max-w-[340px] py-6">
-              <p className="text-white/90 text-sm font-medium mb-2">Welcome to</p>
-              <h1 className="text-[1.75rem] xl:text-[2.15rem] font-bold leading-[1.12] tracking-tight">
+            <div className="auth-slide flex-1 flex flex-col justify-center max-w-[380px] xl:max-w-[420px] py-6">
+              <p className="text-white/90 text-base xl:text-lg font-medium mb-2.5">Welcome to</p>
+              <h1 className="text-[2.35rem] xl:text-[3rem] font-bold leading-[1.08] tracking-tight">
                 <span className="text-[#3b9eff] block">{BRAND.name}</span>
-                <span className="text-white text-[1.15rem] xl:text-[1.35rem] font-semibold">
+                <span className="text-white text-[1.55rem] xl:text-[1.85rem] font-semibold">
                   point of sale system
                 </span>
               </h1>
-              <p className="mt-3 text-slate-300/90 text-sm leading-relaxed">
+              <p className="mt-4 text-slate-300 text-[0.95rem] xl:text-base leading-relaxed">
                 Advanced software solutions for a smarter tomorrow.
               </p>
-              <ul className="mt-8 space-y-4">
+              <ul className="mt-9 space-y-5">
                 {features.map((f) => (
-                  <li key={f.title} className="flex items-center gap-3.5">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0d1524]/85 text-[#3b9eff] border border-[#1e3a5f]">
-                      <f.icon size={18} />
+                  <li key={f.title} className="flex items-center gap-4">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0d1524]/85 text-[#3b9eff] border border-[#1e3a5f]">
+                      <f.icon size={20} />
                     </span>
                     <div>
-                      <div className="text-sm font-semibold text-white leading-none">{f.title}</div>
-                      <div className="text-xs text-slate-400 mt-1">{f.desc}</div>
+                      <div className="text-base font-semibold text-white leading-none">{f.title}</div>
+                      <div className="text-sm text-slate-400 mt-1.5">{f.desc}</div>
                     </div>
                   </li>
                 ))}
