@@ -192,10 +192,10 @@ export default function SignIn() {
               </div>
             </div>
             <div>
-              <h2 className="text-xl font-bold tracking-tight leading-tight">
+              <h2 className="text-2xl xl:text-[1.75rem] font-bold tracking-tight leading-tight">
                 Welcome <span className="text-[#3b9eff]">back!</span>
               </h2>
-              <p className="mt-1 text-sm text-slate-400">Please log in to continue</p>
+              <p className="mt-1.5 text-sm xl:text-base text-slate-400">Please log in to continue</p>
             </div>
           </div>
         ) : (
@@ -421,26 +421,29 @@ export default function SignIn() {
           <div className="relative z-10 flex h-full flex-col px-8 xl:px-11 pt-8 pb-6">
             <BrandLogo variant="dark" size="lg" showTagline />
 
-            <div className="auth-slide flex-1 flex flex-col justify-center max-w-[380px] xl:max-w-[420px] py-6">
-              <p className="text-white/90 text-base xl:text-lg font-medium mb-2.5">Welcome to</p>
-              <h1 className="text-[2.35rem] xl:text-[3rem] font-bold leading-[1.08] tracking-tight">
-                <span className="text-[#3b9eff] block">{BRAND.name}</span>
-                <span className="text-white text-[1.55rem] xl:text-[1.85rem] font-semibold">
+            <div className="auth-slide flex-1 flex flex-col justify-center max-w-[440px] xl:max-w-[520px] py-6">
+              <p className="text-white/90 text-lg xl:text-xl font-medium mb-3">Welcome to</p>
+              <h1 className="font-bold leading-[1.05] tracking-tight">
+                <span className="block text-[2.75rem] xl:text-[3.75rem]">
+                  <span className="text-white">QUANTUM</span>
+                  <span className="text-[#3b9eff]">EXE</span>
+                </span>
+                <span className="block text-white text-[1.85rem] xl:text-[2.35rem] font-semibold mt-1">
                   point of sale system
                 </span>
               </h1>
-              <p className="mt-4 text-slate-300 text-[0.95rem] xl:text-base leading-relaxed">
+              <p className="mt-5 text-slate-300 text-base xl:text-lg leading-relaxed max-w-[28rem]">
                 Advanced software solutions for a smarter tomorrow.
               </p>
-              <ul className="mt-9 space-y-5">
+              <ul className="mt-10 space-y-5">
                 {features.map((f) => (
                   <li key={f.title} className="flex items-center gap-4">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0d1524]/85 text-[#3b9eff] border border-[#1e3a5f]">
-                      <f.icon size={20} />
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#0d1524]/85 text-[#3b9eff] border border-[#1e3a5f]">
+                      <f.icon size={22} />
                     </span>
                     <div>
-                      <div className="text-base font-semibold text-white leading-none">{f.title}</div>
-                      <div className="text-sm text-slate-400 mt-1.5">{f.desc}</div>
+                      <div className="text-lg font-semibold text-white leading-none">{f.title}</div>
+                      <div className="text-sm xl:text-base text-slate-400 mt-1.5">{f.desc}</div>
                     </div>
                   </li>
                 ))}
