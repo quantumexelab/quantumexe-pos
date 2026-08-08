@@ -182,20 +182,20 @@ export default function SignIn() {
 
   const formCard = (
     <div className="w-full max-w-[400px] auth-slide">
-      <div className="rounded-2xl border border-white/[0.1] bg-[#0c121c]/95 backdrop-blur-md px-6 sm:px-8 py-8 shadow-[0_0_80px_rgba(43,140,255,0.22)]">
+      <div className="rounded-2xl border border-white/[0.1] bg-[#0c121c]/95 backdrop-blur-md px-5 sm:px-8 py-7 sm:py-8 shadow-[0_0_80px_rgba(43,140,255,0.22)]">
         {step === "login" ? (
-          <div className="flex items-center gap-4 mb-7">
-            <div className="relative shrink-0 w-14 h-14">
+          <div className="flex items-center gap-3 sm:gap-4 mb-6 sm:mb-7">
+            <div className="relative shrink-0 w-12 h-12 sm:w-14 sm:h-14">
               <div className="absolute inset-0 rounded-full bg-[#2b8cff]/35 blur-xl" />
               <div className="relative h-full w-full rounded-full bg-[#0d1520] border-2 border-[#2b8cff]/55 grid place-items-center text-[#7ec8ff] shadow-[0_0_24px_rgba(43,140,255,0.35)]">
-                <User size={26} strokeWidth={1.6} />
+                <User size={24} strokeWidth={1.6} className="sm:w-[26px] sm:h-[26px]" />
               </div>
             </div>
             <div>
-              <h2 className="text-2xl xl:text-[1.75rem] font-bold tracking-tight leading-tight">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight leading-tight">
                 Welcome <span className="text-[#3b9eff]">back!</span>
               </h2>
-              <p className="mt-1.5 text-sm xl:text-base text-slate-400">Please log in to continue</p>
+              <p className="mt-1 text-sm text-slate-400">Please log in to continue</p>
             </div>
           </div>
         ) : (
@@ -390,35 +390,55 @@ export default function SignIn() {
   );
 
   return (
-    <div className="relative h-[100dvh] max-h-[100dvh] overflow-hidden bg-black text-white auth-fade">
+    <div className="relative min-h-[100dvh] bg-black text-white auth-fade lg:h-[100dvh] lg:max-h-[100dvh] lg:overflow-hidden">
       {/*
-        Match mockup: ~55/45 split — girl centered in LEFT with neon halo + copy;
-        login on solid RIGHT (never over girl). No Google.
+        Desktop: ~55/45 split — hero left, login right.
+        Mobile: stacked scroll — compact hero band, then login.
       */}
-      <div className="relative z-10 h-full grid lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.95fr)] min-h-0">
-        {/* LEFT — hero + overlays */}
-        <section className="relative hidden lg:flex flex-col min-h-0 overflow-hidden bg-black">
+      <div className="relative z-10 min-h-[100dvh] grid lg:h-full lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.95fr)] lg:min-h-0">
+        {/* LEFT — desktop hero; mobile shows compact band */}
+        <section className="relative flex flex-col min-h-0 overflow-hidden bg-black lg:h-full">
           <img
             src={`/signin-hero.png?v=${APP_VERSION}`}
             alt=""
-            className="absolute top-0 z-0 h-full max-w-none select-none pointer-events-none object-cover object-[center_42%]"
+            className="absolute top-0 z-0 h-full max-w-none select-none pointer-events-none object-cover object-[center_35%] lg:object-[center_42%]"
             style={{
               width: "145%",
               left: "-8%",
-              transform: "translateX(14%)",
+              transform: "translateX(8%)",
             }}
             draggable={false}
           />
-          {/* Light left shade for copy; soft fade into login column */}
           <div
             className="absolute inset-0 z-[2] pointer-events-none"
             style={{
               background:
-                "linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 22%, transparent 42%), linear-gradient(90deg, transparent 78%, rgba(0,0,0,0.65) 94%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.25) 0%, transparent 14%, transparent 86%, rgba(0,0,0,0.45) 100%)",
+                "linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 22%, transparent 42%), linear-gradient(90deg, transparent 78%, rgba(0,0,0,0.65) 94%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 14%, transparent 70%, rgba(0,0,0,0.85) 100%)",
             }}
           />
 
-          <div className="relative z-10 flex h-full flex-col px-8 xl:px-11 pt-8 pb-6">
+          {/* Mobile compact hero */}
+          <div className="relative z-10 flex flex-col px-5 pt-6 pb-8 min-h-[42vh] sm:min-h-[46vh] lg:hidden">
+            <BrandLogo variant="dark" size="md" showTagline />
+            <div className="mt-auto max-w-[22rem] pb-2">
+              <p className="text-white/90 text-sm font-medium mb-1.5">Welcome to</p>
+              <h1 className="font-bold leading-[1.08] tracking-tight">
+                <span className="block text-[1.85rem] sm:text-[2.15rem]">
+                  <span className="text-white">QUANTUM</span>
+                  <span className="text-[#3b9eff]">EXE</span>
+                </span>
+                <span className="block text-white text-lg sm:text-xl font-semibold mt-0.5">
+                  point of sale system
+                </span>
+              </h1>
+              <p className="mt-2.5 text-slate-300 text-sm leading-relaxed">
+                Advanced software solutions for a smarter tomorrow.
+              </p>
+            </div>
+          </div>
+
+          {/* Desktop full hero copy */}
+          <div className="relative z-10 hidden lg:flex h-full flex-col px-8 xl:px-11 pt-8 pb-6">
             <BrandLogo variant="dark" size="lg" showTagline />
 
             <div className="auth-slide flex-1 flex flex-col justify-center max-w-[440px] xl:max-w-[520px] py-6">
@@ -465,14 +485,35 @@ export default function SignIn() {
           </div>
         </section>
 
-        {/* RIGHT — solid dark login column */}
-        <section className="relative min-h-0 bg-[#070a10] overflow-y-auto overscroll-contain">
-          <div className="min-h-full flex justify-center items-center px-5 sm:px-8 lg:px-8 xl:px-12 py-10 safe-pb">
+        {/* RIGHT / mobile form — scrollable */}
+        <section className="relative min-h-0 bg-[#070a10] lg:overflow-y-auto lg:overscroll-contain">
+          <div className="min-h-0 flex justify-center items-start lg:items-center px-4 sm:px-6 lg:px-8 xl:px-12 pt-2 pb-8 sm:py-8 lg:py-10 safe-pb lg:min-h-full">
             <div className="w-full max-w-[400px]">
-              <div className="lg:hidden mb-8">
-                <BrandLogo variant="dark" size="md" showTagline />
-              </div>
+              {/* Mobile feature chips */}
+              <ul className="lg:hidden flex flex-wrap gap-2 mb-5">
+                {features.map((f) => (
+                  <li
+                    key={f.title}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#1e3a5f] bg-[#0d1524]/90 px-3 py-1.5 text-xs text-slate-300"
+                  >
+                    <f.icon size={12} className="text-[#3b9eff]" />
+                    {f.title}
+                  </li>
+                ))}
+              </ul>
               {formCard}
+              <footer className="lg:hidden mt-6 space-y-1.5 text-center text-[11px] text-slate-500">
+                <a
+                  href={BRAND.siteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 text-white/80 hover:text-[#3b9eff] font-medium"
+                >
+                  <Globe size={12} className="text-[#3b9eff]" />
+                  www.{BRAND.site}
+                </a>
+                <div>© 2025 {BRAND.name} Pvt.Ltd. All rights reserved.</div>
+              </footer>
             </div>
           </div>
         </section>
