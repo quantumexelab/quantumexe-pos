@@ -178,24 +178,24 @@ export default function SignIn() {
   ];
 
   const fieldClass =
-    "w-full h-[52px] rounded-xl bg-[#101826]/90 border border-[#2a3648] text-white placeholder:text-slate-500 pl-11 pr-4 text-base outline-none focus:border-[#2b8cff] focus:ring-1 focus:ring-[#2b8cff]/40 transition";
+    "w-full h-[56px] rounded-xl bg-[#101826]/90 border border-[#2a3648] text-white placeholder:text-slate-500 pl-12 pr-4 text-base sm:text-[1.05rem] outline-none focus:border-[#2b8cff] focus:ring-1 focus:ring-[#2b8cff]/40 transition";
 
   const formCard = (
-    <div className="w-full max-w-[400px] auth-slide">
-      <div className="rounded-2xl border border-white/[0.1] bg-[#0c121c]/95 backdrop-blur-md px-5 sm:px-8 py-7 sm:py-8 shadow-[0_0_80px_rgba(43,140,255,0.22)]">
+    <div className="w-full max-w-[480px] lg:max-w-[520px] auth-slide">
+      <div className="rounded-2xl border border-white/[0.1] bg-[#0c121c]/95 backdrop-blur-md px-6 sm:px-9 lg:px-10 py-8 sm:py-10 shadow-[0_0_80px_rgba(43,140,255,0.22)]">
         {step === "login" ? (
-          <div className="flex items-center gap-3 sm:gap-4 mb-6 sm:mb-7">
-            <div className="relative shrink-0 w-12 h-12 sm:w-14 sm:h-14">
+          <div className="flex items-center gap-4 sm:gap-5 mb-8">
+            <div className="relative shrink-0 w-14 h-14 sm:w-16 sm:h-16">
               <div className="absolute inset-0 rounded-full bg-[#2b8cff]/35 blur-xl" />
               <div className="relative h-full w-full rounded-full bg-[#0d1520] border-2 border-[#2b8cff]/55 grid place-items-center text-[#7ec8ff] shadow-[0_0_24px_rgba(43,140,255,0.35)]">
-                <User size={24} strokeWidth={1.6} className="sm:w-[26px] sm:h-[26px]" />
+                <User size={28} strokeWidth={1.6} />
               </div>
             </div>
             <div>
-              <h2 className="text-2xl sm:text-[1.85rem] font-bold tracking-tight leading-tight">
+              <h2 className="text-[1.65rem] sm:text-[1.85rem] lg:text-3xl font-bold tracking-tight leading-tight">
                 Welcome <span className="text-[#3b9eff]">back!</span>
               </h2>
-              <p className="mt-1 text-base text-slate-400">Please log in to continue</p>
+              <p className="mt-1.5 text-base sm:text-lg text-slate-400">Please log in to continue</p>
             </div>
           </div>
         ) : (
@@ -228,7 +228,7 @@ export default function SignIn() {
               />
             </div>
             <button
-              className="w-full h-12 rounded-xl font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] transition disabled:opacity-60"
+              className="w-full h-14 rounded-xl text-lg font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] transition disabled:opacity-60"
               disabled={loading}
             >
               {loading ? t("signin.validating") : t("signin.next")}
@@ -270,7 +270,7 @@ export default function SignIn() {
               </div>
             ))}
             <button
-              className="w-full h-12 rounded-xl font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] transition disabled:opacity-60 mt-2"
+              className="w-full h-14 rounded-xl text-lg font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] transition disabled:opacity-60 mt-2"
               disabled={loading}
             >
               {loading ? t("signin.registering") : t("signin.createAccount")}
@@ -287,15 +287,15 @@ export default function SignIn() {
             </button>
           </form>
         ) : (
-          <form onSubmit={submitLogin} className="space-y-4">
+          <form onSubmit={submitLogin} className="space-y-5">
             <div>
-              <label htmlFor="username" className="text-sm font-semibold text-slate-300">
+              <label htmlFor="username" className="text-base font-semibold text-slate-300">
                 Username or Email
               </label>
-              <div className="relative mt-1.5">
+              <div className="relative mt-2">
                 <User
-                  size={16}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#3b9eff] pointer-events-none"
+                  size={18}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3b9eff] pointer-events-none"
                 />
                 <input
                   id="username"
@@ -308,18 +308,18 @@ export default function SignIn() {
               </div>
             </div>
             <div>
-              <label htmlFor="password" className="text-sm font-semibold text-slate-300">
+              <label htmlFor="password" className="text-base font-semibold text-slate-300">
                 Password
               </label>
-              <div className="relative mt-1.5">
+              <div className="relative mt-2">
                 <Lock
-                  size={16}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#3b9eff] pointer-events-none"
+                  size={18}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3b9eff] pointer-events-none"
                 />
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  className={`${fieldClass} pr-11`}
+                  className={`${fieldClass} pr-12`}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
@@ -327,22 +327,22 @@ export default function SignIn() {
                 />
                 <button
                   type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-slate-400 hover:text-white"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 rounded-md text-slate-400 hover:text-white"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                   onClick={() => setShowPassword((v) => !v)}
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-sm">
-              <label className="inline-flex items-center gap-2 text-slate-400 cursor-pointer select-none">
+            <div className="flex items-center justify-between text-base">
+              <label className="inline-flex items-center gap-2.5 text-slate-400 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-600 bg-[#101826] text-[#2b8cff] focus:ring-[#2b8cff]/40"
+                  className="h-5 w-5 rounded border-slate-600 bg-[#101826] text-[#2b8cff] focus:ring-[#2b8cff]/40"
                 />
                 Remember me
               </label>
@@ -357,13 +357,13 @@ export default function SignIn() {
 
             <button
               type="submit"
-              className="w-full h-12 rounded-xl font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] transition disabled:opacity-60 shadow-[0_10px_28px_rgba(43,140,255,0.4)]"
+              className="w-full h-14 rounded-xl text-lg font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] transition disabled:opacity-60 shadow-[0_10px_28px_rgba(43,140,255,0.4)]"
               disabled={loading}
             >
               {loading ? t("signin.signingIn") : "Log in"}
             </button>
 
-            <p className="text-center text-sm text-slate-400 pt-1">
+            <p className="text-center text-base text-slate-400 pt-1">
               Don&apos;t have an account?{" "}
               <button
                 type="button"
@@ -488,7 +488,7 @@ export default function SignIn() {
         {/* RIGHT / mobile form — scrollable */}
         <section className="relative min-h-0 bg-[#070a10] lg:overflow-y-auto lg:overscroll-contain">
           <div className="min-h-0 flex justify-center items-start lg:items-center px-4 sm:px-6 lg:px-8 xl:px-12 pt-2 pb-8 sm:py-8 lg:py-10 safe-pb lg:min-h-full">
-            <div className="w-full max-w-[400px]">
+            <div className="w-full max-w-[480px] lg:max-w-[520px]">
               {/* Mobile feature chips */}
               <ul className="lg:hidden flex flex-wrap gap-2 mb-5">
                 {features.map((f) => (
