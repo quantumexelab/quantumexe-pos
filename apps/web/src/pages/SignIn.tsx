@@ -405,7 +405,7 @@ export default function SignIn() {
             style={{
               width: "145%",
               left: "-8%",
-              transform: "translateX(8%)",
+              transform: "translateX(13%)",
             }}
             draggable={false}
           />
