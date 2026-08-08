@@ -8,7 +8,7 @@ type BrandLogoProps = {
 const sizes = {
   sm: { main: "text-lg", tag: "text-[8px] tracking-[0.28em]" },
   md: { main: "text-xl", tag: "text-[9px] tracking-[0.32em]" },
-  lg: { main: "text-5xl", tag: "text-sm tracking-[0.42em]" },
+  lg: { main: "text-6xl", tag: "text-sm tracking-[0.42em]" },
 };
 
 /** QUANTUMEXE Technologies wordmark */

@@ -178,7 +178,7 @@ export default function SignIn() {
   ];
 
   const fieldClass =
-    "w-full h-12 rounded-xl bg-[#101826]/90 border border-[#2a3648] text-white placeholder:text-slate-500 pl-11 pr-4 text-sm outline-none focus:border-[#2b8cff] focus:ring-1 focus:ring-[#2b8cff]/40 transition";
+    "w-full h-[52px] rounded-xl bg-[#101826]/90 border border-[#2a3648] text-white placeholder:text-slate-500 pl-11 pr-4 text-base outline-none focus:border-[#2b8cff] focus:ring-1 focus:ring-[#2b8cff]/40 transition";
 
   const formCard = (
     <div className="w-full max-w-[400px] auth-slide">
@@ -192,10 +192,10 @@ export default function SignIn() {
               </div>
             </div>
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight leading-tight">
+              <h2 className="text-2xl sm:text-[1.85rem] font-bold tracking-tight leading-tight">
                 Welcome <span className="text-[#3b9eff]">back!</span>
               </h2>
-              <p className="mt-1 text-sm text-slate-400">Please log in to continue</p>
+              <p className="mt-1 text-base text-slate-400">Please log in to continue</p>
             </div>
           </div>
         ) : (
@@ -219,7 +219,7 @@ export default function SignIn() {
         {step === "license" ? (
           <form onSubmit={submitLicense} className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-300">License key</label>
+              <label className="text-sm font-semibold text-slate-300">License key</label>
               <input
                 className={`${fieldClass} pl-4 mt-1.5`}
                 placeholder="QX-xxxx-xxxx-xxxx"
@@ -238,7 +238,7 @@ export default function SignIn() {
           <form onSubmit={submitRegister} className="space-y-3">
             {regFields.map(([key, labelKey, type]) => (
               <div key={key}>
-                <label className="text-xs font-semibold text-slate-300">{t(labelKey)}</label>
+                <label className="text-sm font-semibold text-slate-300">{t(labelKey)}</label>
                 {key === "password" ? (
                   <div className="relative mt-1.5">
                     <input
@@ -289,7 +289,7 @@ export default function SignIn() {
         ) : (
           <form onSubmit={submitLogin} className="space-y-4">
             <div>
-              <label htmlFor="username" className="text-xs font-semibold text-slate-300">
+              <label htmlFor="username" className="text-sm font-semibold text-slate-300">
                 Username or Email
               </label>
               <div className="relative mt-1.5">
@@ -308,7 +308,7 @@ export default function SignIn() {
               </div>
             </div>
             <div>
-              <label htmlFor="password" className="text-xs font-semibold text-slate-300">
+              <label htmlFor="password" className="text-sm font-semibold text-slate-300">
                 Password
               </label>
               <div className="relative mt-1.5">
@@ -442,28 +442,28 @@ export default function SignIn() {
             <BrandLogo variant="dark" size="lg" showTagline />
 
             <div className="auth-slide flex-1 flex flex-col justify-center max-w-[440px] xl:max-w-[520px] py-6">
-              <p className="text-white/90 text-lg xl:text-xl font-medium mb-3">Welcome to</p>
-              <h1 className="font-bold leading-[1.05] tracking-tight">
-                <span className="block text-[2.75rem] xl:text-[3.75rem]">
+              <p className="text-white/90 text-xl xl:text-2xl font-medium mb-3">Welcome to</p>
+              <h1 className="font-bold leading-[1.02] tracking-tight">
+                <span className="block text-[3.25rem] xl:text-[4.5rem]">
                   <span className="text-white">QUANTUM</span>
                   <span className="text-[#3b9eff]">EXE</span>
                 </span>
-                <span className="block text-white text-[1.85rem] xl:text-[2.35rem] font-semibold mt-1">
+                <span className="block text-white text-[2.15rem] xl:text-[2.75rem] font-semibold mt-1.5">
                   point of sale system
                 </span>
               </h1>
-              <p className="mt-5 text-slate-300 text-base xl:text-lg leading-relaxed max-w-[28rem]">
+              <p className="mt-5 text-slate-300 text-lg xl:text-xl leading-relaxed max-w-[30rem]">
                 Advanced software solutions for a smarter tomorrow.
               </p>
               <ul className="mt-10 space-y-5">
                 {features.map((f) => (
                   <li key={f.title} className="flex items-center gap-4">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#0d1524]/85 text-[#3b9eff] border border-[#1e3a5f]">
-                      <f.icon size={22} />
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[#0d1524]/85 text-[#3b9eff] border border-[#1e3a5f]">
+                      <f.icon size={24} />
                     </span>
                     <div>
-                      <div className="text-lg font-semibold text-white leading-none">{f.title}</div>
-                      <div className="text-sm xl:text-base text-slate-400 mt-1.5">{f.desc}</div>
+                      <div className="text-xl font-semibold text-white leading-none">{f.title}</div>
+                      <div className="text-base xl:text-lg text-slate-400 mt-2">{f.desc}</div>
                     </div>
                   </li>
                 ))}
