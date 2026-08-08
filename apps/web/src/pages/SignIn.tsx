@@ -178,24 +178,24 @@ export default function SignIn() {
   ];
 
   const fieldClass =
-    "w-full h-[56px] rounded-xl bg-[#101826]/90 border border-[#2a3648] text-white placeholder:text-slate-500 pl-12 pr-4 text-base sm:text-[1.05rem] outline-none focus:border-[#2b8cff] focus:ring-1 focus:ring-[#2b8cff]/40 transition";
+    "w-full h-12 sm:h-[56px] rounded-xl bg-[#101826]/90 border border-[#2a3648] text-white placeholder:text-slate-500 pl-11 sm:pl-12 pr-4 text-base outline-none focus:border-[#2b8cff] focus:ring-1 focus:ring-[#2b8cff]/40 transition";
 
   const formCard = (
     <div className="w-full max-w-[480px] lg:max-w-[520px] auth-slide">
-      <div className="rounded-2xl border border-white/[0.1] bg-[#0c121c]/95 backdrop-blur-md px-6 sm:px-9 lg:px-10 py-8 sm:py-10 shadow-[0_0_80px_rgba(43,140,255,0.22)]">
+      <div className="rounded-2xl border border-white/[0.1] bg-[#0c121c]/95 backdrop-blur-md px-5 py-6 sm:px-9 sm:py-10 lg:px-10 shadow-[0_0_80px_rgba(43,140,255,0.22)]">
         {step === "login" ? (
-          <div className="flex items-center gap-4 sm:gap-5 mb-8">
-            <div className="relative shrink-0 w-14 h-14 sm:w-16 sm:h-16">
+          <div className="flex items-center gap-3 sm:gap-5 mb-5 sm:mb-8">
+            <div className="relative shrink-0 w-12 h-12 sm:w-16 sm:h-16">
               <div className="absolute inset-0 rounded-full bg-[#2b8cff]/35 blur-xl" />
               <div className="relative h-full w-full rounded-full bg-[#0d1520] border-2 border-[#2b8cff]/55 grid place-items-center text-[#7ec8ff] shadow-[0_0_24px_rgba(43,140,255,0.35)]">
-                <User size={28} strokeWidth={1.6} />
+                <User size={24} strokeWidth={1.6} />
               </div>
             </div>
             <div>
-              <h2 className="text-[1.65rem] sm:text-[1.85rem] lg:text-3xl font-bold tracking-tight leading-tight">
+              <h2 className="text-xl sm:text-[1.85rem] lg:text-3xl font-bold tracking-tight leading-tight">
                 Welcome <span className="text-[#3b9eff]">back!</span>
               </h2>
-              <p className="mt-1.5 text-base sm:text-lg text-slate-400">Please log in to continue</p>
+              <p className="mt-1 text-sm sm:text-lg text-slate-400">Please log in to continue</p>
             </div>
           </div>
         ) : (
@@ -287,15 +287,15 @@ export default function SignIn() {
             </button>
           </form>
         ) : (
-          <form onSubmit={submitLogin} className="space-y-5">
+          <form onSubmit={submitLogin} className="space-y-4 sm:space-y-5">
             <div>
-              <label htmlFor="username" className="text-base font-semibold text-slate-300">
+              <label htmlFor="username" className="text-sm sm:text-base font-semibold text-slate-300">
                 Username or Email
               </label>
-              <div className="relative mt-2">
+              <div className="relative mt-1.5 sm:mt-2">
                 <User
                   size={18}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3b9eff] pointer-events-none"
+                  className="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-[#3b9eff] pointer-events-none"
                 />
                 <input
                   id="username"
@@ -308,13 +308,13 @@ export default function SignIn() {
               </div>
             </div>
             <div>
-              <label htmlFor="password" className="text-base font-semibold text-slate-300">
+              <label htmlFor="password" className="text-sm sm:text-base font-semibold text-slate-300">
                 Password
               </label>
-              <div className="relative mt-2">
+              <div className="relative mt-1.5 sm:mt-2">
                 <Lock
                   size={18}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3b9eff] pointer-events-none"
+                  className="absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-[#3b9eff] pointer-events-none"
                 />
                 <input
                   id="password"
@@ -336,13 +336,13 @@ export default function SignIn() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-base">
-              <label className="inline-flex items-center gap-2.5 text-slate-400 cursor-pointer select-none">
+            <div className="flex items-center justify-between text-sm sm:text-base">
+              <label className="inline-flex items-center gap-2 sm:gap-2.5 text-slate-400 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="h-5 w-5 rounded border-slate-600 bg-[#101826] text-[#2b8cff] focus:ring-[#2b8cff]/40"
+                  className="h-4 w-4 sm:h-5 sm:w-5 rounded border-slate-600 bg-[#101826] text-[#2b8cff] focus:ring-[#2b8cff]/40"
                 />
                 Remember me
               </label>
@@ -357,13 +357,13 @@ export default function SignIn() {
 
             <button
               type="submit"
-              className="w-full h-14 rounded-xl text-lg font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] transition disabled:opacity-60 shadow-[0_10px_28px_rgba(43,140,255,0.4)]"
+              className="w-full h-12 sm:h-14 rounded-xl text-base sm:text-lg font-bold text-white bg-[#2b8cff] hover:bg-[#4a9dff] transition disabled:opacity-60 shadow-[0_10px_28px_rgba(43,140,255,0.4)]"
               disabled={loading}
             >
               {loading ? t("signin.signingIn") : "Log in"}
             </button>
 
-            <p className="text-center text-base text-slate-400 pt-1">
+            <p className="text-center text-sm sm:text-base text-slate-400 pt-0.5">
               Don&apos;t have an account?{" "}
               <button
                 type="button"
@@ -391,25 +391,13 @@ export default function SignIn() {
 
   return (
     <div className="relative min-h-[100dvh] bg-black text-white auth-fade overflow-x-hidden lg:h-[100dvh] lg:max-h-[100dvh] lg:overflow-hidden">
-      {/*
-        Desktop: ~55/45 split — hero left, login right.
-        Mobile: stacked scroll — compact hero band, then login.
-      */}
       <div className="relative z-10 min-h-[100dvh] grid lg:h-full lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.95fr)] lg:min-h-0">
-        {/* LEFT — desktop hero; mobile shows compact band */}
-        <section className="relative flex flex-col min-h-0 overflow-hidden bg-black lg:h-full">
-          {/* Mobile hero image — simple cover, no wide crop */}
+        {/* LEFT — desktop hero only (full panel). Mobile uses separate band below. */}
+        <section className="relative hidden lg:flex flex-col min-h-0 overflow-hidden bg-black lg:h-full">
           <img
             src={`/signin-hero.png?v=${APP_VERSION}`}
             alt=""
-            className="absolute inset-0 z-0 h-full w-full object-cover object-[58%_35%] select-none pointer-events-none lg:hidden"
-            draggable={false}
-          />
-          {/* Desktop hero image — framed toward login */}
-          <img
-            src={`/signin-hero.png?v=${APP_VERSION}`}
-            alt=""
-            className="absolute top-0 z-0 hidden h-full max-w-none select-none pointer-events-none object-cover object-[center_42%] lg:block"
+            className="absolute top-0 z-0 h-full max-w-none select-none pointer-events-none object-cover object-[center_42%]"
             style={{
               width: "145%",
               left: "-8%",
@@ -421,32 +409,11 @@ export default function SignIn() {
             className="absolute inset-0 z-[2] pointer-events-none"
             style={{
               background:
-                "linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 22%, transparent 42%), linear-gradient(90deg, transparent 78%, rgba(0,0,0,0.65) 94%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.45) 0%, transparent 18%, transparent 62%, rgba(0,0,0,0.9) 100%)",
+                "linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 22%, transparent 42%), linear-gradient(90deg, transparent 78%, rgba(0,0,0,0.65) 94%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.25) 0%, transparent 14%, transparent 86%, rgba(0,0,0,0.45) 100%)",
             }}
           />
 
-          {/* Mobile compact hero */}
-          <div className="relative z-10 flex flex-col px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-6 min-h-[38vh] sm:min-h-[42vh] lg:hidden">
-            <BrandLogo variant="dark" size="md" showTagline />
-            <div className="mt-auto max-w-[22rem] pb-1">
-              <p className="text-white/90 text-sm font-medium mb-1.5">Welcome to</p>
-              <h1 className="font-bold leading-[1.08] tracking-tight">
-                <span className="block text-[1.85rem] sm:text-[2.15rem]">
-                  <span className="text-white">QUANTUM</span>
-                  <span className="text-[#3b9eff]">EXE</span>
-                </span>
-                <span className="block text-white text-lg sm:text-xl font-semibold mt-0.5">
-                  point of sale system
-                </span>
-              </h1>
-              <p className="mt-2.5 text-slate-300 text-sm leading-relaxed">
-                Advanced software solutions for a smarter tomorrow.
-              </p>
-            </div>
-          </div>
-
-          {/* Desktop full hero copy */}
-          <div className="relative z-10 hidden lg:flex h-full flex-col px-8 xl:px-11 pt-8 pb-6">
+          <div className="relative z-10 flex h-full flex-col px-8 xl:px-11 pt-8 pb-6">
             <BrandLogo variant="dark" size="lg" showTagline />
 
             <div className="auth-slide flex-1 flex flex-col justify-center max-w-[440px] xl:max-w-[520px] py-6">
@@ -493,30 +460,56 @@ export default function SignIn() {
           </div>
         </section>
 
+        {/* RIGHT / mobile: compact hero + form */}
         <section className="relative min-h-0 bg-[#070a10] lg:overflow-y-auto lg:overscroll-contain">
-          <div className="min-h-0 flex justify-center items-start lg:items-center px-4 sm:px-6 lg:px-8 xl:px-12 pt-3 pb-[max(2rem,env(safe-area-inset-bottom))] sm:py-8 lg:py-10 lg:min-h-full">
+          {/* Mobile-only hero strip — short, girl right, no text over face/phone */}
+          <div className="lg:hidden relative h-[30vh] min-h-[200px] max-h-[280px] overflow-hidden">
+            <img
+              src={`/signin-hero.png?v=${APP_VERSION}`}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover object-[72%_28%] select-none pointer-events-none"
+              draggable={false}
+            />
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 35%, transparent 55%, #070a10 100%)",
+              }}
+            />
+            <div className="relative z-10 px-5 pt-[max(1rem,env(safe-area-inset-top))]">
+              <BrandLogo variant="dark" size="md" showTagline />
+            </div>
+          </div>
+
+          <div className="relative z-10 -mt-6 lg:mt-0 flex justify-center items-start lg:items-center px-4 sm:px-6 lg:px-8 xl:px-12 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-8 lg:py-10 lg:min-h-full">
             <div className="w-full max-w-[480px] lg:max-w-[520px]">
-              {/* Mobile feature chips */}
-              <ul className="lg:hidden flex flex-wrap gap-2 mb-4">
-                {features.map((f) => (
-                  <li
-                    key={f.title}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[#1e3a5f] bg-[#0d1524]/90 px-3 py-1.5 text-xs text-slate-300"
-                  >
-                    <f.icon size={12} className="text-[#3b9eff]" />
-                    {f.title}
-                  </li>
-                ))}
-              </ul>
+              {/* Mobile welcome line under hero */}
+              <div className="lg:hidden mb-4 px-0.5">
+                <p className="text-sm text-slate-400">Welcome to</p>
+                <p className="text-lg font-bold leading-tight">
+                  <span className="text-white">QUANTUM</span>
+                  <span className="text-[#3b9eff]">EXE</span>
+                  <span className="text-white font-semibold text-base"> POS</span>
+                </p>
+              </div>
               {formCard}
-              <footer className="lg:hidden mt-6 space-y-1.5 text-center text-[11px] text-slate-500 pb-2">
+              <footer className="lg:hidden mt-5 space-y-1 text-center text-[11px] text-slate-500">
+                <div className="flex items-center justify-center gap-3 text-slate-400 mb-2">
+                  {features.map((f) => (
+                    <span key={f.title} className="inline-flex items-center gap-1">
+                      <f.icon size={11} className="text-[#3b9eff]" />
+                      {f.title}
+                    </span>
+                  ))}
+                </div>
                 <a
                   href={BRAND.siteUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2 text-white/80 hover:text-[#3b9eff] font-medium"
+                  className="inline-flex items-center justify-center gap-1.5 text-white/75 hover:text-[#3b9eff] font-medium"
                 >
-                  <Globe size={12} className="text-[#3b9eff]" />
+                  <Globe size={11} className="text-[#3b9eff]" />
                   www.{BRAND.site}
                 </a>
                 <div>© 2026 {BRAND.name} Pvt.Ltd. All rights reserved.</div>
