@@ -207,8 +207,19 @@ router.post("/auth/login", async (req, res) => {
     };
   }
 
+  type CloudUserRow = {
+    id: string;
+    name?: unknown;
+    contact?: unknown;
+    username?: unknown;
+    email?: unknown;
+    passwordHash?: unknown;
+    roleId?: unknown;
+    shopId?: unknown;
+  };
+
   /** Direct Firestore User lookup (web cloud users) when SQLite has no match. */
-  async function findCloudFirestoreUser(loginName: string) {
+  async function findCloudFirestoreUser(loginName: string): Promise<CloudUserRow | null> {
     const { credentialsConfigured, getSyncFirestore } = await import("./sync/firestoreAdmin.js");
     if (!credentialsConfigured()) return null;
     const db = getSyncFirestore();
@@ -218,7 +229,7 @@ router.post("/auth/login", async (req, res) => {
           const snap = await db.collection("User").where(field, "==", v).limit(1).get();
           if (!snap.empty) {
             const data = snap.docs[0].data() as Record<string, unknown>;
-            return { id: snap.docs[0].id, ...data };
+            return { id: snap.docs[0].id, ...data } as CloudUserRow;
           }
         } catch (e) {
           console.warn(`[auth] cloud User query ${field}=${v} failed:`, e instanceof Error ? e.message : e);
