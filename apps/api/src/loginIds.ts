@@ -27,6 +27,19 @@ export function loginIdVariants(raw: string): string[] {
   return [...out];
 }
 
+/** Prefer fewest Firestore queries: raw, local 0xx, then +94. */
+export function preferredLoginIds(raw: string): string[] {
+  const all = loginIdVariants(raw);
+  const preferred: string[] = [];
+  const s = String(raw || "").trim();
+  if (s) preferred.push(s);
+  const zero = all.find((v) => /^0\d{9}$/.test(v));
+  const e164 = all.find((v) => /^\+94\d{9}$/.test(v));
+  if (zero && !preferred.includes(zero)) preferred.push(zero);
+  if (e164 && !preferred.includes(e164)) preferred.push(e164);
+  return preferred.length ? preferred : all.slice(0, 3);
+}
+
 export function userLoginWhere(login: string) {
   const variants = loginIdVariants(login);
   return {

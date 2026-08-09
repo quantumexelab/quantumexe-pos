@@ -246,11 +246,13 @@ export async function createShopRegistration(input: {
 }
 
 export async function findShopByPhone(phone: string): Promise<ShopRecord | null> {
-  const { loginIdVariants } = await import("../loginIds.js");
-  const variants = loginIdVariants(phone);
+  const { preferredLoginIds, loginIdVariants } = await import("../loginIds.js");
+  const variants = preferredLoginIds(phone);
+  const all = loginIdVariants(phone);
   if (useCloud()) {
     try {
-      for (const p of variants) {
+      // Cap at 3 reads to protect Firebase quota
+      for (const p of variants.slice(0, 3)) {
         const snap = await getDb().collection(SHOPS_COL).where("phone", "==", p).limit(1).get();
         if (!snap.empty) return snap.docs[0].data() as ShopRecord;
       }
@@ -259,7 +261,7 @@ export async function findShopByPhone(phone: string): Promise<ShopRecord | null>
     }
   }
   const map = await readLocalShops();
-  return Object.values(map).find((s) => variants.includes(s.phone.trim())) || null;
+  return Object.values(map).find((s) => all.includes(s.phone.trim())) || null;
 }
 
 export async function getShop(shopId: string): Promise<ShopRecord | null> {

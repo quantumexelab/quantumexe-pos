@@ -72,63 +72,6 @@ router.post("/auth/login", async (req, res) => {
   }
 
   /** Desktop: bring cloud shop owner / cloud user into local SQLite so offline POS works. */
-  async function upsertLocalFromCloudUser(input: {
-    name: string;
-    contact: string;
-    email?: string | null;
-    passwordHash: string;
-    shopId?: string | null;
-    roleName?: string;
-  }) {
-    const { adminRole, active } = await ensureLocalRoleStatus();
-    const roleName = input.roleName || "Admin";
-    const role =
-      (await prisma.role.findFirst({ where: { name: roleName } })) ||
-      (await prisma.role.create({ data: { name: roleName } }));
-    const contact =
-      loginIdVariants(input.contact).find((v) => v.startsWith("0") && v.length === 10) ||
-      input.contact;
-    let localUser = await prisma.user.findFirst({
-      where: userLoginWhere(input.contact),
-      include: { role: true, status: true },
-    });
-    if (!localUser) {
-      localUser = await prisma.user.create({
-        data: {
-          name: input.name || "Shop User",
-          contact,
-          username: contact,
-          email: input.email || `${contact.replace(/\D/g, "")}@shop.local`,
-          passwordHash: input.passwordHash,
-          roleId: role.id,
-          statusId: active.id,
-          shopId: input.shopId || null,
-        },
-        include: { role: true, status: true },
-      });
-    } else {
-      localUser = await prisma.user.update({
-        where: { id: localUser.id },
-        data: {
-          passwordHash: input.passwordHash,
-          shopId: input.shopId || localUser.shopId,
-          statusId: active.id,
-          roleId: role.id,
-          name: localUser.name || input.name,
-        },
-        include: { role: true, status: true },
-      });
-    }
-    if (input.shopId) {
-      await prisma.setting.upsert({
-        where: { key: "shop_id" },
-        create: { key: "shop_id", value: input.shopId },
-        update: { value: input.shopId },
-      });
-    }
-    return localUser;
-  }
-
   async function upsertLocalFromCloudShop(remoteShop: {
     shopId: string;
     shopName: string;
@@ -138,108 +81,55 @@ router.post("/auth/login", async (req, res) => {
     passwordHash: string;
     status: string;
   }) {
+    const { adminRole, active } = await ensureLocalRoleStatus();
+    const contact =
+      loginIdVariants(remoteShop.phone).find((v) => v.startsWith("0") && v.length === 10) ||
+      remoteShop.phone;
+    let localUser = await prisma.user.findFirst({
+      where: userLoginWhere(remoteShop.phone),
+      include: { role: true, status: true },
+    });
+    if (!localUser) {
+      localUser = await prisma.user.create({
+        data: {
+          name: remoteShop.ownerName || remoteShop.shopName || "Shop Admin",
+          contact,
+          username: contact,
+          email: remoteShop.email || `${contact.replace(/\D/g, "")}@shop.local`,
+          passwordHash: remoteShop.passwordHash,
+          roleId: adminRole.id,
+          statusId: active.id,
+          shopId: remoteShop.shopId,
+        },
+        include: { role: true, status: true },
+      });
+    } else {
+      localUser = await prisma.user.update({
+        where: { id: localUser.id },
+        data: {
+          passwordHash: remoteShop.passwordHash,
+          shopId: remoteShop.shopId,
+          statusId: active.id,
+          roleId: adminRole.id,
+          name: localUser.name || remoteShop.ownerName,
+        },
+        include: { role: true, status: true },
+      });
+    }
+    await prisma.setting.upsert({
+      where: { key: "shop_id" },
+      create: { key: "shop_id", value: remoteShop.shopId },
+      update: { value: remoteShop.shopId },
+    });
     await prisma.setting.upsert({
       where: { key: "shop_name" },
       create: { key: "shop_name", value: remoteShop.shopName },
       update: { value: remoteShop.shopName },
     });
-    return upsertLocalFromCloudUser({
-      name: remoteShop.ownerName || remoteShop.shopName || "Shop Admin",
-      contact: remoteShop.phone,
-      email: remoteShop.email,
-      passwordHash: remoteShop.passwordHash,
-      shopId: remoteShop.shopId,
-      roleName: "Admin",
-    });
+    return localUser;
   }
 
-  function localLoginPayload(
-    localUser: {
-      id: number;
-      name: string;
-      contact: string | null;
-      email: string | null;
-      roleId: number;
-      statusId: number;
-      role?: { name: string } | null;
-      status?: { name: string } | null;
-      username?: string | null;
-      shopId?: string | null;
-    },
-    extra: {
-      shop_status?: string;
-      shopId?: string | null;
-      shopType?: string | null;
-      features?: unknown;
-      syncedFromCloud?: boolean;
-      authSource?: string;
-    } = {}
-  ) {
-    const shopId = extra.shopId ?? localUser.shopId ?? null;
-    const token = signToken({
-      ...localUser,
-      role: localUser.role?.name || "Admin",
-      contact: localUser.contact,
-      shopId,
-    });
-    return {
-      success: true,
-      message: "Login successful",
-      token,
-      user: {
-        id: localUser.id,
-        name: localUser.name,
-        username: localUser.username || localUser.contact,
-        contact: localUser.contact,
-        email: localUser.email,
-        role_id: localUser.roleId,
-        status_id: localUser.statusId,
-        role: localUser.role?.name || "Admin",
-        ststus: localUser.status?.name || "Active",
-        shop_status: extra.shop_status || "active",
-        shopId,
-        shopType: extra.shopType ?? null,
-        features: extra.features ?? null,
-        firebaseDedicated: false,
-        syncedFromCloud: Boolean(extra.syncedFromCloud),
-        authSource: extra.authSource || (extra.syncedFromCloud ? "cloud" : "local"),
-      },
-    };
-  }
-
-  type CloudUserRow = {
-    id: string;
-    name?: unknown;
-    contact?: unknown;
-    username?: unknown;
-    email?: unknown;
-    passwordHash?: unknown;
-    roleId?: unknown;
-    shopId?: unknown;
-  };
-
-  /** Direct Firestore User lookup (web cloud users) when SQLite has no match. */
-  async function findCloudFirestoreUser(loginName: string): Promise<CloudUserRow | null> {
-    const { credentialsConfigured, getSyncFirestore } = await import("./sync/firestoreAdmin.js");
-    if (!credentialsConfigured()) return null;
-    const db = getSyncFirestore();
-    for (const v of loginIdVariants(loginName)) {
-      for (const field of ["contact", "username"] as const) {
-        try {
-          const snap = await db.collection("User").where(field, "==", v).limit(1).get();
-          if (!snap.empty) {
-            const data = snap.docs[0].data() as Record<string, unknown>;
-            return { id: snap.docs[0].id, ...data } as CloudUserRow;
-          }
-        } catch (e) {
-          console.warn(`[auth] cloud User query ${field}=${v} failed:`, e instanceof Error ? e.message : e);
-        }
-      }
-    }
-    return null;
-  }
-
-  // Desktop / SQLite: try local users first so login works offline and never hangs on Firestore
+  // Desktop / SQLite: 1) local  2) cloud shop/user once  3) stop (no extra Firebase verify loops)
   if (useLocalDb) {
     try {
       const localUser = await prisma.user.findFirst({
@@ -247,6 +137,7 @@ router.post("/auth/login", async (req, res) => {
         include: { role: true, status: true },
       });
       if (localUser) {
+        // Passwords in SQLite are bcrypt hashes — never compare plaintext
         const passwordOk = await bcrypt.compare(password, localUser.passwordHash);
         if (passwordOk) {
           const statusName = localUser.status?.name || "Active";
@@ -255,20 +146,11 @@ router.post("/auth/login", async (req, res) => {
             (localUser as { shopId?: string | null }).shopId ||
             (await prisma.setting.findUnique({ where: { key: "shop_id" } }))?.value ||
             null;
-          let shop_status = "active";
+          // Use cached local status — do NOT hit Firebase on every login (quota)
+          let shop_status =
+            (await prisma.setting.findUnique({ where: { key: "shop_status" } }))?.value || "active";
           let shopType: string | null = null;
           let features: unknown = null;
-          try {
-            const { refreshLocalAccessFromRegistry } = await import("./master/shopRegistry.js");
-            const access = await withTimeout(
-              refreshLocalAccessFromRegistry(localShopId),
-              cloudMs,
-              { status: "active" } as { status: string }
-            );
-            shop_status = access.status || "active";
-          } catch {
-            shop_status = "active";
-          }
           try {
             const typeRow = await prisma.setting.findUnique({ where: { key: "shop_type" } });
             shopType = typeRow?.value || null;
@@ -277,85 +159,170 @@ router.post("/auth/login", async (req, res) => {
           } catch {
             /* ignore */
           }
-          return res.json(
-            localLoginPayload(localUser, {
+          const token = signToken({
+            ...localUser,
+            role: localUser.role?.name || "Admin",
+            contact: localUser.contact,
+            shopId: localShopId,
+          });
+          return res.json({
+            success: true,
+            message: "Login successful",
+            authSource: "sqlite",
+            token,
+            user: {
+              id: localUser.id,
+              name: localUser.name,
+              username: (localUser as { username?: string | null }).username || localUser.contact,
+              contact: localUser.contact,
+              email: localUser.email,
+              role_id: localUser.roleId,
+              status_id: localUser.statusId,
+              role: localUser.role?.name || "Admin",
+              ststus: localUser.status?.name || "Active",
               shop_status,
               shopId: localShopId,
               shopType,
               features,
-              authSource: "local",
-            })
-          );
+              firebaseDedicated: false,
+            },
+          });
         }
       }
 
-      // 1) Cloud shop registry (owner phone + password)
+      // SQLite miss / wrong password → single cloud check (shop registry, ≤3 reads)
+      const { findShopByPhone } = await import("./master/shopRegistry.js");
+      const { preferredLoginIds } = await import("./loginIds.js");
+      const remoteShop = await withTimeout(findShopByPhone(login), cloudMs, null);
+
+      if (remoteShop?.passwordHash && (await bcrypt.compare(password, remoteShop.passwordHash))) {
+        if (remoteShop.status === "revoked") {
+          return res.status(403).json(fail("Shop access revoked — contact Master Admin", 403));
+        }
+        const localUser = await upsertLocalFromCloudShop(remoteShop);
+        await prisma.setting.upsert({
+          where: { key: "shop_status" },
+          create: { key: "shop_status", value: remoteShop.status || "active" },
+          update: { value: remoteShop.status || "active" },
+        });
+        const token = signToken({
+          ...localUser,
+          role: localUser.role?.name || "Admin",
+          contact: localUser.contact,
+          shopId: remoteShop.shopId,
+        });
+        return res.json({
+          success: true,
+          message: "Login successful (verified from cloud, saved to local SQLite)",
+          authSource: "cloud",
+          token,
+          user: {
+            id: localUser.id,
+            name: localUser.name,
+            username: (localUser as { username?: string | null }).username || localUser.contact,
+            contact: localUser.contact,
+            email: localUser.email,
+            role_id: localUser.roleId,
+            status_id: localUser.statusId,
+            role: localUser.role?.name || "Admin",
+            ststus: localUser.status?.name || "Active",
+            shop_status: remoteShop.status || "active",
+            shopId: remoteShop.shopId,
+            shopType: remoteShop.shopType || null,
+            features: null,
+            firebaseDedicated: false,
+            syncedFromCloud: true,
+          },
+        });
+      }
+
+      // Optional: one cloud User lookup (cashier accounts) — max 2 reads
       try {
-        const { findShopByPhone } = await import("./master/shopRegistry.js");
-        const remoteShop = await withTimeout(findShopByPhone(login), cloudMs, null);
-        if (remoteShop?.passwordHash) {
-          const shopPwOk = await bcrypt.compare(password, remoteShop.passwordHash);
-          if (shopPwOk) {
-            if (remoteShop.status === "revoked") {
-              return res.status(403).json(fail("Shop access revoked — contact Master Admin", 403));
+        const { credentialsConfigured, getSyncFirestore } = await import("./sync/firestoreAdmin.js");
+        if (credentialsConfigured()) {
+          const db = getSyncFirestore();
+          let cloudUser: Record<string, unknown> | null = null;
+          for (const id of preferredLoginIds(login).slice(0, 2)) {
+            const snap = await db.collection("User").where("contact", "==", id).limit(1).get();
+            if (!snap.empty) {
+              cloudUser = snap.docs[0].data() as Record<string, unknown>;
+              break;
             }
-            const synced = await upsertLocalFromCloudShop(remoteShop);
-            return res.json(
-              localLoginPayload(synced, {
-                shop_status: remoteShop.status || "active",
-                shopId: remoteShop.shopId,
-                shopType: remoteShop.shopType || null,
-                syncedFromCloud: true,
-                authSource: "cloud-shop",
-              })
-            );
           }
-        }
-      } catch (e) {
-        console.warn("[auth] desktop cloud shop login failed:", e instanceof Error ? e.message : e);
-      }
-
-      // 2) Cloud Firestore User collection (same users as web) → mirror into SQLite → return login
-      try {
-        const cloudUser = await withTimeout(findCloudFirestoreUser(login), cloudMs, null);
-        if (cloudUser?.passwordHash && typeof cloudUser.passwordHash === "string") {
-          const pwOk = await bcrypt.compare(password, cloudUser.passwordHash);
-          if (pwOk) {
-            let roleName = "Admin";
-            try {
-              const roleId = Number(cloudUser.roleId);
-              if (roleId) {
-                const { getSyncFirestore } = await import("./sync/firestoreAdmin.js");
-                const db = getSyncFirestore();
-                const roleDoc = await db.collection("Role").doc(String(roleId)).get();
-                const n = roleDoc.data()?.name;
-                if (typeof n === "string" && n) roleName = n;
+          if (cloudUser?.passwordHash && typeof cloudUser.passwordHash === "string") {
+            const okPw = await bcrypt.compare(password, cloudUser.passwordHash);
+            if (okPw) {
+              const { adminRole, active } = await ensureLocalRoleStatus();
+              const contact = String(cloudUser.contact || login);
+              const hash = cloudUser.passwordHash; // already bcrypt
+              let localUser = await prisma.user.findFirst({
+                where: userLoginWhere(contact),
+                include: { role: true, status: true },
+              });
+              if (!localUser) {
+                localUser = await prisma.user.create({
+                  data: {
+                    name: String(cloudUser.name || "User"),
+                    contact,
+                    username: contact,
+                    email: String(cloudUser.email || `${contact.replace(/\D/g, "")}@shop.local`),
+                    passwordHash: hash,
+                    roleId: adminRole.id,
+                    statusId: active.id,
+                    shopId: cloudUser.shopId ? String(cloudUser.shopId) : remoteShop?.shopId || null,
+                  },
+                  include: { role: true, status: true },
+                });
+              } else {
+                localUser = await prisma.user.update({
+                  where: { id: localUser.id },
+                  data: { passwordHash: hash },
+                  include: { role: true, status: true },
+                });
               }
-            } catch {
-              /* default Admin */
+              const shopId =
+                (localUser as { shopId?: string | null }).shopId || remoteShop?.shopId || null;
+              const token = signToken({
+                ...localUser,
+                role: localUser.role?.name || "Admin",
+                contact: localUser.contact,
+                shopId,
+              });
+              return res.json({
+                success: true,
+                message: "Login successful (cloud user synced to SQLite)",
+                authSource: "cloud",
+                token,
+                user: {
+                  id: localUser.id,
+                  name: localUser.name,
+                  username: (localUser as { username?: string | null }).username || localUser.contact,
+                  contact: localUser.contact,
+                  email: localUser.email,
+                  role_id: localUser.roleId,
+                  status_id: localUser.statusId,
+                  role: localUser.role?.name || "Cashier",
+                  ststus: localUser.status?.name || "Active",
+                  shop_status: remoteShop?.status || "active",
+                  shopId,
+                  shopType: null,
+                  features: null,
+                  firebaseDedicated: false,
+                  syncedFromCloud: true,
+                },
+              });
             }
-            const synced = await upsertLocalFromCloudUser({
-              name: String(cloudUser.name || "Shop User"),
-              contact: String(cloudUser.contact || cloudUser.username || login),
-              email: cloudUser.email ? String(cloudUser.email) : null,
-              passwordHash: cloudUser.passwordHash,
-              shopId: cloudUser.shopId ? String(cloudUser.shopId) : null,
-              roleName,
-            });
-            return res.json(
-              localLoginPayload(synced, {
-                shopId: synced.shopId,
-                syncedFromCloud: true,
-                authSource: "cloud-user",
-              })
-            );
           }
         }
       } catch (e) {
-        console.warn("[auth] desktop cloud User login failed:", e instanceof Error ? e.message : e);
+        console.warn("[auth] cloud user lookup failed:", e instanceof Error ? e.message : e);
       }
+
+      // Desktop: do not fall through into more Firebase verify loops
+      return res.status(401).json(fail("Invalid username or password", 401));
     } catch (e) {
       console.warn("[auth] local login failed:", e instanceof Error ? e.message : e);
+      return res.status(401).json(fail("Invalid username or password", 401));
     }
   }
 

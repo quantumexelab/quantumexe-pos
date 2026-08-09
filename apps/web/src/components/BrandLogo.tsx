@@ -8,9 +8,9 @@ type BrandLogoProps = {
 };
 
 const sizes = {
-  sm: { main: "text-lg", tag: "text-[8px] tracking-[0.28em]", mark: "h-7 w-7" },
-  md: { main: "text-xl", tag: "text-[9px] tracking-[0.32em]", mark: "h-9 w-9" },
-  lg: { main: "text-6xl", tag: "text-sm tracking-[0.42em]", mark: "h-14 w-14" },
+  sm: { main: "text-lg", tag: "text-[8px] tracking-[0.28em]", mark: "h-8 w-8" },
+  md: { main: "text-xl", tag: "text-[9px] tracking-[0.32em]", mark: "h-10 w-10" },
+  lg: { main: "text-5xl xl:text-6xl", tag: "text-sm tracking-[0.42em]", mark: "h-16 w-16" },
 };
 
 /** QUANTUMEXE Technologies wordmark + official QE hex mark */
@@ -23,16 +23,16 @@ export function BrandLogo({
 }: BrandLogoProps) {
   const s = sizes[size];
   const quantum = variant === "dark" ? "text-white" : "text-slate-900";
-  const accent = variant === "dark" ? "text-sky-400" : "text-sky-500";
+  const accent = variant === "dark" ? "text-[#3b9eff]" : "text-sky-500";
 
   return (
     <div className={`leading-none ${className}`}>
-      <div className="flex items-center gap-2.5 sm:gap-3">
+      <div className="flex items-center gap-3 sm:gap-3.5">
         {showMark && (
           <img
-            src="/qe-logo.png"
-            alt=""
-            className={`${s.mark} shrink-0 object-contain select-none`}
+            src="/qe-logo.png?v=2"
+            alt="QUANTUMEXE"
+            className={`${s.mark} shrink-0 object-contain select-none drop-shadow-[0_0_12px_rgba(43,140,255,0.35)]`}
             draggable={false}
           />
         )}
