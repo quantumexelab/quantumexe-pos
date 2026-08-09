@@ -246,17 +246,20 @@ export async function createShopRegistration(input: {
 }
 
 export async function findShopByPhone(phone: string): Promise<ShopRecord | null> {
-  const p = phone.trim();
+  const { loginIdVariants } = await import("../loginIds.js");
+  const variants = loginIdVariants(phone);
   if (useCloud()) {
     try {
-      const snap = await getDb().collection(SHOPS_COL).where("phone", "==", p).limit(1).get();
-      if (!snap.empty) return snap.docs[0].data() as ShopRecord;
+      for (const p of variants) {
+        const snap = await getDb().collection(SHOPS_COL).where("phone", "==", p).limit(1).get();
+        if (!snap.empty) return snap.docs[0].data() as ShopRecord;
+      }
     } catch {
       /* local */
     }
   }
   const map = await readLocalShops();
-  return Object.values(map).find((s) => s.phone === p) || null;
+  return Object.values(map).find((s) => variants.includes(s.phone.trim())) || null;
 }
 
 export async function getShop(shopId: string): Promise<ShopRecord | null> {
