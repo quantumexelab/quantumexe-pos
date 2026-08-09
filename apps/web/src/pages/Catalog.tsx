@@ -465,6 +465,35 @@ export function CreateProduct() {
     loadLookups();
   }, []);
 
+  // Edit → Create (same component instance) must clear loaded product fields
+  useEffect(() => {
+    if (isEdit) return;
+    setStep(0);
+    setError("");
+    setMsg("");
+    setSaving(false);
+    setBasic({
+      name: "",
+      code: "",
+      barcode: "",
+      categoryId: "",
+      brandId: "",
+      unitId: "",
+      productTypeId: "",
+    });
+    setInventory({
+      cost: "",
+      price: "",
+      quantity: "",
+      lowThreshold: "",
+      expireDate: "",
+    });
+    setVariations([{ name: "", barcode: "", price: "", cost: "", size: "", color: "" }]);
+    setStructureModalOpen(false);
+    setProductStructure(null);
+    setQuickAdd(null);
+  }, [isEdit, editId]);
+
   // Auto-generate product code when Category + Brand + Unit + Type are set (create only)
   useEffect(() => {
     if (isEdit) return;
@@ -5396,24 +5425,41 @@ export function QuotationForm({ edit = false }: { edit?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (!(edit && id)) return;
-    api.get(`/quotations/${id}`).then((r) => {
-      const q = r.data.data;
-      setCustomerId(String(q.customerId || ""));
-      if (q.customer?.name) setCustomerQuery(q.customer.name);
-      if (q.expiresAt) setExpiryDate(String(q.expiresAt).slice(0, 10));
-      setLines(
-        (q.items || []).map((it: any, idx: number) => ({
-          key: `${it.variantId}-${idx}`,
-          variantId: it.variantId,
-          sku: it.variant?.product?.code || `SKU-${it.variantId}`,
-          name: it.variant?.product?.name || `Item ${it.variantId}`,
-          price: Number(it.price || 0),
-          qty: Number(it.qty || 1),
-          discount: Number(it.discount || 0),
-        }))
-      );
-    });
+    if (edit && id) {
+      api.get(`/quotations/${id}`).then((r) => {
+        const q = r.data.data;
+        setCustomerId(String(q.customerId || ""));
+        if (q.customer?.name) setCustomerQuery(q.customer.name);
+        if (q.expiresAt) setExpiryDate(String(q.expiresAt).slice(0, 10));
+        setLines(
+          (q.items || []).map((it: any, idx: number) => ({
+            key: `${it.variantId}-${idx}`,
+            variantId: it.variantId,
+            sku: it.variant?.product?.code || `SKU-${it.variantId}`,
+            name: it.variant?.product?.name || `Item ${it.variantId}`,
+            price: Number(it.price || 0),
+            qty: Number(it.qty || 1),
+            discount: Number(it.discount || 0),
+          }))
+        );
+      });
+      return;
+    }
+    // Create mode: clear any fields left over from Edit Quotation
+    setCustomerId("");
+    setCustomerQuery("");
+    setIssueDate(new Date().toISOString().slice(0, 10));
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    setExpiryDate(d.toISOString().slice(0, 10));
+    setProductQuery("");
+    setSelectedVariantId("");
+    setQty(1);
+    setDiscountMode("percent");
+    setAdjustValue(0);
+    setNotes("");
+    setLines([]);
+    setError("");
   }, [edit, id]);
 
   const filteredCustomers = useMemo(() => {

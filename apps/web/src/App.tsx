@@ -1,4 +1,4 @@
-import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useParams } from "react-router-dom";
 import { auth } from "./api";
 import AppLayout from "./components/AppLayout";
 import SignIn from "./pages/SignIn";
@@ -29,6 +29,17 @@ import {
   StockHome,
   StockList,
 } from "./pages/Catalog";
+
+/** Remount create/edit so form state never leaks between modes. */
+function CreateProductPage() {
+  const { id } = useParams();
+  return <CreateProduct key={id ? `edit-${id}` : "create"} />;
+}
+
+function QuotationFormPage({ edit = false }: { edit?: boolean }) {
+  const { id } = useParams();
+  return <QuotationForm key={edit ? `edit-${id ?? ""}` : "create"} edit={edit} />;
+}
 import { CreateStoreRelease, StoreReleaseHome, StoreReleaseList } from "./pages/StoreRelease";
 import SettingsPage from "./pages/Settings";
 import BackupPage from "./pages/Backup";
@@ -96,8 +107,8 @@ export default function App() {
 
             <Route path="/quotation" element={<QuotationHome />} />
             <Route path="/quotation/quotation-list" element={<QuotationList />} />
-            <Route path="/quotation/create-quotation" element={<QuotationForm />} />
-            <Route path="/quotation/edit-quotation/:id" element={<QuotationForm edit />} />
+            <Route path="/quotation/create-quotation" element={<QuotationFormPage />} />
+            <Route path="/quotation/edit-quotation/:id" element={<QuotationFormPage edit />} />
 
             <Route path="/stock" element={<StockHome />} />
             <Route path="/stock/stock-list" element={<StockList />} />
@@ -116,8 +127,8 @@ export default function App() {
 
             <Route path="/products" element={<ProductsHome />} />
             <Route path="/products/product-list" element={<ProductList />} />
-            <Route path="/products/create-product" element={<CreateProduct />} />
-            <Route path="/products/edit-product/:id" element={<CreateProduct />} />
+            <Route path="/products/create-product" element={<CreateProductPage />} />
+            <Route path="/products/edit-product/:id" element={<CreateProductPage />} />
             <Route path="/products/deactivated-products" element={<DeactivatedProducts />} />
             <Route path="/products/manage-category" element={<ManageCategory />} />
             <Route path="/products/manage-brand" element={<ManageBrand />} />
