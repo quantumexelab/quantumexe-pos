@@ -397,14 +397,14 @@ export default function SignIn() {
           <img
             src={`/signin-hero.png?v=${APP_VERSION}`}
             alt=""
-            className="absolute inset-0 z-0 h-full w-full select-none pointer-events-none object-cover object-[72%_18%] scale-[1.08] origin-[70%_20%]"
+            className="absolute inset-0 z-0 h-full w-full select-none pointer-events-none object-cover object-[42%_16%]"
             draggable={false}
           />
           <div
             className="absolute inset-0 z-[2] pointer-events-none"
             style={{
               background:
-                "linear-gradient(90deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.45) 28%, rgba(0,0,0,0.12) 48%, transparent 62%), linear-gradient(90deg, transparent 82%, rgba(0,0,0,0.55) 96%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 16%, transparent 82%, rgba(0,0,0,0.55) 100%)",
+                "linear-gradient(90deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.38) 24%, rgba(0,0,0,0.1) 42%, transparent 58%), linear-gradient(90deg, transparent 84%, rgba(0,0,0,0.5) 96%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.3) 0%, transparent 14%, transparent 84%, rgba(0,0,0,0.5) 100%)",
             }}
           />
 
@@ -462,7 +462,7 @@ export default function SignIn() {
             <img
               src={`/signin-hero.png?v=${APP_VERSION}`}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover object-[50%_12%] select-none pointer-events-none"
+              className="absolute inset-0 h-full w-full object-cover object-[40%_10%] select-none pointer-events-none"
               draggable={false}
             />
             <div
