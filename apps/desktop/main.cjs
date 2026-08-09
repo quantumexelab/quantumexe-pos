@@ -407,10 +407,10 @@ function setupAutoUpdater() {
 
   setTimeout(() => {
     autoUpdater.checkForUpdates().catch((e) => console.error("[update]", e?.message || e));
-  }, 8_000);
+  }, 3_000);
   setInterval(() => {
     autoUpdater.checkForUpdates().catch(() => undefined);
-  }, 6 * 60 * 60 * 1000);
+  }, 60 * 60 * 1000);
 }
 
 app.whenReady().then(async () => {
