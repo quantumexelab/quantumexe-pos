@@ -397,19 +397,14 @@ export default function SignIn() {
           <img
             src={`/signin-hero.png?v=${APP_VERSION}`}
             alt=""
-            className="absolute top-0 z-0 h-full max-w-none select-none pointer-events-none object-cover object-[center_42%]"
-            style={{
-              width: "145%",
-              left: "-8%",
-              transform: "translateX(13%)",
-            }}
+            className="absolute inset-0 z-0 h-full w-full select-none pointer-events-none object-cover object-[72%_18%] scale-[1.08] origin-[70%_20%]"
             draggable={false}
           />
           <div
             className="absolute inset-0 z-[2] pointer-events-none"
             style={{
               background:
-                "linear-gradient(90deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 22%, transparent 42%), linear-gradient(90deg, transparent 78%, rgba(0,0,0,0.65) 94%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.25) 0%, transparent 14%, transparent 86%, rgba(0,0,0,0.45) 100%)",
+                "linear-gradient(90deg, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.45) 28%, rgba(0,0,0,0.12) 48%, transparent 62%), linear-gradient(90deg, transparent 82%, rgba(0,0,0,0.55) 96%, #000 100%), linear-gradient(180deg, rgba(0,0,0,0.35) 0%, transparent 16%, transparent 82%, rgba(0,0,0,0.55) 100%)",
             }}
           />
 
@@ -467,14 +462,14 @@ export default function SignIn() {
             <img
               src={`/signin-hero.png?v=${APP_VERSION}`}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover object-[72%_28%] select-none pointer-events-none"
+              className="absolute inset-0 h-full w-full object-cover object-[50%_12%] select-none pointer-events-none"
               draggable={false}
             />
             <div
               className="absolute inset-0 pointer-events-none"
               style={{
                 background:
-                  "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, transparent 35%, transparent 55%, #070a10 100%)",
+                  "linear-gradient(180deg, rgba(0,0,0,0.5) 0%, transparent 32%, transparent 48%, #070a10 100%)",
               }}
             />
             <div className="relative z-10 px-5 pt-[max(1rem,env(safe-area-inset-top))]">
