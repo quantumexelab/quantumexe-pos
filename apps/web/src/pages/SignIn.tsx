@@ -182,7 +182,7 @@ export default function SignIn() {
 
   const formCard = (
     <div className="w-full max-w-[480px] lg:max-w-[520px] auth-slide">
-      <div className="rounded-2xl border border-white/[0.1] bg-[#0c121c]/95 backdrop-blur-md px-5 py-6 sm:px-9 sm:py-10 lg:px-10 shadow-[0_0_80px_rgba(43,140,255,0.22)]">
+      <div className="rounded-2xl border border-white/[0.1] bg-[#0c121c]/95 backdrop-blur-md px-5 py-6 sm:px-9 sm:py-10 lg:px-10 [@media(max-height:800px)]:sm:px-7 [@media(max-height:800px)]:sm:py-7 shadow-[0_0_80px_rgba(43,140,255,0.22)]">
         {step === "login" ? (
           <div className="flex items-center gap-3 sm:gap-5 mb-5 sm:mb-8">
             <div className="relative shrink-0 w-12 h-12 sm:w-16 sm:h-16">
@@ -381,7 +381,7 @@ export default function SignIn() {
         )}
       </div>
 
-      <div className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-400">
+      <div className="mt-5 xl:mt-8 flex items-center justify-center gap-2 text-xs text-slate-400">
         <Shield size={14} className="text-[#2b8cff]" />
         <span>Secure. Reliable. Scalable.</span>
         <span className="text-slate-500">· v{APP_VERSION}</span>
@@ -390,10 +390,10 @@ export default function SignIn() {
   );
 
   return (
-    <div className="relative min-h-[100dvh] bg-black text-white auth-fade overflow-x-hidden lg:h-[100dvh] lg:max-h-[100dvh] lg:overflow-hidden">
-      <div className="relative z-10 min-h-[100dvh] grid lg:h-full lg:grid-cols-[minmax(0,1.15fr)_minmax(400px,0.95fr)] lg:min-h-0">
+    <div className="relative h-[100dvh] max-h-[100dvh] bg-black text-white auth-fade overflow-hidden">
+      <div className="relative z-10 h-full grid grid-rows-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.95fr)]">
         {/* LEFT — desktop hero only (full panel). Mobile uses separate band below. */}
-        <section className="relative hidden lg:flex flex-col min-h-0 overflow-hidden bg-black lg:h-full">
+        <section className="relative hidden lg:flex flex-col h-full min-h-0 overflow-hidden bg-black">
           <img
             src={`/signin-hero.png?v=${APP_VERSION}`}
             alt=""
@@ -408,39 +408,41 @@ export default function SignIn() {
             }}
           />
 
-          <div className="relative z-10 flex h-full flex-col px-8 xl:px-11 pt-8 pb-6">
-            <BrandLogo variant="dark" size="lg" showTagline />
+          <div className="relative z-10 flex h-full min-h-0 flex-col px-8 xl:px-11 pt-6 pb-5 xl:pt-8 xl:pb-6">
+            <div className="shrink-0">
+              <BrandLogo variant="dark" size="lg" showTagline />
+            </div>
 
-            <div className="auth-slide flex-1 flex flex-col justify-center max-w-[440px] xl:max-w-[520px] py-6">
-              <p className="text-white/90 text-xl xl:text-2xl font-medium mb-3">Welcome to</p>
+            <div className="auth-slide flex-1 flex flex-col justify-center min-h-0 max-w-[440px] xl:max-w-[520px] py-3 xl:py-6">
+              <p className="text-white/90 text-lg xl:text-2xl font-medium mb-2 xl:mb-3">Welcome to</p>
               <h1 className="font-bold leading-[1.02] tracking-tight">
-                <span className="block text-[3.25rem] xl:text-[4.5rem]">
+                <span className="block text-[clamp(2.35rem,6.2vh,4.5rem)]">
                   <span className="text-white">QUANTUM</span>
                   <span className="text-[#3b9eff]">EXE</span>
                 </span>
-                <span className="block text-white text-[2.15rem] xl:text-[2.75rem] font-semibold mt-1.5">
+                <span className="block text-white text-[clamp(1.45rem,3.8vh,2.75rem)] font-semibold mt-1.5">
                   point of sale system
                 </span>
               </h1>
-              <p className="mt-5 text-slate-300 text-lg xl:text-xl leading-relaxed max-w-[30rem]">
+              <p className="mt-3 xl:mt-5 text-slate-300 text-base xl:text-xl leading-relaxed max-w-[30rem]">
                 Advanced software solutions for a smarter tomorrow.
               </p>
-              <ul className="mt-10 space-y-5">
+              <ul className="mt-6 xl:mt-10 space-y-3 xl:space-y-5">
                 {features.map((f) => (
                   <li key={f.title} className="flex items-center gap-4">
-                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[#0d1524]/85 text-[#3b9eff] border border-[#1e3a5f]">
-                      <f.icon size={24} />
+                    <span className="flex h-11 w-11 xl:h-14 xl:w-14 shrink-0 items-center justify-center rounded-xl bg-[#0d1524]/85 text-[#3b9eff] border border-[#1e3a5f]">
+                      <f.icon size={22} />
                     </span>
                     <div>
-                      <div className="text-xl font-semibold text-white leading-none">{f.title}</div>
-                      <div className="text-base xl:text-lg text-slate-400 mt-2">{f.desc}</div>
+                      <div className="text-lg xl:text-xl font-semibold text-white leading-none">{f.title}</div>
+                      <div className="text-sm xl:text-lg text-slate-400 mt-1.5 xl:mt-2">{f.desc}</div>
                     </div>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <footer className="space-y-1.5 text-[11px] text-slate-400">
+            <footer className="shrink-0 space-y-1.5 text-[11px] text-slate-400">
               <a
                 href={BRAND.siteUrl}
                 target="_blank"
@@ -456,9 +458,9 @@ export default function SignIn() {
         </section>
 
         {/* RIGHT / mobile: compact hero + form */}
-        <section className="relative min-h-0 bg-[#070a10] lg:overflow-y-auto lg:overscroll-contain">
+        <section className="relative h-full min-h-0 bg-[#070a10] overflow-y-auto overscroll-contain flex flex-col">
           {/* Mobile-only hero strip — short, girl right, no text over face/phone */}
-          <div className="lg:hidden relative h-[30vh] min-h-[200px] max-h-[280px] overflow-hidden">
+          <div className="lg:hidden relative h-[30vh] min-h-[200px] max-h-[280px] overflow-hidden shrink-0">
             <img
               src={`/signin-hero.png?v=${APP_VERSION}`}
               alt=""
@@ -477,7 +479,7 @@ export default function SignIn() {
             </div>
           </div>
 
-          <div className="relative z-10 -mt-6 lg:mt-0 flex justify-center items-start lg:items-center px-4 sm:px-6 lg:px-8 xl:px-12 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-8 lg:py-10 lg:min-h-full">
+          <div className="relative z-10 -mt-6 lg:mt-0 flex flex-1 flex-col justify-start lg:justify-center items-center px-4 sm:px-6 lg:px-8 xl:px-12 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-2 sm:py-8 lg:py-8">
             <div className="w-full max-w-[480px] lg:max-w-[520px]">
               {/* Mobile welcome line under hero */}
               <div className="lg:hidden mb-4 px-0.5">
